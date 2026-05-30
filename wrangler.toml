@@ -11,13 +11,10 @@ binding = "ASSETS"
 binding = "WORKER_SELF_REFERENCE"
 service = "rental-v2"
 
-# Cron triggers — 09:00 Thai = 02:00 UTC
-# reminders: days 5,10,15,20,25 | contracts: daily
-[triggers]
-crons = [
-  "0 2 5,10,15,20,25 * *",
-  "0 2 * * *"
-]
+# Cron is handled by external service (cron-job.org) calling:
+#   GET /api/cron/reminders?secret=CRON_SECRET   (daily 09:00 Thai)
+#   GET /api/cron/contracts?secret=CRON_SECRET   (daily 09:00 Thai)
+# The reminders endpoint self-checks reminder_days, so calling daily is safe.
 
 [vars]
 # ตั้งค่า environment variables ใน Cloudflare dashboard > Workers > rental > Settings > Variables
