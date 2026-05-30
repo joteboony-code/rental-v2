@@ -11,6 +11,14 @@ binding = "ASSETS"
 binding = "WORKER_SELF_REFERENCE"
 service = "rental-v2"
 
+# Cron triggers — 09:00 Thai = 02:00 UTC
+# reminders: days 5,10,15,20,25 | contracts: daily
+[triggers]
+crons = [
+  "0 2 5,10,15,20,25 * *",
+  "0 2 * * *"
+]
+
 [vars]
 # ตั้งค่า environment variables ใน Cloudflare dashboard > Workers > rental > Settings > Variables
 # NEXT_PUBLIC_SUPABASE_URL = "..."

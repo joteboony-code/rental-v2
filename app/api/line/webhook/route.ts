@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import { decryptSecret } from '@/lib/crypto-secrets'
 import { DEFAULT_DORM_ID } from '@/lib/line-integration'
+import { buildBillPortalUrl } from '@/lib/portal-url'
 
-type SupabaseServiceClient = ReturnType<typeof createServiceClient>
+type SupabaseClient = ReturnType<typeof createServiceClient>
 
-type LineMessagingConfig = {
+type LineConfig = {
   channelAccessToken: string
   channelSecret: string | null
   liffId: string | null
@@ -16,7 +17,7 @@ type LineMessagingConfig = {
 type LineEvent = {
   type: string
   replyToken?: string
-  source: { userId: string; type: string }
+  source: { userId: string }
   message?: { id: string; type: string; text?: string }
 }
 
@@ -28,11 +29,26 @@ type SlipOkResponse = {
     amount: number
     transDate: string
     transTime: string
+    ref?: string
     sender?: { name?: string }
   }
 }
 
-async function getLineMessagingConfig(): Promise<LineMessagingConfig | null> {
+const SEP = '━━━━━━━━━━━━━━'
+
+function fmt(n: number) {
+  return n.toLocaleString('th-TH', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
+}
+
+function thaiDate(d: Date) {
+  return d.toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })
+}
+
+function thaiMonth(dateStr: string) {
+  return new Date(dateStr).toLocaleDateString('th-TH', { year: 'numeric', month: 'long' })
+}
+
+async function getLineConfig(): Promise<LineConfig | null> {
   const supabase = createServiceClient()
   const { data } = await supabase
     .from('line_integrations')
@@ -51,178 +67,147 @@ async function getLineMessagingConfig(): Promise<LineMessagingConfig | null> {
   }
 }
 
-async function isValidSignature(body: string, signature: string, secret: string): Promise<boolean> {
-  if (!signature) return false
+async function isValidSignature(body: string, sig: string, secret: string) {
+  if (!sig) return false
   const enc = new TextEncoder()
-  const key = await crypto.subtle.importKey(
-    'raw',
-    enc.encode(secret),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['verify']
-  )
-  const sig = Uint8Array.from(atob(signature), (char) => char.charCodeAt(0))
-  return crypto.subtle.verify('HMAC', key, sig, enc.encode(body))
+  const key = await crypto.subtle.importKey('raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['verify'])
+  const sigBytes = Uint8Array.from(atob(sig), (c) => c.charCodeAt(0))
+  return crypto.subtle.verify('HMAC', key, sigBytes, enc.encode(body))
 }
 
-async function replyMessage(replyToken: string, token: string, messages: object[]) {
-  const res = await fetch('https://api.line.me/v2/bot/message/reply', {
+async function reply(replyToken: string, token: string, messages: object[]) {
+  await fetch('https://api.line.me/v2/bot/message/reply', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify({ replyToken, messages }),
   })
-  if (!res.ok) throw new Error(`LINE reply API ${res.status}: ${await res.text()}`)
 }
 
-async function pushMessage(to: string | null, token: string, messages: object[]) {
+async function push(to: string | null, token: string, messages: object[]) {
   if (!to) return
-  const res = await fetch('https://api.line.me/v2/bot/message/push', {
+  await fetch('https://api.line.me/v2/bot/message/push', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify({ to, messages }),
   })
-  if (!res.ok) throw new Error(`LINE push API ${res.status}: ${await res.text()}`)
 }
 
-async function notifyOwner(lineConfig: LineMessagingConfig, text: string) {
-  try {
-    await pushMessage(lineConfig.ownerLineUserId, lineConfig.channelAccessToken, [{ type: 'text', text }])
-  } catch (error) {
-    console.error('[LINE webhook] owner notify failed:', error)
+async function notifyOwner(cfg: LineConfig, text: string) {
+  if (!cfg.ownerLineUserId) return
+  try { await push(cfg.ownerLineUserId, cfg.channelAccessToken, [{ type: 'text', text }]) } catch { /* silent */ }
+}
+
+function buildPortalFlex(portalUrl: string) {
+  return {
+    type: 'flex', altText: 'ดูบิล / ชำระเงิน',
+    contents: {
+      type: 'bubble', size: 'micro',
+      footer: {
+        type: 'box', layout: 'vertical', paddingAll: '12px',
+        contents: [{
+          type: 'button',
+          action: { type: 'uri', label: '🔗 ดูบิล / ชำระเงิน', uri: portalUrl },
+          style: 'primary', color: '#0C1B4D', height: 'sm',
+        }],
+      },
+    },
   }
 }
 
-async function getLineImageBlob(messageId: string, token: string): Promise<{ blob: Blob; contentType: string } | null> {
-  const res = await fetch(
-    `https://api-data.line.me/v2/bot/message/${messageId}/content`,
-    { headers: { Authorization: `Bearer ${token}` } }
-  )
+function paymentConfirmation(opts: {
+  title: string
+  roomNumber: string
+  billingMonth: string
+  status: string
+  paidAmount: number
+  remaining: number
+  note?: string
+}) {
+  const lines = [
+    `✅ ${opts.title}`,
+    `ห้อง ${opts.roomNumber}`,
+    `รอบบิล ${thaiMonth(opts.billingMonth)}`,
+    `สถานะ: ${opts.status}`,
+    `รับชำระแล้ว: ${fmt(opts.paidAmount)} บาท`,
+    `ยอดคงเหลือ: ${fmt(opts.remaining)} บาท`,
+  ]
+  if (opts.note) lines.push(opts.note)
+  return lines.join('\n')
+}
+
+async function getImageBlob(messageId: string, token: string) {
+  const res = await fetch(`https://api-data.line.me/v2/bot/message/${messageId}/content`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
   if (!res.ok) return null
   const blob = await res.blob()
   return { blob, contentType: blob.type || 'image/jpeg' }
 }
 
-function fmt(n: number) {
-  return n.toLocaleString('th-TH', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
+async function blobToBase64(blob: Blob): Promise<string> {
+  const buffer = await blob.arrayBuffer()
+  const bytes = new Uint8Array(buffer)
+  let binary = ''
+  for (const b of bytes) binary += String.fromCharCode(b)
+  return btoa(binary)
 }
 
-function formatSlipDate(transDate: string, transTime: string) {
+// ── SlipOK verification ──────────────────────────────────────
+async function verifySlipOk(
+  imageBlob: Blob,
+  contentType: string,
+  branchId: string,
+  apiKey: string
+): Promise<SlipOkResponse> {
+  const fd = new FormData()
+  fd.append('files', new File([imageBlob], 'slip.jpg', { type: contentType }))
+  fd.append('log', 'true')
+
+  const res = await fetch(
+    `https://api.slipok.com/api/line/apikey/${encodeURIComponent(branchId)}`,
+    { method: 'POST', headers: { 'x-authorization': apiKey }, body: fd }
+  )
+
   try {
-    const [dd, mm, yyyy] = transDate.split('/')
-    const year = Number(yyyy) > 2500 ? Number(yyyy) - 543 : Number(yyyy)
-    return new Date(`${year}-${mm}-${dd}T${transTime}`)
+    return await res.json() as SlipOkResponse
   } catch {
-    return null
+    return { success: false, message: `HTTP ${res.status}` }
   }
 }
 
-async function syncBillStatus(supabase: SupabaseServiceClient, billId: string) {
-  const { data: bill, error: billError } = await supabase
-    .from('bills')
-    .select('total_amount, status')
-    .eq('id', billId)
-    .single()
-
-  if (billError || !bill) {
-    return { paid: false, warning: billError?.message ?? 'ไม่พบบิล' }
-  }
-
-  const { data: payments, error: paymentsError } = await supabase
-    .from('payments')
-    .select('amount')
-    .eq('bill_id', billId)
-
-  if (paymentsError) return { paid: false, warning: paymentsError.message }
-
-  const totalPaid = (payments ?? []).reduce((sum, payment) => sum + Number(payment.amount), 0)
-  const paid = totalPaid >= Number(bill.total_amount)
-
-  if (paid && bill.status !== 'paid') {
-    const { error } = await supabase.from('bills').update({ status: 'paid' }).eq('id', billId)
-    if (error) return { paid, warning: error.message }
-  } else if (!paid && bill.status === 'paid') {
-    const { error } = await supabase.from('bills').update({ status: 'pending' }).eq('id', billId)
-    if (error) return { paid, warning: error.message }
-  }
-
-  return { paid, warning: null as string | null }
+// ── Event handlers ───────────────────────────────────────────
+async function handleFollow(replyToken: string, cfg: LineConfig) {
+  await reply(replyToken, cfg.channelAccessToken, [{
+    type: 'text',
+    text: 'ยินดีต้อนรับ 🏠\n\nกรุณาสแกน QR จากห้องเช่าของท่านเพื่อจับคู่บัญชี LINE กับห้องพัก\n\nเมื่อจับคู่แล้ว ท่านจะได้รับใบแจ้งค่าเช่าและแจ้งเตือนต่างๆ ทาง LINE นี้',
+  }])
 }
 
-export async function GET() {
-  return NextResponse.json({ ok: true, endpoint: 'LINE webhook' })
-}
+async function handleText(lineUserId: string, replyToken: string, cfg: LineConfig, supabase: SupabaseClient) {
+  const { data: existing } = await supabase
+    .from('tenants')
+    .select('full_name')
+    .eq('line_user_id', lineUserId)
+    .maybeSingle()
 
-export async function POST(req: NextRequest) {
-  const bodyText = await req.text()
-  const signature = req.headers.get('x-line-signature') ?? ''
-
-  let lineConfig: LineMessagingConfig | null = null
-  try {
-    lineConfig = await getLineMessagingConfig()
-  } catch (error) {
-    console.error('[LINE webhook] config error:', error)
-    return NextResponse.json({ ok: true })
-  }
-
-  if (!lineConfig) return NextResponse.json({ ok: true })
-
-  if (lineConfig.channelSecret) {
-    const valid = await isValidSignature(bodyText, signature, lineConfig.channelSecret)
-    if (!valid) return NextResponse.json({ ok: true })
-  }
-
-  let payload: { events: LineEvent[] }
-  try {
-    payload = JSON.parse(bodyText) as { events: LineEvent[] }
-  } catch {
-    return NextResponse.json({ ok: false }, { status: 400 })
-  }
-
-  await processEvents(payload.events ?? [], lineConfig)
-  return NextResponse.json({ ok: true })
-}
-
-async function processEvents(events: LineEvent[], lineConfig: LineMessagingConfig) {
-  const supabase = createServiceClient()
-  const token = lineConfig.channelAccessToken
-
-  for (const event of events) {
-    try {
-      const lineUserId = event.source.userId
-
-      if (event.type === 'follow' && event.replyToken) {
-        await replyMessage(event.replyToken, token, [{
-          type: 'text',
-          text: 'ยินดีต้อนรับ 🏠\n\nกรุณาสแกน QR จากห้องเช่าของท่านเพื่อจับคู่บัญชี LINE กับห้องพัก\n\nเมื่อจับคู่แล้ว ท่านจะได้รับใบแจ้งค่าเช่าและแจ้งเตือนต่างๆ ทาง LINE นี้',
-        }])
-        continue
-      }
-
-      if (event.type !== 'message' || !event.message || !event.replyToken) continue
-
-      if (event.message.type === 'image') {
-        await handleSlipImage(lineUserId, event.message.id, event.replyToken, supabase, lineConfig)
-        continue
-      }
-
-      if (event.message.type === 'text' && event.message.text) {
-        await handleTextMessage(lineUserId, event.message.text.trim(), event.replyToken, supabase, lineConfig)
-      }
-    } catch (error) {
-      console.error('[LINE webhook] event error:', error)
-    }
-  }
+  await reply(replyToken, cfg.channelAccessToken, [{
+    type: 'text',
+    text: existing
+      ? `บัญชีของคุณ (${existing.full_name}) จับคู่กับห้องแล้ว\nส่งรูปสลิปเพื่อแจ้งชำระค่าเช่าได้เลยครับ 😊`
+      : 'กรุณาสแกน QR จากห้องเช่าของท่านเพื่อจับคู่บัญชี LINE\n\nหากมีปัญหา กรุณาติดต่อเจ้าของหอครับ',
+  }])
 }
 
 async function handleSlipImage(
   lineUserId: string,
   messageId: string,
   replyToken: string,
-  supabase: SupabaseServiceClient,
-  lineConfig: LineMessagingConfig
+  cfg: LineConfig,
+  supabase: SupabaseClient
 ) {
-  const token = lineConfig.channelAccessToken
+  const token = cfg.channelAccessToken
 
+  // Get tenant
   const { data: tenant } = await supabase
     .from('tenants')
     .select('id, full_name')
@@ -230,9 +215,9 @@ async function handleSlipImage(
     .maybeSingle()
 
   if (!tenant) {
-    await replyMessage(replyToken, token, [{
+    await reply(replyToken, token, [{
       type: 'text',
-      text: 'ยังไม่ได้จับคู่บัญชี\nส่งรหัส 6 หลักที่ได้รับจากเจ้าของห้องเพื่อจับคู่ก่อน',
+      text: 'ยังไม่ได้จับคู่บัญชีครับ\nกรุณาสแกน QR จากห้องเช่าของท่านก่อนนะครับ',
     }])
     return
   }
@@ -244,10 +229,18 @@ async function handleSlipImage(
     .eq('status', 'active')
     .maybeSingle()
 
-  type RoomJoin = { room_number: string }
-  const room = activeContract?.rooms as unknown as RoomJoin | null
-  const roomLabel = room?.room_number ? `ห้อง ${room.room_number}` : 'ไม่พบห้อง active'
+  type RJ = { room_number: string }
+  const room = activeContract?.rooms as unknown as RJ | null
+  const roomNumber = room?.room_number ?? '—'
 
+  // Handle room 99 test
+  if (roomNumber === '99') {
+    await reply(replyToken, token, [{ type: 'text', text: '🧪 ห้องทดสอบ 99 — ระบบรับสลิปแล้วครับ' }])
+    await notifyOwner(cfg, `🧪 [TEST ห้อง 99] ได้รับสลิปจาก ${tenant.full_name}`)
+    return
+  }
+
+  // Get SlipOK settings
   const { data: settings } = await supabase
     .from('settings')
     .select('slipok_api_key, slipok_branch_id')
@@ -255,166 +248,226 @@ async function handleSlipImage(
     .maybeSingle()
 
   if (!settings?.slipok_api_key || !settings?.slipok_branch_id) {
-    await replyMessage(replyToken, token, [{
-      type: 'text',
-      text: `ได้รับสลิปของคุณแล้ว (${tenant.full_name})\nกรุณารอเจ้าของห้องยืนยัน`,
-    }])
-    await notifyOwner(lineConfig, `ได้รับสลิปจาก ${tenant.full_name} (${roomLabel}) แต่ยังไม่ได้ตั้งค่า SlipOK ครบ`)
+    await reply(replyToken, token, [{ type: 'text', text: 'ได้รับรูปแล้วครับ 😊\nเจ้าของหอจะตรวจสอบให้นะครับ' }])
+    await notifyOwner(cfg, `🧾 มีสลิปเข้ามาครับ\n🏠 ห้อง ${roomNumber} — ${tenant.full_name}\n⚠️ ยังไม่ได้ตั้งค่า SlipOK`)
     return
   }
 
-  const image = await getLineImageBlob(messageId, token)
+  // Download image
+  const image = await getImageBlob(messageId, token)
   if (!image) {
-    await replyMessage(replyToken, token, [{ type: 'text', text: 'ไม่สามารถรับรูปสลิปได้ กรุณาส่งใหม่อีกครั้ง' }])
-    await notifyOwner(lineConfig, `รับรูปสลิปจาก ${tenant.full_name} (${roomLabel}) ไม่สำเร็จ`)
+    await reply(replyToken, token, [{ type: 'text', text: 'ได้รับรูปแล้วครับ แต่ระบบตรวจสลิปอัตโนมัติไม่สำเร็จ กรุณารอเจ้าของตรวจสอบ หรือส่งสลิปที่ชัดเจนอีกครั้งครับ' }])
+    await notifyOwner(cfg, `🧾 มีสลิปเข้ามาครับ\n🏠 ห้อง ${roomNumber} — ${tenant.full_name}\n⚠️ ตรวจไม่ได้\nสาเหตุ: ดาวน์โหลดรูปไม่สำเร็จ`)
     return
   }
 
-  const slipFd = new FormData()
-  slipFd.append('files', new File([image.blob], 'slip.jpg', { type: image.contentType }))
-  slipFd.append('log', 'true')
-
-  const slipRes = await fetch(
-    `https://api.slipok.com/api/line/apikey/${encodeURIComponent(settings.slipok_branch_id)}`,
-    {
-      method: 'POST',
-      headers: { 'x-authorization': settings.slipok_api_key },
-      body: slipFd,
-    }
-  )
-
-  let slipJson: SlipOkResponse
+  // Verify with SlipOK
+  let slipResult: SlipOkResponse
   try {
-    slipJson = await slipRes.json() as SlipOkResponse
-  } catch {
-    slipJson = { success: false, message: `SlipOK response ไม่ถูกต้อง (HTTP ${slipRes.status})` }
-  }
-
-  if (!slipRes.ok || !slipJson.success || !slipJson.data) {
-    const reason = slipJson.message
-      ? `${slipJson.message}${slipJson.code ? ` (${slipJson.code})` : ''}`
-      : `SlipOK ตรวจไม่ผ่าน (HTTP ${slipRes.status})`
-    await replyMessage(replyToken, token, [{
-      type: 'text',
-      text: `ตรวจสลิปไม่ผ่าน\n${reason}\n\nกรุณาตรวจสอบและส่งใหม่ หรือติดต่อเจ้าของห้อง`,
-    }])
-    await notifyOwner(lineConfig, `สลิปตรวจไม่ผ่าน\nผู้เช่า: ${tenant.full_name}\n${roomLabel}\nเหตุผล: ${reason}`)
+    slipResult = await verifySlipOk(image.blob, image.contentType, settings.slipok_branch_id, settings.slipok_api_key)
+  } catch (error) {
+    await reply(replyToken, token, [{ type: 'text', text: 'ได้รับรูปแล้วครับ แต่ระบบตรวจสลิปอัตโนมัติไม่สำเร็จ กรุณารอเจ้าของตรวจสอบ หรือส่งสลิปที่ชัดเจนอีกครั้งครับ' }])
+    await notifyOwner(cfg, `🧾 มีสลิปเข้ามาครับ\n🏠 ห้อง ${roomNumber} — ${tenant.full_name}\n⚠️ ตรวจไม่ได้\nสาเหตุ: ${String(error)}`)
     return
   }
 
-  const { amount, transDate, transTime } = slipJson.data
-  const senderName = slipJson.data.sender?.name ?? ''
-  const paidDate = formatSlipDate(transDate, transTime)
-  const thDate = paidDate
-    ? paidDate.toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })
-    : transDate
+  // SlipOK failed
+  if (!slipResult.success || !slipResult.data) {
+    const reason = slipResult.message
+      ? `${slipResult.message}${slipResult.code ? ` (${slipResult.code})` : ''}`
+      : 'SlipOK ตรวจไม่ผ่าน'
 
+    // Check if it's a duplicate
+    if (slipResult.code === 1012 || slipResult.message?.toLowerCase().includes('duplicate')) {
+      await reply(replyToken, token, [{
+        type: 'text',
+        text: `⚠️ สลิปนี้เคยถูกตรวจแล้วครับ\nกรุณาติดต่อเจ้าของหอนะครับ`,
+      }])
+      await notifyOwner(cfg, `⚠️ SlipOK แจ้งว่าสลิปนี้ซ้ำครับ\n🏠 ห้อง ${roomNumber} — ${tenant.full_name}\nสาเหตุ: ${reason}`)
+      return
+    }
+
+    await reply(replyToken, token, [{
+      type: 'text',
+      text: `ได้รับรูปแล้วครับ แต่ระบบตรวจสลิปอัตโนมัติไม่สำเร็จ กรุณารอเจ้าของตรวจสอบ หรือส่งสลิปที่ชัดเจนอีกครั้งครับ`,
+    }])
+    await notifyOwner(cfg, `🧾 มีสลิปเข้ามาครับ\n🏠 ห้อง ${roomNumber} — ${tenant.full_name}\n⚠️ ตรวจไม่ได้\nสาเหตุ: ${reason}`)
+    return
+  }
+
+  const { amount, transDate, transTime, ref, sender } = slipResult.data
+  const senderName = sender?.name ?? ''
+  const slipRef = ref ?? null
+
+  // Check duplicate ref in DB
+  if (slipRef) {
+    const { data: existingPayment } = await supabase
+      .from('payments')
+      .select('id, bill_id, bills(rooms(room_number))')
+      .eq('slip_ref', slipRef)
+      .maybeSingle()
+
+    if (existingPayment) {
+      type BillJoin = { rooms: { room_number: string } | null }
+      const usedBill = existingPayment.bills as unknown as BillJoin | null
+      const usedRoom = usedBill?.rooms?.room_number ?? '—'
+      await reply(replyToken, token, [{
+        type: 'text',
+        text: `⚠️ สลิปนี้เคยถูกใช้แล้วครับ\n🏠 ใช้กับห้อง: ${usedRoom}\n💰 ${fmt(amount)} บาท\n🔢 Ref: ${slipRef}\nกรุณาติดต่อเจ้าของหอนะครับ`,
+      }])
+      await notifyOwner(cfg, `⚠️ พบสลิปซ้ำครับ\n🏠 ผู้ส่งปัจจุบัน: ห้อง ${roomNumber} — ${tenant.full_name}\nเคยใช้ที่ห้อง: ${usedRoom}\n💰 ${fmt(amount)} บาท\n🔢 Ref: ${slipRef}`)
+      return
+    }
+  }
+
+  // Format slip date/time
+  let paidDate: Date | null = null
+  try {
+    const [dd, mm, yyyy] = transDate.split('/')
+    const year = Number(yyyy) > 2500 ? Number(yyyy) - 543 : Number(yyyy)
+    paidDate = new Date(`${year}-${mm}-${dd}T${transTime}`)
+  } catch { /* use now */ }
+
+  const thDate = paidDate ? thaiDate(paidDate) : transDate
+  const paidAt = paidDate?.toISOString() ?? new Date().toISOString()
+
+  // Upload slip image
   const arrayBuffer = await image.blob.arrayBuffer()
   const ext = image.contentType.split('/')[1] || 'jpg'
-  const path = `line/${tenant.id}/${Date.now()}.${ext}`
-  const { data: upload, error: uploadError } = await supabase.storage
+  const uploadPath = `line/${tenant.id}/${Date.now()}.${ext}`
+  const { data: upload } = await supabase.storage
     .from('payment-slips')
-    .upload(path, arrayBuffer, { contentType: image.contentType, upsert: false })
+    .upload(uploadPath, arrayBuffer, { contentType: image.contentType, upsert: false })
 
-  if (uploadError || !upload) {
-    await replyMessage(replyToken, token, [{
-      type: 'text',
-      text: `ตรวจสลิปผ่านแล้ว แต่ระบบอัปโหลดสลิปไม่สำเร็จ\nกรุณาติดต่อเจ้าของห้อง`,
-    }])
-    await notifyOwner(lineConfig, `สลิปตรวจผ่านแต่อัปโหลดไม่สำเร็จ\nผู้เช่า: ${tenant.full_name}\n${roomLabel}\nยอด: ฿${fmt(amount)}\nError: ${uploadError?.message ?? 'unknown error'}`)
-    return
-  }
+  const slipUrl = upload
+    ? supabase.storage.from('payment-slips').getPublicUrl(upload.path).data.publicUrl
+    : null
 
-  const { data: urlData } = supabase.storage.from('payment-slips').getPublicUrl(upload.path)
-  const slipUrl = urlData.publicUrl
-
-  const { data: bills, error: billsError } = await supabase
+  // Find matching bill
+  const { data: bills } = await supabase
     .from('bills')
-    .select('id, total_amount, billing_month, due_date, status')
+    .select('id, total_amount, billing_month, status')
     .eq('tenant_id', tenant.id)
     .in('status', ['pending', 'overdue'])
     .order('billing_month', { ascending: false })
-    .limit(3)
+    .limit(5)
 
-  if (billsError) {
-    await replyMessage(replyToken, token, [{
-      type: 'text',
-      text: `ตรวจสลิปผ่านแล้ว แต่ระบบค้นหาบิลไม่สำเร็จ\nกรุณาติดต่อเจ้าของห้อง`,
-    }])
-    await notifyOwner(lineConfig, `สลิปตรวจผ่านแต่ค้นหาบิลไม่สำเร็จ\nผู้เช่า: ${tenant.full_name}\n${roomLabel}\nยอด: ฿${fmt(amount)}\nError: ${billsError.message}`)
-    return
-  }
-
-  const matchingBill = bills?.find((bill) => Math.abs(Number(bill.total_amount) - amount) < 1)
+  const matchingBill = bills?.find((b) => Math.abs(Number(b.total_amount) - amount) < 1)
 
   if (!matchingBill) {
-    await replyMessage(replyToken, token, [{
+    await reply(replyToken, token, [{
       type: 'text',
-      text: `ตรวจสลิปผ่านแล้ว\nยอดเงิน: ฿${fmt(amount)}\nวันที่: ${thDate} ${transTime}\n\nแต่ยอดไม่ตรงกับบิลที่ค้างชำระ กรุณาติดต่อเจ้าของห้อง`,
+      text: `ได้รับรูปแล้วครับ แต่ระบบตรวจสลิปอัตโนมัติไม่สำเร็จ กรุณารอเจ้าของตรวจสอบ หรือส่งสลิปที่ชัดเจนอีกครั้งครับ`,
     }])
-    await notifyOwner(lineConfig, `สลิปตรวจผ่านแต่ยอดไม่ตรงกับบิลค้างชำระ\nผู้เช่า: ${tenant.full_name}\n${roomLabel}\nยอดสลิป: ฿${fmt(amount)}\nผู้โอน: ${senderName || '-'}`)
+    await notifyOwner(cfg, `🧾 ตรวจสลิปสำเร็จครับ แต่ไม่พบบิลที่ตรงกัน\n🏠 ห้อง ${roomNumber} — ${tenant.full_name}\n💰 ${fmt(amount)} บาท\n📅 ${thDate} ${transTime}\n${senderName ? `ผู้โอน: ${senderName}` : ''}\n🔢 Ref: ${slipRef ?? '-'}`)
     return
   }
 
-  const paidAt = paidDate?.toISOString() ?? new Date().toISOString()
-  const { error: paymentError } = await supabase.from('payments').insert({
+  // Record payment
+  const { error: payErr } = await supabase.from('payments').insert({
     bill_id: matchingBill.id,
     amount,
     payment_method: 'transfer',
     slip_url: slipUrl,
+    slip_ref: slipRef,
     note: `สลิปจาก LINE${senderName ? ` (${senderName})` : ''}`,
     paid_at: paidAt,
   })
 
-  if (paymentError) {
-    await replyMessage(replyToken, token, [{
-      type: 'text',
-      text: `ตรวจสลิปผ่านแล้ว แต่ระบบบันทึกการชำระเงินไม่สำเร็จ\nกรุณาติดต่อเจ้าของห้อง`,
-    }])
-    await notifyOwner(lineConfig, `สลิปตรวจผ่านแต่บันทึก payment ไม่สำเร็จ\nผู้เช่า: ${tenant.full_name}\n${roomLabel}\nยอด: ฿${fmt(amount)}\nError: ${paymentError.message}`)
+  if (payErr) {
+    await reply(replyToken, token, [{ type: 'text', text: 'ได้รับรูปแล้วครับ แต่ระบบตรวจสลิปอัตโนมัติไม่สำเร็จ กรุณารอเจ้าของตรวจสอบ หรือส่งสลิปที่ชัดเจนอีกครั้งครับ' }])
+    await notifyOwner(cfg, `⚠️ Worker error: บันทึก payment ไม่สำเร็จ\n🏠 ห้อง ${roomNumber}\nError: ${payErr.message}`)
     return
   }
 
-  const statusSync = await syncBillStatus(supabase, matchingBill.id)
-  const billingMonth = new Date(matchingBill.billing_month).toLocaleDateString('th-TH', {
-    month: 'long',
-    year: 'numeric',
+  // Check total paid
+  const { data: allPayments } = await supabase
+    .from('payments')
+    .select('amount')
+    .eq('bill_id', matchingBill.id)
+
+  const totalPaid = (allPayments ?? []).reduce((s, p) => s + Number(p.amount), 0)
+  const totalBill = Number(matchingBill.total_amount)
+  const remaining = Math.max(0, totalBill - totalPaid)
+  const fullyPaid = remaining < 1
+
+  if (fullyPaid) {
+    await supabase.from('bills').update({ status: 'paid' }).eq('id', matchingBill.id)
+  }
+
+  const status = fullyPaid ? 'ชำระแล้ว ✅' : 'รับชำระบางส่วน'
+  const confirmText = paymentConfirmation({
+    title: fullyPaid ? 'ชำระเงินครบแล้วครับ!' : 'รับชำระบางส่วนแล้วครับ',
+    roomNumber,
+    billingMonth: matchingBill.billing_month as string,
+    status,
+    paidAmount: totalPaid,
+    remaining,
+    note: slipRef ? `🔢 Ref: ${slipRef}` : undefined,
   })
 
-  const statusText = statusSync.warning
-    ? `บันทึกแล้ว แต่ sync สถานะบิลไม่สำเร็จ: ${statusSync.warning}`
-    : statusSync.paid
-    ? 'บันทึกแล้ว และอัปเดตสถานะบิลเป็นชำระแล้ว'
-    : 'บันทึกแล้ว แต่ยอดรวมยังไม่ครบยอดบิล'
+  const portalUrl = buildBillPortalUrl(matchingBill.id, cfg.liffId, cfg.appUrl)
 
-  let replyText = `ตรวจสลิปผ่าน\n\nยอดเงิน: ฿${fmt(amount)}\nวันที่: ${thDate} ${transTime}\n`
-  if (senderName) replyText += `ผู้โอน: ${senderName}\n`
-  replyText += `\nตรงกับค่าเช่าเดือน ${billingMonth}\n${statusText}`
+  await reply(replyToken, token, [
+    { type: 'text', text: confirmText },
+    buildPortalFlex(portalUrl),
+  ])
 
-  await replyMessage(replyToken, token, [{ type: 'text', text: replyText }])
-  await notifyOwner(lineConfig, `สลิปถูกต้องและบันทึกแล้ว\nผู้เช่า: ${tenant.full_name}\n${roomLabel}\nเดือน: ${billingMonth}\nยอด: ฿${fmt(amount)}\nผู้โอน: ${senderName || '-'}\nสถานะ: ${statusText}`)
+  if (fullyPaid) {
+    await notifyOwner(cfg, `✅ สลิปถูกต้อง! อัปเดตสถานะแล้วครับ\n🏠 ห้อง ${roomNumber} — ${tenant.full_name}\n💰 ${fmt(amount)} บาท\n🔢 Ref: ${slipRef ?? '-'}\n📅 ${thDate} ${transTime}`)
+  } else {
+    await notifyOwner(cfg, `⚠️ รับชำระบางส่วนครับ\n🏠 ห้อง ${roomNumber} — ${tenant.full_name}\n💰 ยอดค้างเหลือ: ${fmt(remaining)} บาท\n🔢 Ref: ${slipRef ?? '-'}`)
+  }
 }
 
-async function handleTextMessage(
-  lineUserId: string,
-  _text: string,
-  replyToken: string,
-  supabase: SupabaseServiceClient,
-  lineConfig: LineMessagingConfig
-) {
-  const token = lineConfig.channelAccessToken
+// ── Route handlers ───────────────────────────────────────────
+export async function GET() {
+  return NextResponse.json({ ok: true, endpoint: 'LINE webhook' })
+}
 
-  const { data: existing } = await supabase
-    .from('tenants')
-    .select('full_name')
-    .eq('line_user_id', lineUserId)
-    .maybeSingle()
+export async function POST(req: NextRequest) {
+  const bodyText = await req.text()
+  const signature = req.headers.get('x-line-signature') ?? ''
 
-  await replyMessage(replyToken, token, [{
-    type: 'text',
-    text: existing
-      ? `บัญชีของคุณ (${existing.full_name}) จับคู่กับห้องแล้ว\nส่งรูปสลิปเพื่อแจ้งชำระค่าเช่าได้เลย`
-      : 'กรุณาสแกน QR จากห้องเช่าของท่านเพื่อจับคู่บัญชี LINE\n\nหากมีปัญหา กรุณาติดต่อเจ้าของห้อง',
-  }])
-  void lineConfig
+  let cfg: LineConfig | null = null
+  try { cfg = await getLineConfig() } catch { return NextResponse.json({ ok: true }) }
+  if (!cfg) return NextResponse.json({ ok: true })
+
+  if (cfg.channelSecret) {
+    const valid = await isValidSignature(bodyText, signature, cfg.channelSecret)
+    if (!valid) return NextResponse.json({ ok: true })
+  }
+
+  let payload: { events: LineEvent[] }
+  try { payload = JSON.parse(bodyText) as { events: LineEvent[] } }
+  catch { return NextResponse.json({ ok: false }, { status: 400 }) }
+
+  const supabase = createServiceClient()
+
+  for (const event of payload.events ?? []) {
+    try {
+      const lineUserId = event.source.userId
+
+      if (event.type === 'follow' && event.replyToken) {
+        await handleFollow(event.replyToken, cfg)
+        continue
+      }
+
+      if (event.type !== 'message' || !event.message || !event.replyToken) continue
+
+      if (event.message.type === 'image') {
+        await handleSlipImage(lineUserId, event.message.id, event.replyToken, cfg, supabase)
+        continue
+      }
+
+      if (event.message.type === 'text') {
+        await handleText(lineUserId, event.replyToken, cfg, supabase)
+      }
+    } catch (error) {
+      console.error('[webhook]', error)
+      await notifyOwner(cfg, `⚠️ Worker error: ${String(error)}`)
+    }
+  }
+
+  return NextResponse.json({ ok: true })
 }

@@ -2,10 +2,11 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/service'
 import { parseReminderDays } from '@/lib/reminder-utils'
 import { getLineMessagingConfig } from '@/lib/line-integration'
-import { buildBillPortalUrl, buildTenantPortalUrl } from '@/lib/portal-url'
-// ── helpers ─────────────────────────────────────────────────
+import { buildBillPortalUrl } from '@/lib/portal-url'
+
 function fmt(n: number) {
   return n.toLocaleString('th-TH', { maximumFractionDigits: 0 })
 }
@@ -13,6 +14,12 @@ function fmt(n: number) {
 function thaiMonth(dateStr: string) {
   return new Date(dateStr).toLocaleDateString('th-TH', { year: 'numeric', month: 'long' })
 }
+
+function thaiDate(dateStr: string) {
+  return new Date(dateStr).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })
+}
+
+const SEP = '━━━━━━━━━━━━━━'
 
 async function pushMessage(to: string, token: string, messages: object[]) {
   const res = await fetch('https://api.line.me/v2/bot/message/push', {
@@ -23,10 +30,29 @@ async function pushMessage(to: string, token: string, messages: object[]) {
   if (!res.ok) throw new Error(`LINE API ${res.status}: ${await res.text()}`)
 }
 
+function buildPortalFlex(portalUrl: string) {
+  return {
+    type: 'flex',
+    altText: 'ดูบิล / ชำระเงิน',
+    contents: {
+      type: 'bubble',
+      size: 'micro',
+      footer: {
+        type: 'box', layout: 'vertical', paddingAll: '12px',
+        contents: [{
+          type: 'button',
+          action: { type: 'uri', label: '🔗 ดูบิล / ชำระเงิน', uri: portalUrl },
+          style: 'primary', color: '#0C1B4D', height: 'sm',
+        }],
+      },
+    },
+  }
+}
+
 // ── Snooze a bill ────────────────────────────────────────────
 export async function snoozeBill(
   billId: string,
-  snoozeUntil: string,   // "YYYY-MM-DD"
+  snoozeUntil: string,
   snoozeNote: string
 ): Promise<{ success: boolean; message: string }> {
   const supabase = await createClient()
@@ -36,12 +62,10 @@ export async function snoozeBill(
     .eq('id', billId)
 
   if (error) return { success: false, message: error.message }
-
   revalidatePath('/bills')
   return { success: true, message: 'งดแจ้งเตือนแล้ว' }
 }
 
-// ── Clear snooze ─────────────────────────────────────────────
 export async function clearSnooze(
   billId: string
 ): Promise<{ success: boolean; message: string }> {
@@ -52,161 +76,184 @@ export async function clearSnooze(
     .eq('id', billId)
 
   if (error) return { success: false, message: error.message }
-
   revalidatePath('/bills')
   return { success: true, message: 'เปิดการแจ้งเตือนแล้ว' }
 }
 
-// ── Send overdue reminders (pending + overdue, not snoozed) ─
+// ── Core reminder sender (used by both manual & cron) ────────
 export async function sendOverdueReminders(
-  billingMonth: string,   // "YYYY-MM-DD"
-  mode: 'text' | 'flex'
+  billingMonth: string,
+  _mode: 'text' | 'flex' = 'text'
 ): Promise<{
-  success:  boolean
-  sent:     number
-  snoozed:  number
-  noLine:   number
-  message:  string
+  success: boolean
+  sent: number
+  snoozed: number
+  noLine: number
+  failed: number
+  message: string
+  ownerSummary?: string
 }> {
-  const supabase = await createClient()
-  const today    = new Date().toISOString().split('T')[0]  // "YYYY-MM-DD"
+  const supabase = createServiceClient()
+  const today = new Date().toISOString().split('T')[0]
+  const todayThai = thaiDate(today)
 
-  // Get all pending/overdue bills for this month
   const { data: bills } = await supabase
     .from('bills')
     .select(`
-      id, total_amount, due_date, billing_month, snooze_until, snooze_note,
+      id, total_amount, due_date, billing_month,
+      rent_amount, water_amount, electricity_amount, other_amount, other_note,
+      snooze_until, snooze_note,
       rooms   ( room_number ),
-      tenants ( full_name, line_user_id )
+      tenants ( full_name, line_user_id ),
+      meter_readings ( water_units, electricity_units, water_unit_price, electricity_unit_price )
     `)
     .eq('billing_month', billingMonth)
     .in('status', ['pending', 'overdue'])
 
   if (!bills || bills.length === 0) {
-    return { success: false, sent: 0, snoozed: 0, noLine: 0, message: 'ไม่มีบิลที่รอชำระ' }
+    return { success: false, sent: 0, snoozed: 0, noLine: 0, failed: 0, message: 'ไม่มีบิลที่รอชำระ' }
   }
 
   const lineConfig = await getLineMessagingConfig()
   if (!lineConfig) {
-    return { success: false, sent: 0, snoozed: 0, noLine: 0, message: 'ยังไม่ได้ตั้งค่า LINE Channel Access Token' }
+    return { success: false, sent: 0, snoozed: 0, noLine: 0, failed: 0, message: 'ยังไม่ได้ตั้งค่า LINE' }
   }
 
-  let sent = 0, snoozed = 0, noLine = 0
+  const { data: settings } = await supabase
+    .from('settings')
+    .select('bank_accounts_text, water_unit_price, electricity_unit_price')
+    .eq('id', 1)
+    .maybeSingle()
+
+  const bankText = settings?.bank_accounts_text ?? ''
+  const monthLabel = thaiMonth(billingMonth)
+
+  let sent = 0, snoozed = 0, noLine = 0, failed = 0
+  const sentRooms: string[] = []
 
   for (const bill of bills) {
     type TJ = { full_name: string; line_user_id: string | null }
     type RJ = { room_number: string }
-    const tenant     = bill.tenants as unknown as TJ | null
-    const room       = bill.rooms   as unknown as RJ | null
+    type MJ = { water_units: number | null; electricity_units: number | null; water_unit_price: number | null; electricity_unit_price: number | null }
+
+    const tenant = bill.tenants as unknown as TJ | null
+    const room = bill.rooms as unknown as RJ | null
+    const meter = bill.meter_readings as unknown as MJ | null
     const lineUserId = tenant?.line_user_id
 
     if (!lineUserId) { noLine++; continue }
 
-    // Check snooze
     const snoozeUntil = bill.snooze_until as string | null
     if (snoozeUntil && snoozeUntil >= today) { snoozed++; continue }
 
-    const month      = thaiMonth(bill.billing_month as string)
     const roomNumber = room?.room_number ?? '—'
-    const total      = Number(bill.total_amount)
-    const portalUrl  = buildBillPortalUrl(bill.id, lineConfig.liffId, lineConfig.appUrl)
-    const tenantPortalUrl = buildTenantPortalUrl(lineConfig.liffId, lineConfig.appUrl)
-    const overdue    = (bill.due_date as string) < today
+    const tenantName = tenant?.full_name ?? '—'
+
+    // Calculate old balance (sum of older unpaid bills for same tenant)
+    const { data: olderBills } = await supabase
+      .from('bills')
+      .select('id, total_amount')
+      .eq('tenant_id', (bill as { tenant_id?: string }).tenant_id ?? '')
+      .in('status', ['pending', 'overdue'])
+      .lt('billing_month', billingMonth)
+
+    const oldBalance = (olderBills ?? []).reduce((sum, b) => sum + Number(b.total_amount), 0)
+    const remaining = Number(bill.total_amount)
+    const portalUrl = buildBillPortalUrl(bill.id, lineConfig.liffId, lineConfig.appUrl)
+
+    // Build message lines
+    const lines: string[] = [
+      `🔔 แจ้งเตือนค่าเช่า — ห้อง ${roomNumber}`,
+      `👤 ${tenantName}`,
+      `📅 รอบบิล ${monthLabel}`,
+      `🗓️ วันที่แจ้ง ${todayThai}`,
+      SEP,
+    ]
+
+    if (oldBalance > 0) lines.push(`📌 ยอดค้างเก่า: ${fmt(oldBalance)}฿`)
+
+    const elecAmt = Number(bill.electricity_amount)
+    const waterAmt = Number(bill.water_amount)
+    const rentAmt = Number(bill.rent_amount)
+    const otherAmt = Number(bill.other_amount)
+
+    if (elecAmt > 0) {
+      const units = meter?.electricity_units ?? null
+      const rate = meter?.electricity_unit_price ?? settings?.electricity_unit_price ?? 8
+      const unitsText = units != null ? `${units} หน่วย × ${fmt(rate)}฿ = ` : ''
+      lines.push(`⚡ ค่าไฟ: ${unitsText}${fmt(elecAmt)}฿`)
+    }
+    if (waterAmt > 0) {
+      const units = meter?.water_units ?? null
+      const rate = meter?.water_unit_price ?? settings?.water_unit_price ?? 18
+      const unitsText = units != null ? `${units} หน่วย × ${fmt(rate)}฿ = ` : ''
+      lines.push(`💧 ค่าน้ำ: ${unitsText}${fmt(waterAmt)}฿`)
+    }
+
+    lines.push(`🏠 ค่าเช่า: ${fmt(rentAmt)}฿`)
+
+    if (otherAmt > 0) {
+      const note = (bill.other_note as string | null) ?? ''
+      lines.push(`🗑️ ${note || 'อื่นๆ'}: ${fmt(otherAmt)}฿`)
+    }
+
+    lines.push(SEP)
+    lines.push(`💰 ยอดคงเหลือที่ต้องชำระ: ${fmt(remaining)}฿`)
+    lines.push(SEP)
+
+    if (bankText) lines.push(`📲 โอนเข้า ${bankText}`)
 
     try {
-      if (mode === 'text') {
-        const emoji = overdue ? '⚠️' : '📢'
-        const lines = [
-          `${emoji} แจ้งเตือนค่าเช่า${overdue ? 'เกินกำหนด' : ''} — ห้อง ${roomNumber}`,
-          `เดือน: ${month}`,
-          overdue
-            ? `ยอดค้างชำระ: ฿${fmt(total)}`
-            : `ยอดที่ต้องชำระ: ฿${fmt(total)}`,
-          `ครบกำหนด: ${new Date(bill.due_date as string).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })}`,
-          ``,
-          `🔗 ดูบิล / ชำระเงิน: ${portalUrl}`,
-          `🏠 ดูข้อมูลห้อง: ${tenantPortalUrl}`,
-        ]
-        await pushMessage(lineUserId, lineConfig.channelAccessToken, [{ type: 'text', text: lines.join('\n') }])
-      } else {
-        const isOverdue = overdue
-        const bubble = {
-          type: 'flex',
-          altText: `แจ้งเตือนค่าเช่าห้อง ${roomNumber} ${isOverdue ? 'เกินกำหนด' : ''} ฿${fmt(total)}`,
-          contents: {
-            type: 'bubble',
-            size: 'mega',
-            header: {
-              type: 'box', layout: 'vertical',
-              backgroundColor: isOverdue ? '#B91C1C' : '#0C1B4D',
-              paddingAll: '20px',
-              contents: [
-                {
-                  type: 'text',
-                  text: isOverdue ? '⚠️ ค่าเช่าเกินกำหนด!' : '📢 แจ้งเตือนค่าเช่า',
-                  color: isOverdue ? '#FEE2E2' : '#94A3B8', size: 'xs', weight: 'bold',
-                },
-                { type: 'text', text: `ห้อง ${roomNumber}`, color: '#FFFFFF', size: 'xxl', weight: 'bold' },
-                { type: 'text', text: month, color: isOverdue ? '#FCA5A5' : '#64748B', size: 'sm', margin: 'xs' },
-              ],
-            },
-            body: {
-              type: 'box', layout: 'vertical', spacing: 'md', paddingAll: '20px',
-              contents: [
-                {
-                  type: 'box', layout: 'horizontal',
-                  contents: [
-                    { type: 'text', text: isOverdue ? 'ยอดค้างชำระ' : 'ยอดที่ต้องชำระ', size: 'sm', color: '#64748B', flex: 1 },
-                    { type: 'text', text: `฿${fmt(total)}`, size: 'xl', weight: 'bold', color: isOverdue ? '#DC2626' : '#0F172A', align: 'end' },
-                  ],
-                },
-                {
-                  type: 'box', layout: 'horizontal',
-                  contents: [
-                    { type: 'text', text: 'ครบกำหนด', size: 'sm', color: '#94A3B8', flex: 1 },
-                    {
-                      type: 'text',
-                      text: new Date(bill.due_date as string).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' }),
-                      size: 'sm', color: '#EF4444', align: 'end',
-                    },
-                  ],
-                },
-              ],
-            },
-            footer: {
-              type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '16px',
-              backgroundColor: '#F8FAFC',
-              contents: [
-                {
-                  type: 'button',
-                  action: { type: 'uri', label: '💳 ดูบิล / ชำระเงิน', uri: portalUrl },
-                  style: 'primary',
-                  color: isOverdue ? '#B91C1C' : '#0C1B4D',
-                  height: 'sm',
-                },
-                {
-                  type: 'button',
-                  action: { type: 'uri', label: 'ดูข้อมูลห้อง', uri: tenantPortalUrl },
-                  style: 'secondary',
-                  height: 'sm',
-                },
-              ],
-            },
-          },
-        }
-        await pushMessage(lineUserId, lineConfig.channelAccessToken, [bubble])
-      }
+      await pushMessage(lineUserId, lineConfig.channelAccessToken, [
+        { type: 'text', text: lines.join('\n') },
+        buildPortalFlex(portalUrl),
+      ])
       sent++
+      sentRooms.push(`ห้อง ${roomNumber}: ${fmt(remaining)}฿`)
     } catch {
-      noLine++
+      failed++
     }
   }
 
-  const parts = [`ส่งสำเร็จ ${sent} ห้อง`]
-  if (snoozed > 0) parts.push(`งดแจ้งเตือน ${snoozed} ห้อง`)
-  if (noLine > 0)  parts.push(`ไม่มี LINE ${noLine} ห้อง`)
+  // Owner summary
+  const totalRemaining = bills
+    .filter((b) => {
+      const t = b.tenants as unknown as { line_user_id: string | null } | null
+      return t?.line_user_id
+    })
+    .reduce((sum, b) => sum + Number(b.total_amount), 0)
 
-  return { success: true, sent, snoozed, noLine, message: parts.join(' · ') }
+  const ownerLines = [
+    `📋 สรุปแจ้งเตือนอัตโนมัติ`,
+    `วันที่ ${todayThai} รอบบิล ${monthLabel}`,
+    `✅ ส่งสำเร็จ: ${sent} ห้อง`,
+    `❌ ส่งไม่สำเร็จ: ${failed} ห้อง`,
+    `📅 งดแจ้งเตือน: ${snoozed} ห้อง`,
+    `⚠️ ไม่มี User ID: ${noLine} ห้อง`,
+    `💰 ยอดค้างที่แจ้งรวม: ${fmt(totalRemaining)}฿`,
+  ]
+
+  if (sentRooms.length > 0) {
+    ownerLines.push(SEP)
+    ownerLines.push(...sentRooms)
+  }
+
+  const ownerSummary = ownerLines.join('\n')
+
+  if (lineConfig.ownerLineUserId && sent > 0) {
+    try {
+      await pushMessage(lineConfig.ownerLineUserId, lineConfig.channelAccessToken, [
+        { type: 'text', text: ownerSummary },
+      ])
+    } catch { /* silent */ }
+  }
+
+  const parts = [`ส่งสำเร็จ ${sent} ห้อง`]
+  if (failed > 0) parts.push(`ไม่สำเร็จ ${failed} ห้อง`)
+  if (snoozed > 0) parts.push(`งดแจ้ง ${snoozed} ห้อง`)
+  if (noLine > 0) parts.push(`ไม่มี LINE ${noLine} ห้อง`)
+
+  return { success: true, sent, snoozed, noLine, failed, message: parts.join(' · '), ownerSummary }
 }
 
 // ── Update reminder settings ─────────────────────────────────
@@ -215,19 +262,12 @@ export async function updateReminderSettings(
   enabled: boolean
 ): Promise<{ success: boolean; message: string }> {
   const supabase = await createClient()
-
-  // Validate days
   const days = parseReminderDays(reminderDays)
-  if (days.length === 0) {
-    return { success: false, message: 'กรุณาระบุวันที่แจ้งเตือนอย่างน้อย 1 วัน' }
-  }
+  if (days.length === 0) return { success: false, message: 'กรุณาระบุวันที่แจ้งเตือนอย่างน้อย 1 วัน' }
 
   const { error } = await supabase
     .from('settings')
-    .update({
-      reminder_days:    days.join(','),
-      reminder_enabled: enabled,
-    })
+    .update({ reminder_days: days.join(','), reminder_enabled: enabled })
     .eq('id', 1)
 
   if (error) return { success: false, message: error.message }
@@ -236,4 +276,3 @@ export async function updateReminderSettings(
   revalidatePath('/settings')
   return { success: true, message: 'บันทึกการตั้งค่าแจ้งเตือนแล้ว' }
 }
-
