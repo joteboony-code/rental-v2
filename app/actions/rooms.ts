@@ -5,18 +5,10 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { RoomSchema, RoomFormState } from '@/lib/definitions'
 
-async function getAdminOrThrow() {
+async function getOwnerOrThrow() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single()
-
-  if (profile?.role !== 'admin') redirect('/dashboard')
   return { supabase, user }
 }
 
@@ -24,7 +16,7 @@ export async function createRoom(
   state: RoomFormState,
   formData: FormData
 ): Promise<RoomFormState> {
-  const { supabase } = await getAdminOrThrow()
+  const { supabase } = await getOwnerOrThrow()
 
   const validated = RoomSchema.safeParse({
     room_number:  formData.get('room_number'),
@@ -57,7 +49,7 @@ export async function updateRoom(
   state: RoomFormState,
   formData: FormData
 ): Promise<RoomFormState> {
-  const { supabase } = await getAdminOrThrow()
+  const { supabase } = await getOwnerOrThrow()
 
   const validated = RoomSchema.safeParse({
     room_number:  formData.get('room_number'),
@@ -87,11 +79,12 @@ export async function updateRoom(
 }
 
 export async function deleteRoom(id: string) {
-  const { supabase } = await getAdminOrThrow()
+  const { supabase } = await getOwnerOrThrow()
 
   const { error } = await supabase.from('rooms').delete().eq('id', id)
   if (error) throw new Error(error.message)
 
   revalidatePath('/rooms')
 }
+
 
