@@ -193,7 +193,7 @@ async function processEvents(events: LineEvent[], lineConfig: LineMessagingConfi
       if (event.type === 'follow' && event.replyToken) {
         await replyMessage(event.replyToken, token, [{
           type: 'text',
-          text: 'ยินดีต้อนรับ\n\nเพื่อจับคู่บัญชีกับห้องเช่าของท่าน ส่งรหัส 6 หลักที่ได้รับจากเจ้าของห้อง\n\nตัวอย่าง: A3X9K2',
+          text: 'ยินดีต้อนรับ 🏠\n\nกรุณาสแกน QR จากห้องเช่าของท่านเพื่อจับคู่บัญชี LINE กับห้องพัก\n\nเมื่อจับคู่แล้ว ท่านจะได้รับใบแจ้งค่าเช่าและแจ้งเตือนต่างๆ ทาง LINE นี้',
         }])
         continue
       }
@@ -397,96 +397,24 @@ async function handleSlipImage(
 
 async function handleTextMessage(
   lineUserId: string,
-  text: string,
+  _text: string,
   replyToken: string,
   supabase: SupabaseServiceClient,
   lineConfig: LineMessagingConfig
 ) {
   const token = lineConfig.channelAccessToken
-  const code = text.toUpperCase().replace(/\s/g, '')
 
-  if (!/^[A-Z0-9]{6}$/.test(code)) {
-    const { data: existing } = await supabase
-      .from('tenants')
-      .select('full_name')
-      .eq('line_user_id', lineUserId)
-      .maybeSingle()
-
-    await replyMessage(replyToken, token, [{
-      type: 'text',
-      text: existing
-        ? `บัญชีของคุณ (${existing.full_name}) จับคู่แล้ว\nส่งรูปสลิปเพื่อแจ้งชำระค่าเช่าได้เลย`
-        : 'ส่งรหัส 6 หลักจากเจ้าของห้องเพื่อจับคู่บัญชี หรือส่งรูปสลิปเพื่อแจ้งชำระค่าเช่า',
-    }])
-    return
-  }
-
-  const now = new Date().toISOString()
-  const { data: pairingToken, error } = await supabase
-    .from('pairing_tokens')
-    .select('id, tenant_id, expires_at, used_at, tenants(full_name, id)')
-    .eq('token', code)
-    .maybeSingle()
-
-  if (error || !pairingToken) {
-    await replyMessage(replyToken, token, [{
-      type: 'text',
-      text: `รหัส "${code}" ไม่ถูกต้อง\nกรุณาตรวจสอบรหัสจากเจ้าของห้องอีกครั้ง`,
-    }])
-    return
-  }
-
-  if (pairingToken.used_at) {
-    await replyMessage(replyToken, token, [{ type: 'text', text: 'รหัสนี้ถูกใช้ไปแล้ว\nกรุณาขอรหัสใหม่จากเจ้าของห้อง' }])
-    return
-  }
-
-  if (pairingToken.expires_at < now) {
-    await replyMessage(replyToken, token, [{ type: 'text', text: 'รหัสหมดอายุแล้ว\nกรุณาขอรหัสใหม่จากเจ้าของห้อง' }])
-    return
-  }
-
-  type TenantJoin = { id: string; full_name: string }
-  const tenant = pairingToken.tenants as unknown as TenantJoin | null
-  if (!tenant) {
-    await replyMessage(replyToken, token, [{ type: 'text', text: 'ไม่พบข้อมูลผู้เช่าสำหรับรหัสนี้ กรุณาติดต่อเจ้าของห้อง' }])
-    return
-  }
-
-  const { error: pairError } = await supabase
+  const { data: existing } = await supabase
     .from('tenants')
-    .update({ line_user_id: lineUserId })
-    .eq('id', tenant.id)
-
-  if (pairError) {
-    await replyMessage(replyToken, token, [{ type: 'text', text: `จับคู่ไม่สำเร็จ: ${pairError.message}` }])
-    return
-  }
-
-  const { error: tokenError } = await supabase
-    .from('pairing_tokens')
-    .update({ used_at: now })
-    .eq('id', pairingToken.id)
-
-  if (tokenError) {
-    await replyMessage(replyToken, token, [{ type: 'text', text: `จับคู่แล้ว แต่บันทึกสถานะรหัสไม่สำเร็จ: ${tokenError.message}` }])
-    return
-  }
-
-  const { data: activeContract } = await supabase
-    .from('contracts')
-    .select('rooms(room_number)')
-    .eq('tenant_id', tenant.id)
-    .eq('status', 'active')
+    .select('full_name')
+    .eq('line_user_id', lineUserId)
     .maybeSingle()
-
-  type RoomJoin = { room_number: string }
-  const room = activeContract?.rooms as unknown as RoomJoin | null
-  const roomLabel = room?.room_number ? `ห้อง ${room.room_number}` : 'ไม่พบห้อง active'
 
   await replyMessage(replyToken, token, [{
     type: 'text',
-    text: `จับคู่สำเร็จ\n\nสวัสดี ${tenant.full_name}\nท่านจะได้รับการแจ้งเตือนค่าเช่าและข้อความสำคัญผ่าน LINE นี้\n\nหากต้องการแจ้งชำระค่าเช่า ส่งรูปสลิปมาได้เลย`,
+    text: existing
+      ? `บัญชีของคุณ (${existing.full_name}) จับคู่กับห้องแล้ว\nส่งรูปสลิปเพื่อแจ้งชำระค่าเช่าได้เลย`
+      : 'กรุณาสแกน QR จากห้องเช่าของท่านเพื่อจับคู่บัญชี LINE\n\nหากมีปัญหา กรุณาติดต่อเจ้าของห้อง',
   }])
-  await notifyOwner(lineConfig, `จับคู่ LINE สำเร็จ\nผู้เช่า: ${tenant.full_name}\n${roomLabel}`)
+  void lineConfig
 }
