@@ -229,6 +229,21 @@ export async function updateBill(
   return { success: true, message: 'แก้ไขบิลเรียบร้อยแล้ว' }
 }
 
+// ─── Delete Bill ─────────────────────────────────────────────
+export async function deleteBill(billId: string): Promise<{ success: boolean; message?: string }> {
+  const supabase = await createClient()
+
+  // ลบประวัติชำระก่อน (FK payments → bills)
+  const { error: payErr } = await supabase.from('payments').delete().eq('bill_id', billId)
+  if (payErr) return { success: false, message: `ลบประวัติชำระไม่สำเร็จ: ${payErr.message}` }
+
+  const { error } = await supabase.from('bills').delete().eq('id', billId)
+  if (error) return { success: false, message: error.message }
+
+  revalidatePath('/bills')
+  return { success: true }
+}
+
 // ─── Mark Bill Paid ──────────────────────────────────────────
 export async function markBillPaid(billId: string): Promise<{ success: boolean; message: string }> {
   const supabase = await createClient()

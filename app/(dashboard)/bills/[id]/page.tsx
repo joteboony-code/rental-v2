@@ -9,6 +9,7 @@ import { ChevronLeft, Droplets, Zap, Home, User, Receipt, CreditCard, MessageCir
 import { roomRow } from '@/lib/room-utils'
 import { LineNotifyButton } from './_components/line-notify-button'
 import { EditBillForm } from './_components/edit-bill-form'
+import { DeleteBillButton } from './_components/delete-bill-button'
 
 export default async function BillDetailPage({
   params,
@@ -96,6 +97,7 @@ export default async function BillDetailPage({
                 electricityRate={Number(settings?.electricity_unit_price ?? 8)}
               />
             )}
+            <DeleteBillButton billId={id} roomNumber={room?.room_number ?? '—'} month={monthLabel} />
             <BillStatusBadge status={bill.status} />
           </div>
         </div>
