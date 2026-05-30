@@ -18,6 +18,7 @@ type PairFormProps = {
   addFriendUrl?: string | null
   appOrigin?: string
   initialRoomNumber?: string
+  pairingCode?: string | null
 }
 
 type LiffStatus = 'loading' | 'ok' | 'need-login' | 'no-liff' | 'error'
@@ -26,6 +27,7 @@ export function PairForm({
   liffId,
   addFriendUrl,
   initialRoomNumber = '',
+  pairingCode,
 }: PairFormProps) {
   const [state, action, pending] = useActionState<PairLineState, FormData>(
     pairTenantLine,
@@ -126,14 +128,25 @@ export function PairForm({
         </div>
       </div>
 
-      {/* Add LINE OA button */}
+      {/* Pairing code card */}
+      {pairingCode && (
+        <div className="rounded-2xl bg-white px-5 py-4 shadow-sm">
+          <p className="text-xs font-medium text-slate-400">รหัสจับคู่ (ระบบใส่ให้อัตโนมัติ)</p>
+          <p className="mt-2 font-mono text-4xl font-bold tracking-[0.2em] text-slate-900">
+            {pairingCode}
+          </p>
+          <p className="mt-1.5 text-xs text-slate-400">หมดอายุภายใน 24 ชั่วโมง</p>
+        </div>
+      )}
+
+      {/* Add LINE OA / send code button */}
       {addFriendUrl && (
         <a
           href={addFriendUrl}
           className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#06C755] text-sm font-bold text-white shadow-sm active:opacity-90"
         >
           <span className="text-lg font-light">+</span>
-          เพิ่ม LINE OA / ปลดบล็อก
+          {pairingCode ? 'เปิด LINE — กดส่งรหัสได้เลย' : 'เพิ่ม LINE OA / ปลดบล็อก'}
         </a>
       )}
 
@@ -180,10 +193,16 @@ export function PairForm({
 
       {/* Step instructions */}
       <div className="space-y-2.5 pb-4">
-        {[
-          'เพิ่ม LINE OA ของหอพักให้เรียบร้อย (กดปุ่มด้านบน)',
-          'กด "ยืนยันจับคู่" เพื่อบันทึกบัญชี LINE เข้าระบบ',
-        ].map((step, i) => (
+        {(pairingCode
+          ? [
+              'กดปุ่มสีเขียวด้านบน — LINE จะเปิดพร้อมรหัสในช่องพิมพ์',
+              'กดส่ง — ระบบจับคู่ให้อัตโนมัติทันที',
+            ]
+          : [
+              'เพิ่ม LINE OA ของหอพักให้เรียบร้อย (กดปุ่มด้านบน)',
+              'กด "ยืนยันจับคู่" เพื่อบันทึกบัญชี LINE เข้าระบบ',
+            ]
+        ).map((step, i) => (
           <div key={i} className="flex items-start gap-3 text-sm text-slate-500">
             <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-white text-xs font-bold text-slate-600 shadow-sm">
               {i + 1}
