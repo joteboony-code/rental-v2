@@ -65,7 +65,7 @@ export default async function BillingHistoryPage() {
               <div key={month} className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
                 <div className="px-5 py-4 flex items-center justify-between flex-wrap gap-3">
                   <div>
-                    <Link href={`/admin/bills?month=${month}`}
+                    <Link href={`/bills?month=${month}`}
                       className="font-bold text-slate-950 hover:text-slate-700 text-lg">
                       {monthLabel}
                     </Link>
@@ -107,4 +107,5 @@ export default async function BillingHistoryPage() {
     </div>
   )
 }
+
 

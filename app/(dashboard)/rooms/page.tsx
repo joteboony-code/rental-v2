@@ -124,7 +124,7 @@ export default async function RoomsPage() {
                       <td className="px-5 py-4">
                         <div className="flex items-center justify-end gap-1">
                           <RoomPairQrButton roomNumber={room.room_number} pairUrl={roomPairUrl} />
-                          <Link href={`/admin/rooms/${room.id}/edit`}
+                          <Link href={`/rooms/${room.id}/edit`}
                             className="p-2 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">
                             <Pencil className="size-3.5" />
                           </Link>
@@ -159,7 +159,7 @@ export default async function RoomsPage() {
                     </div>
                     <div className="flex items-center gap-1">
                       <RoomPairQrButton roomNumber={room.room_number} pairUrl={roomPairUrl} />
-                      <Link href={`/admin/rooms/${room.id}/edit`}
+                      <Link href={`/rooms/${room.id}/edit`}
                         className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">
                         <Pencil className="size-4" />
                       </Link>
@@ -209,4 +209,5 @@ function StatCard({ value, label, sub, color }: {
     </div>
   )
 }
+
 

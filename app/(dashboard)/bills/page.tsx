@@ -101,11 +101,11 @@ export default async function BillsPage({ searchParams }: Props) {
             className={buttonVariants({ variant: 'outline', size: 'sm' }) + ' rounded-xl gap-1.5 border-slate-200 text-slate-600 hover:bg-slate-50'}>
             <History className="size-3.5" /> ประวัติ
           </Link>
-          <a href={`/admin/bills/export?month=${currentMonth}`}
+          <a href={`/bills/export?month=${currentMonth}`}
             className={buttonVariants({ variant: 'outline', size: 'sm' }) + ' rounded-xl gap-1.5 border-slate-200 text-slate-600 hover:bg-slate-50'}>
             <Download className="size-3.5" /> Export
           </a>
-          <Link href={`/admin/bills/meter?month=${currentMonth}`}
+          <Link href={`/bills/meter?month=${currentMonth}`}
             className={buttonVariants({ variant: 'default', size: 'sm' }) + ' rounded-xl gap-1.5 bg-slate-950 hover:bg-slate-800 text-white shadow-md shadow-slate-900/20'}>
             <ClipboardList className="size-3.5" /> บันทึกมิเตอร์
           </Link>
@@ -188,7 +188,7 @@ export default async function BillsPage({ searchParams }: Props) {
       <div className="flex gap-2 overflow-x-auto pb-1">
         {filterTabs.map(({ value, label, count }) => (
           <Link key={value}
-            href={`/admin/bills?month=${currentMonth}${value ? `&status=${value}` : ''}`}
+            href={`/bills?month=${currentMonth}${value ? `&status=${value}` : ''}`}
             className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all whitespace-nowrap border ${
               (status ?? '') === value
                 ? 'bg-slate-950 text-white border-slate-950 shadow-sm'
@@ -207,7 +207,7 @@ export default async function BillsPage({ searchParams }: Props) {
         {!bills || bills.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-24 text-slate-400">
             <p className="font-semibold text-slate-600 mb-1">ยังไม่มีบิลในเดือนนี้</p>
-            <Link href={`/admin/bills/meter?month=${currentMonth}`}
+            <Link href={`/bills/meter?month=${currentMonth}`}
               className={buttonVariants({ variant: 'default', size: 'sm' }) + ' mt-4 rounded-xl bg-slate-950 hover:bg-slate-800'}>
               บันทึกมิเตอร์ + ออกบิล
             </Link>
@@ -261,7 +261,7 @@ export default async function BillsPage({ searchParams }: Props) {
                         )}
                       </td>
                       <td className="px-5 py-4 text-right">
-                        <Link href={`/admin/bills/${bill.id}`}
+                        <Link href={`/bills/${bill.id}`}
                           className="text-xs font-semibold text-slate-500 hover:text-slate-900 hover:bg-slate-200 px-3 py-1.5 rounded-lg transition-colors">
                           ดูบิล →
                         </Link>
@@ -289,7 +289,7 @@ export default async function BillsPage({ searchParams }: Props) {
                 const room   = bill.rooms   as { room_number: string; floor: number | null } | null
                 const tenant = bill.tenants as { full_name: string } | null
                 return (
-                  <Link key={bill.id} href={`/admin/bills/${bill.id}`}
+                  <Link key={bill.id} href={`/bills/${bill.id}`}
                     className="flex items-center gap-4 p-4 hover:bg-slate-50 transition-colors">
                     <div className="size-11 rounded-xl bg-slate-100 flex items-center justify-center text-sm font-bold text-slate-700 shrink-0">
                       {room?.room_number ?? '—'}
@@ -322,4 +322,5 @@ export default async function BillsPage({ searchParams }: Props) {
     </div>
   )
 }
+
 

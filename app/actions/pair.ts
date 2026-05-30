@@ -34,7 +34,7 @@ export async function generatePairingToken(tenantId: string): Promise<GeneratePa
   if (error) return { success: false, message: error.message }
 
   const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
-  revalidatePath(`/admin/tenants/${tenantId}`)
+  revalidatePath(`/tenants/${tenantId}`)
   return { success: true, token, expiresAt }
 }
 
@@ -46,7 +46,7 @@ export async function unlinkTenantLine(tenantId: string): Promise<{ success: boo
     .eq('id', tenantId)
 
   if (error) return { success: false, message: error.message }
-  revalidatePath(`/admin/tenants/${tenantId}`)
+  revalidatePath(`/tenants/${tenantId}`)
   return { success: true }
 }
 
@@ -91,3 +91,4 @@ export async function pairTenantLine(
     roomNumber: result?.room_number ?? null,
   }
 }
+

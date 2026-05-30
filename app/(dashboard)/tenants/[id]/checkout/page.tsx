@@ -35,7 +35,7 @@ export default async function CheckoutPage({
   if (!contract) {
     return (
       <div className="p-5 md:p-8 max-w-2xl">
-        <Link href={`/admin/tenants/${id}`}
+        <Link href={`/tenants/${id}`}
           className="inline-flex items-center gap-1 text-xs font-medium text-slate-400 hover:text-slate-700 mb-5 transition-colors">
           <ChevronLeft className="size-3.5" /> ข้อมูลผู้เช่า
         </Link>
@@ -63,7 +63,7 @@ export default async function CheckoutPage({
 
       {/* ── Header ── */}
       <div>
-        <Link href={`/admin/tenants/${id}`}
+        <Link href={`/tenants/${id}`}
           className="inline-flex items-center gap-1 text-xs font-medium text-slate-400 hover:text-slate-700 mb-5 transition-colors">
           <ChevronLeft className="size-3.5" /> ข้อมูลผู้เช่า
         </Link>
@@ -104,3 +104,4 @@ export default async function CheckoutPage({
     </div>
   )
 }
+

@@ -1,0 +1,234 @@
+{
+  "version": 3,
+  "pages404": true,
+  "appType": "app",
+  "caseSensitive": false,
+  "basePath": "",
+  "redirects": [
+    {
+      "source": "/:path+/",
+      "destination": "/:path+",
+      "internal": true,
+      "priority": true,
+      "statusCode": 308,
+      "regex": "^(?:/((?:[^/]+?)(?:/(?:[^/]+?))*))/$"
+    }
+  ],
+  "headers": [],
+  "onMatchHeaders": [],
+  "rewrites": {
+    "beforeFiles": [],
+    "afterFiles": [],
+    "fallback": []
+  },
+  "dynamicRoutes": [
+    {
+      "page": "/bills/[id]",
+      "regex": "^/bills/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/bills/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/portal/[billId]",
+      "regex": "^/portal/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPbillId": "nxtPbillId"
+      },
+      "namedRegex": "^/portal/(?<nxtPbillId>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/repairs/[id]",
+      "regex": "^/repairs/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/repairs/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/rooms/[id]/edit",
+      "regex": "^/rooms/([^/]+?)/edit(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/rooms/(?<nxtPid>[^/]+?)/edit(?:/)?$"
+    },
+    {
+      "page": "/tenants/[id]",
+      "regex": "^/tenants/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/tenants/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/tenants/[id]/checkout",
+      "regex": "^/tenants/([^/]+?)/checkout(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/tenants/(?<nxtPid>[^/]+?)/checkout(?:/)?$"
+    },
+    {
+      "page": "/tenants/[id]/edit",
+      "regex": "^/tenants/([^/]+?)/edit(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/tenants/(?<nxtPid>[^/]+?)/edit(?:/)?$"
+    }
+  ],
+  "staticRoutes": [
+    {
+      "page": "/",
+      "regex": "^/(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/(?:/)?$"
+    },
+    {
+      "page": "/api/line/webhook",
+      "regex": "^/api/line/webhook(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/line/webhook(?:/)?$"
+    },
+    {
+      "page": "/auth/callback",
+      "regex": "^/auth/callback(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/auth/callback(?:/)?$"
+    },
+    {
+      "page": "/bills",
+      "regex": "^/bills(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/bills(?:/)?$"
+    },
+    {
+      "page": "/bills/export",
+      "regex": "^/bills/export(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/bills/export(?:/)?$"
+    },
+    {
+      "page": "/bills/history",
+      "regex": "^/bills/history(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/bills/history(?:/)?$"
+    },
+    {
+      "page": "/bills/meter",
+      "regex": "^/bills/meter(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/bills/meter(?:/)?$"
+    },
+    {
+      "page": "/broadcast",
+      "regex": "^/broadcast(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/broadcast(?:/)?$"
+    },
+    {
+      "page": "/favicon.ico",
+      "regex": "^/favicon\\.ico(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/favicon\\.ico(?:/)?$"
+    },
+    {
+      "page": "/_global-error",
+      "regex": "^/_global\\-error(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/_global\\-error(?:/)?$"
+    },
+    {
+      "page": "/history",
+      "regex": "^/history(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/history(?:/)?$"
+    },
+    {
+      "page": "/login",
+      "regex": "^/login(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/login(?:/)?$"
+    },
+    {
+      "page": "/_not-found",
+      "regex": "^/_not\\-found(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/_not\\-found(?:/)?$"
+    },
+    {
+      "page": "/portal",
+      "regex": "^/portal(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/portal(?:/)?$"
+    },
+    {
+      "page": "/portal/pair",
+      "regex": "^/portal/pair(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/portal/pair(?:/)?$"
+    },
+    {
+      "page": "/repairs",
+      "regex": "^/repairs(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/repairs(?:/)?$"
+    },
+    {
+      "page": "/repairs/new",
+      "regex": "^/repairs/new(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/repairs/new(?:/)?$"
+    },
+    {
+      "page": "/rooms",
+      "regex": "^/rooms(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/rooms(?:/)?$"
+    },
+    {
+      "page": "/rooms/new",
+      "regex": "^/rooms/new(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/rooms/new(?:/)?$"
+    },
+    {
+      "page": "/settings",
+      "regex": "^/settings(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/settings(?:/)?$"
+    },
+    {
+      "page": "/tenants",
+      "regex": "^/tenants(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/tenants(?:/)?$"
+    },
+    {
+      "page": "/tenants/new",
+      "regex": "^/tenants/new(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/tenants/new(?:/)?$"
+    }
+  ],
+  "dataRoutes": [],
+  "rsc": {
+    "header": "rsc",
+    "varyHeader": "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch",
+    "prefetchHeader": "next-router-prefetch",
+    "didPostponeHeader": "x-nextjs-postponed",
+    "contentTypeHeader": "text/x-component",
+    "suffix": ".rsc",
+    "prefetchSegmentHeader": "next-router-segment-prefetch",
+    "prefetchSegmentSuffix": ".segment.rsc",
+    "prefetchSegmentDirSuffix": ".segments",
+    "clientParamParsing": false,
+    "dynamicRSCPrerender": false
+  },
+  "rewriteHeaders": {
+    "pathHeader": "x-nextjs-rewritten-path",
+    "queryHeader": "x-nextjs-rewritten-query"
+  }
+}

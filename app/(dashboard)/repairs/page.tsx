@@ -93,7 +93,7 @@ export default async function RepairsPage({ searchParams }: Props) {
       <div className="flex gap-2 overflow-x-auto pb-1">
         {filterTabs.map(({ value, label, count }) => (
           <Link key={value}
-            href={`/admin/repairs${value ? `?status=${value}` : ''}`}
+            href={`/repairs${value ? `?status=${value}` : ''}`}
             className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all whitespace-nowrap border ${
               (status ?? '') === value
                 ? 'bg-slate-950 text-white border-slate-950 shadow-sm'
@@ -160,7 +160,7 @@ export default async function RepairsPage({ searchParams }: Props) {
                         {new Date(repair.created_at).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })}
                       </td>
                       <td className="px-5 py-4 text-right">
-                        <Link href={`/admin/repairs/${repair.id}`}
+                        <Link href={`/repairs/${repair.id}`}
                           className="text-xs font-semibold text-slate-500 hover:text-slate-900 hover:bg-slate-200 px-3 py-1.5 rounded-lg transition-colors">
                           จัดการ →
                         </Link>
@@ -179,7 +179,7 @@ export default async function RepairsPage({ searchParams }: Props) {
                 const room   = repair.rooms   as unknown as RoomJoin   | null
                 const tenant = repair.tenants as unknown as TenantJoin | null
                 return (
-                  <Link key={repair.id} href={`/admin/repairs/${repair.id}`}
+                  <Link key={repair.id} href={`/repairs/${repair.id}`}
                     className="flex items-start gap-4 p-4 hover:bg-slate-50 transition-colors">
                     <div className="size-11 rounded-xl bg-slate-100 flex items-center justify-center text-sm font-bold text-slate-700 shrink-0 mt-0.5">
                       {room?.room_number ?? '—'}
@@ -207,4 +207,5 @@ export default async function RepairsPage({ searchParams }: Props) {
     </div>
   )
 }
+
 

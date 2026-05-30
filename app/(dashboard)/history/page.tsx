@@ -66,7 +66,7 @@ export default async function MoveOutHistoryPage() {
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between flex-wrap gap-2">
-                      <Link href={`/admin/tenants/${tenant?.id}`}
+                      <Link href={`/tenants/${tenant?.id}`}
                         className="font-semibold text-slate-800 hover:text-slate-950 flex items-center gap-1.5">
                         <User className="size-3.5 text-slate-400" />
                         {tenant?.full_name ?? '—'}
@@ -102,4 +102,5 @@ export default async function MoveOutHistoryPage() {
     </div>
   )
 }
+
 

@@ -13,7 +13,7 @@ export function BillingMonthNav({ currentMonth }: { currentMonth: string }) {
     startTransition(async () => {
       const res = await shiftBillingMonth(dir)
       if (res.success) {
-        router.push(`/admin/bills?month=${res.month}`)
+        router.push(`/bills?month=${res.month}`)
       }
     })
   }
@@ -46,3 +46,4 @@ export function BillingMonthNav({ currentMonth }: { currentMonth: string }) {
     </div>
   )
 }
+

@@ -88,7 +88,7 @@ export async function recordPayment(
   }
 
   revalidatePath('/bills')
-  revalidatePath(`/admin/bills/${billId}`)
+  revalidatePath(`/bills/${billId}`)
   revalidatePath('/portal')
 
   return {
@@ -140,7 +140,8 @@ export async function deletePayment(paymentId: string, billId: string): Promise<
   }
 
   revalidatePath('/bills')
-  revalidatePath(`/admin/bills/${billId}`)
+  revalidatePath(`/bills/${billId}`)
   revalidatePath('/portal')
 }
+
 

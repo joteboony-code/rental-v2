@@ -26,10 +26,11 @@ export async function saveCheckout(data: {
     .eq('id', data.roomId)
   if (e2) return { success: false, message: `อัพเดทห้องไม่สำเร็จ: ${e2.message}` }
 
-  revalidatePath(`/admin/tenants/${data.tenantId}`)
+  revalidatePath(`/tenants/${data.tenantId}`)
   revalidatePath('/tenants')
   revalidatePath('/rooms')
 
   return { success: true, message: 'บันทึกการย้ายออกเรียบร้อย' }
 }
+
 

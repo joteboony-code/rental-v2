@@ -73,12 +73,12 @@ export default async function TenantDetailPage({
           </div>
           <div className="flex items-center gap-2">
             {hasActiveContract && (
-              <Link href={`/admin/tenants/${id}/checkout`}
+              <Link href={`/tenants/${id}/checkout`}
                 className={buttonVariants({ variant: 'outline', size: 'sm' }) + ' rounded-xl border-rose-200 text-rose-600 hover:bg-rose-50 hover:border-rose-400 gap-1.5'}>
                 <LogOut className="size-3.5" /> ย้ายออก
               </Link>
             )}
-            <Link href={`/admin/tenants/${id}/edit`}
+            <Link href={`/tenants/${id}/edit`}
               className={buttonVariants({ variant: 'outline', size: 'sm' }) + ' rounded-xl border-slate-200 text-slate-600 hover:bg-slate-50 gap-1.5'}>
               <Pencil className="size-3.5" /> แก้ไขข้อมูล
             </Link>
@@ -261,4 +261,5 @@ function formatDate(dateStr: string) {
     day: 'numeric',
   })
 }
+
 

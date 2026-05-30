@@ -56,7 +56,7 @@ export async function createRepair(
   if (error) return { message: `เกิดข้อผิดพลาด: ${error.message}` }
 
   revalidatePath('/repairs')
-  redirect(`/admin/repairs/${data.id}`)
+  redirect(`/repairs/${data.id}`)
 }
 
 // ─── Update Repair Status ────────────────────────────────────
@@ -73,7 +73,7 @@ export async function updateRepairStatus(
 
   if (error) return { success: false, message: error.message }
   revalidatePath('/repairs')
-  revalidatePath(`/admin/repairs/${id}`)
+  revalidatePath(`/repairs/${id}`)
   return { success: true, message: 'อัปเดตสถานะแล้ว' }
 }
 
@@ -102,4 +102,5 @@ export async function deleteRepair(id: string): Promise<void> {
   revalidatePath('/repairs')
   redirect('/repairs')
 }
+
 

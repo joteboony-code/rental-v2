@@ -151,7 +151,7 @@ export default async function TenantsPage() {
                         )}
                       </td>
                       <td className="px-5 py-4 text-right">
-                        <Link href={`/admin/tenants/${tenant.id}`}
+                        <Link href={`/tenants/${tenant.id}`}
                           className="inline-flex h-8 min-w-24 items-center justify-center gap-1.5 rounded-lg bg-slate-100 px-3 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-950">
                           ดูข้อมูล
                           <ArrowRight className="size-3.5" strokeWidth={1.8} />
@@ -169,7 +169,7 @@ export default async function TenantsPage() {
                 const activeContract = (tenant.contracts as { status: string; rooms: { room_number: string; floor: number | null } | null }[] | null)
                   ?.find((c) => c.status === 'active')
                 return (
-                  <Link key={tenant.id} href={`/admin/tenants/${tenant.id}`}
+                  <Link key={tenant.id} href={`/tenants/${tenant.id}`}
                     className="flex items-center gap-4 p-4 hover:bg-slate-50 transition-colors">
                     <div className="size-11 rounded-xl bg-slate-100 flex items-center justify-center text-sm font-bold text-slate-600 shrink-0">
                       {tenant.full_name.slice(0, 2).toUpperCase()}
@@ -211,4 +211,5 @@ export default async function TenantsPage() {
     </div>
   )
 }
+
 

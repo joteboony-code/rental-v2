@@ -37,7 +37,7 @@ export async function createTenant(
   }
 
   revalidatePath('/tenants')
-  redirect(`/admin/tenants/${data.id}`)
+  redirect(`/tenants/${data.id}`)
 }
 
 // ─── Update Tenant ───────────────────────────────────────────
@@ -72,7 +72,7 @@ export async function updateTenant(
   }
 
   revalidatePath('/tenants')
-  revalidatePath(`/admin/tenants/${id}`)
+  revalidatePath(`/tenants/${id}`)
   return { success: true, message: 'บันทึกข้อมูลเรียบร้อยแล้ว' }
 }
 
@@ -178,7 +178,7 @@ export async function uploadContractImages(
     .update({ contract_images: [...existing, ...newUrls] })
     .eq('id', tenantId)
 
-  revalidatePath(`/admin/tenants/${tenantId}`)
+  revalidatePath(`/tenants/${tenantId}`)
   return { success: true, message: `อัพโหลดสำเร็จ ${newUrls.length} ไฟล์`, urls: newUrls }
 }
 
@@ -211,7 +211,7 @@ export async function deleteContractImage(
     }
   } catch {}
 
-  revalidatePath(`/admin/tenants/${tenantId}`)
+  revalidatePath(`/tenants/${tenantId}`)
 }
 
 // ─── Terminate Contract ───────────────────────────────────────
@@ -224,7 +224,8 @@ export async function terminateContract(contractId: string, tenantId: string): P
 
   if (error) throw new Error(error.message)
   revalidatePath('/tenants')
-  revalidatePath(`/admin/tenants/${tenantId}`)
+  revalidatePath(`/tenants/${tenantId}`)
   revalidatePath('/rooms')
 }
+
 
