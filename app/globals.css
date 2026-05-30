@@ -128,3 +128,16 @@
     @apply font-sans;
   }
 }
+
+/* ── Sidebar tooltip ── */
+.sidebar-tooltip {
+  pointer-events: none;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateX(-4px);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+.sidebar-item:hover .sidebar-tooltip {
+  opacity: 1;
+  transform: translateX(0);
+}
