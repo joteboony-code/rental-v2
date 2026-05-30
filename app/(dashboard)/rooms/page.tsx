@@ -128,7 +128,7 @@ export default async function RoomsPage() {
                             className="p-2 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">
                             <Pencil className="size-3.5" />
                           </Link>
-                          <DeleteRoomButton id={room.id} />
+                          <DeleteRoomButton id={room.id} roomNumber={room.room_number} />
                         </div>
                       </td>
                     </tr>

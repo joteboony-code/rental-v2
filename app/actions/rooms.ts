@@ -78,13 +78,44 @@ export async function updateRoom(
   return { success: true, message: 'แก้ไขห้องเรียบร้อยแล้ว' }
 }
 
-export async function deleteRoom(id: string) {
+export async function deleteRoom(id: string): Promise<{ success: boolean; message?: string }> {
   const { supabase } = await getOwnerOrThrow()
 
+  // อนุญาตลบเฉพาะห้องเลข 31 ขึ้นไป (ห้อง 1–30 เป็นห้องจริง ห้ามลบ)
+  const { data: room } = await supabase
+    .from('rooms')
+    .select('room_number')
+    .eq('id', id)
+    .maybeSingle()
+
+  if (!room) return { success: false, message: 'ไม่พบห้อง' }
+  if ((parseInt(room.room_number) || 0) < 31) {
+    return { success: false, message: 'ลบได้เฉพาะห้องเลข 31 ขึ้นไป' }
+  }
+
+  // cascade: ลบข้อมูลที่อ้างถึงห้องนี้ตามลำดับ FK
+  const { data: bills } = await supabase.from('bills').select('id').eq('room_id', id)
+  const billIds = (bills ?? []).map((b) => b.id)
+
+  if (billIds.length > 0) {
+    const { error } = await supabase.from('payments').delete().in('bill_id', billIds)
+    if (error) return { success: false, message: `ลบประวัติชำระไม่สำเร็จ: ${error.message}` }
+  }
+
+  for (const [table, msg] of [
+    ['bills', 'บิล'],
+    ['meter_readings', 'มิเตอร์'],
+    ['contracts', 'สัญญา'],
+  ] as const) {
+    const { error } = await supabase.from(table).delete().eq('room_id', id)
+    if (error) return { success: false, message: `ลบ${msg}ไม่สำเร็จ: ${error.message}` }
+  }
+
   const { error } = await supabase.from('rooms').delete().eq('id', id)
-  if (error) throw new Error(error.message)
+  if (error) return { success: false, message: error.message }
 
   revalidatePath('/rooms')
+  return { success: true }
 }
 
 

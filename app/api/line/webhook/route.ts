@@ -479,6 +479,15 @@ export async function POST(req: NextRequest) {
     } catch (error) {
       console.error('[webhook]', error)
       await notifyOwner(cfg, `⚠️ Worker error: ${String(error)}`)
+      // ตอบผู้ใช้เสมอแม้เกิดข้อผิดพลาด เพื่อไม่ให้เงียบหาย (best-effort)
+      if (event.type === 'message' && event.replyToken) {
+        try {
+          await reply(event.replyToken, cfg.channelAccessToken, [{
+            type: 'text',
+            text: 'ขออภัยครับ ระบบขัดข้องชั่วคราว กรุณาส่งใหม่อีกครั้ง หรือติดต่อเจ้าของหอครับ',
+          }])
+        } catch { /* reply token อาจถูกใช้ไปแล้ว */ }
+      }
     }
   }
 
