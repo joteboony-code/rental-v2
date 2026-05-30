@@ -9,7 +9,7 @@ binding = "ASSETS"
 
 [[services]]
 binding = "WORKER_SELF_REFERENCE"
-service = "rental"
+service = "rental-v2"
 
 [vars]
 # ตั้งค่า environment variables ใน Cloudflare dashboard > Workers > rental > Settings > Variables
