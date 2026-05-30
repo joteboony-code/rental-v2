@@ -18,12 +18,13 @@ export type GeneratePairingTokenResult = {
 export async function generatePairingToken(tenantId: string): Promise<GeneratePairingTokenResult> {
   const supabase = await createClient()
 
-  // ลบ token เก่าที่ยังไม่ได้ใช้ของ tenant นี้
+  // mark token เก่าเป็น cancelled แทนการลบ (เก็บ audit trail)
   await supabase
     .from('pairing_tokens')
-    .delete()
+    .update({ cancelled_at: new Date().toISOString(), cancel_reason: 'replaced_by_new_qr' })
     .eq('tenant_id', tenantId)
     .is('used_at', null)
+    .is('cancelled_at', null)
 
   const token = randomToken()
   const { error } = await supabase.from('pairing_tokens').insert({

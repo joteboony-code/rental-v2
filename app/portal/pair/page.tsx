@@ -9,7 +9,12 @@ function randomToken() {
   return Array.from({ length: 6 }, () => TOKEN_CHARS[Math.floor(Math.random() * TOKEN_CHARS.length)]).join('')
 }
 
-async function getPairingCode(roomNumber: string): Promise<string | null> {
+type PairingInfo = {
+  code: string | null
+  alreadyLinked: boolean
+}
+
+async function getPairingInfo(roomNumber: string): Promise<PairingInfo> {
   const supabase = createServiceClient()
 
   // หา tenant จาก room number ผ่าน active contract
@@ -21,25 +26,41 @@ async function getPairingCode(roomNumber: string): Promise<string | null> {
     .maybeSingle()
 
   const tenantId = contract?.tenant_id
-  if (!tenantId) return null
+  if (!tenantId) return { code: null, alreadyLinked: false }
 
-  // ใช้ token เดิมถ้ายังไม่หมดอายุ
+  // ตรวจว่าห้องมี LINE จับคู่อยู่แล้วหรือไม่
+  const { data: tenant } = await supabase
+    .from('tenants')
+    .select('line_user_id')
+    .eq('id', tenantId)
+    .maybeSingle()
+
+  const alreadyLinked = !!tenant?.line_user_id
+
+  // ใช้ token เดิมถ้ายังไม่หมดอายุและไม่ถูก cancel
   const { data: existing } = await supabase
     .from('pairing_tokens')
     .select('token')
     .eq('tenant_id', tenantId)
     .is('used_at', null)
+    .is('cancelled_at', null)
     .gt('expires_at', new Date().toISOString())
     .maybeSingle()
 
-  if (existing?.token) return existing.token
+  if (existing?.token) return { code: existing.token, alreadyLinked }
 
-  // สร้าง token ใหม่
-  await supabase.from('pairing_tokens').delete().eq('tenant_id', tenantId).is('used_at', null)
+  // สร้าง token ใหม่ (cancel อันเก่าผ่าน generatePairingToken ใน actions)
+  await supabase
+    .from('pairing_tokens')
+    .update({ cancelled_at: new Date().toISOString(), cancel_reason: 'replaced_by_new_qr' })
+    .eq('tenant_id', tenantId)
+    .is('used_at', null)
+    .is('cancelled_at', null)
+
   const token = randomToken()
   const { error } = await supabase.from('pairing_tokens').insert({ tenant_id: tenantId, token })
-  if (error) return null
-  return token
+  if (error) return { code: null, alreadyLinked }
+  return { code: token, alreadyLinked }
 }
 
 export default async function PairPage({
@@ -54,7 +75,9 @@ export default async function PairPage({
   const protocol = headerList.get('x-forwarded-proto') ?? 'https'
   const fallbackOrigin = host ? `${protocol}://${host}` : ''
   const appOrigin = normalizeOrigin(line?.app_url) || fallbackOrigin
-  const pairingCode = room ? await getPairingCode(room) : null
+  const { code: pairingCode, alreadyLinked } = room
+    ? await getPairingInfo(room)
+    : { code: null, alreadyLinked: false }
 
   const addFriendUrl = (() => {
     if (!line?.line_oa_basic_id) return null
@@ -62,7 +85,7 @@ export default async function PairPage({
       ? line.line_oa_basic_id.slice(1)
       : line.line_oa_basic_id
     if (pairingCode) {
-      // เปิด LINE chat พร้อมรหัสใส่ช่องพิมพ์อัตโนมัติ
+      // เปิด LINE chat พร้อมรหัสใส่ช่องพิมพ์อัตโนมัติ (fallback เมื่อไม่ได้อยู่ใน LIFF)
       return `https://line.me/R/oaMessage/@${rawId}?text=${encodeURIComponent(pairingCode)}`
     }
     return `https://line.me/R/ti/p/${encodeURIComponent(line.line_oa_basic_id)}`
@@ -91,6 +114,7 @@ export default async function PairPage({
           appOrigin={appOrigin}
           initialRoomNumber={room ?? ''}
           pairingCode={pairingCode}
+          alreadyLinked={alreadyLinked}
         />
       </div>
     </main>

@@ -75,6 +75,19 @@ async function isValidSignature(body: string, sig: string, secret: string) {
   return crypto.subtle.verify('HMAC', key, sigBytes, enc.encode(body))
 }
 
+async function getDisplayName(lineUserId: string, token: string): Promise<string> {
+  try {
+    const res = await fetch(`https://api.line.me/v2/bot/profile/${lineUserId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!res.ok) return ''
+    const data = await res.json() as { displayName?: string }
+    return data.displayName ?? ''
+  } catch {
+    return ''
+  }
+}
+
 async function reply(replyToken: string, token: string, messages: object[]) {
   await fetch('https://api.line.me/v2/bot/message/reply', {
     method: 'POST',
@@ -194,6 +207,7 @@ async function handleText(lineUserId: string, text: string, replyToken: string, 
       .select('id, tenant_id')
       .eq('token', upper)
       .is('used_at', null)
+      .is('cancelled_at', null)
       .gt('expires_at', now)
       .maybeSingle()
 
@@ -204,9 +218,10 @@ async function handleText(lineUserId: string, text: string, replyToken: string, 
         .eq('id', tokenRow.tenant_id)
 
       if (!error) {
+        const displayName = await getDisplayName(lineUserId, cfg.channelAccessToken)
         await supabase
           .from('pairing_tokens')
-          .update({ used_at: now })
+          .update({ used_at: now, line_user_id: lineUserId, display_name: displayName })
           .eq('id', tokenRow.id)
 
         // ดึงข้อมูลผู้เช่าและห้อง
