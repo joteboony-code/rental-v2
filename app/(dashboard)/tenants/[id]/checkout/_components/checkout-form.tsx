@@ -119,7 +119,10 @@ export function CheckoutForm({
     if (!canSave) return
     setSaveResult(null)
     startSave(async () => {
-      const res = await saveCheckout({ contractId, roomId, tenantId, moveOutDate, note })
+      const res = await saveCheckout({
+        contractId, roomId, tenantId, moveOutDate, note,
+        paidBills: unpaidBills.map((b) => ({ id: b.id, amount: b.total_amount })),
+      })
       setSaveResult(res)
       if (res.success) {
         setTimeout(() => router.push('/tenants'), 2000)
