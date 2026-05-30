@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { notFound } from 'next/navigation'
 import { createServiceClient } from '@/lib/supabase/service'
 import { Droplets, Zap, Home, User, Phone, CheckCircle, Clock, AlertTriangle } from 'lucide-react'
