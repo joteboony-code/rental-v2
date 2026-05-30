@@ -1,0 +1,19 @@
+name = "rental-v2"
+main = ".open-next/worker.js"
+compatibility_date = "2026-05-29"
+compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public"]
+
+[assets]
+directory = ".open-next/assets"
+binding = "ASSETS"
+
+[[services]]
+binding = "WORKER_SELF_REFERENCE"
+service = "rental"
+
+[vars]
+# ตั้งค่า environment variables ใน Cloudflare dashboard > Workers > rental > Settings > Variables
+# NEXT_PUBLIC_SUPABASE_URL = "..."
+# NEXT_PUBLIC_SUPABASE_ANON_KEY = "..."
+# ตั้งเป็น Secret ไม่ใช่ plain var: ENCRYPTION_KEY
+

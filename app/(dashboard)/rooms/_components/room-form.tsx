@@ -1,0 +1,167 @@
+'use client'
+
+import { useActionState } from 'react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { type RoomFormState, type Room } from '@/lib/definitions'
+
+type Props = {
+  action: (state: RoomFormState, formData: FormData) => Promise<RoomFormState>
+  room?: Room
+  submitLabel?: string
+}
+
+export function RoomForm({ action, room, submitLabel = 'บันทึก' }: Props) {
+  const [state, formAction, pending] = useActionState(action, undefined)
+
+  return (
+    <form action={formAction} className="space-y-4">
+      {state?.message && (
+        <Alert variant={state.success ? 'default' : 'destructive'}>
+          <AlertDescription>{state.message}</AlertDescription>
+        </Alert>
+      )}
+
+      <div className="grid grid-cols-2 gap-4">
+        {/* เลขห้อง */}
+        <div className="space-y-1.5">
+          <Label htmlFor="room_number">เลขห้อง *</Label>
+          <Input
+            id="room_number"
+            name="room_number"
+            placeholder="เช่น 101, A201"
+            defaultValue={room?.room_number}
+            required
+          />
+          {state?.errors?.room_number && (
+            <p className="text-xs text-red-500">{state.errors.room_number[0]}</p>
+          )}
+        </div>
+
+        {/* ชั้น */}
+        <div className="space-y-1.5">
+          <Label htmlFor="floor">ชั้น</Label>
+          <Input
+            id="floor"
+            name="floor"
+            type="number"
+            placeholder="เช่น 1, 2, 3"
+            defaultValue={room?.floor ?? ''}
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        {/* ประเภทห้อง */}
+        <div className="space-y-1.5">
+          <Label htmlFor="room_type">ประเภทห้อง *</Label>
+          <select
+            id="room_type"
+            name="room_type"
+            defaultValue={room?.room_type ?? 'standard'}
+            className="flex h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+          >
+            <option value="standard">Standard</option>
+            <option value="deluxe">Deluxe</option>
+            <option value="suite">Suite</option>
+          </select>
+        </div>
+
+        {/* ขนาด */}
+        <div className="space-y-1.5">
+          <Label htmlFor="size_sqm">ขนาด (ตร.ม.)</Label>
+          <Input
+            id="size_sqm"
+            name="size_sqm"
+            type="number"
+            step="0.01"
+            placeholder="เช่น 28.5"
+            defaultValue={room?.size_sqm ?? ''}
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        {/* ค่าเช่า */}
+        <div className="space-y-1.5">
+          <Label htmlFor="monthly_rent">ค่าเช่า/เดือน (฿) *</Label>
+          <Input
+            id="monthly_rent"
+            name="monthly_rent"
+            type="number"
+            step="0.01"
+            placeholder="เช่น 3500"
+            defaultValue={room?.monthly_rent ?? ''}
+            required
+          />
+          {state?.errors?.monthly_rent && (
+            <p className="text-xs text-red-500">{state.errors.monthly_rent[0]}</p>
+          )}
+        </div>
+
+        {/* มัดจำ */}
+        <div className="space-y-1.5">
+          <Label htmlFor="deposit">มัดจำ (฿)</Label>
+          <Input
+            id="deposit"
+            name="deposit"
+            type="number"
+            step="0.01"
+            placeholder="เช่น 7000"
+            defaultValue={room?.deposit ?? 0}
+          />
+        </div>
+
+        {/* WiFi fee */}
+        <div className="space-y-1.5">
+          <Label htmlFor="wifi_fee">ค่า WiFi/เดือน (฿)</Label>
+          <Input
+            id="wifi_fee"
+            name="wifi_fee"
+            type="number"
+            step="1"
+            min="0"
+            placeholder="ว่างเว้นถ้าห้องนี้ไม่มี WiFi"
+            defaultValue={room?.wifi_fee ?? ''}
+          />
+          <p className="text-xs text-slate-400">เว้นว่างถ้าห้องนี้ไม่ใช้ WiFi</p>
+        </div>
+      </div>
+
+      {/* สถานะ */}
+      <div className="space-y-1.5">
+        <Label htmlFor="status">สถานะ *</Label>
+        <select
+          id="status"
+          name="status"
+          defaultValue={room?.status ?? 'available'}
+          className="flex h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+        >
+          <option value="available">ว่าง</option>
+          <option value="occupied">มีผู้เช่า</option>
+          <option value="maintenance">ซ่อมบำรุง</option>
+          <option value="reserved">จอง</option>
+        </select>
+      </div>
+
+      {/* รายละเอียด */}
+      <div className="space-y-1.5">
+        <Label htmlFor="description">รายละเอียดเพิ่มเติม</Label>
+        <Textarea
+          id="description"
+          name="description"
+          placeholder="เช่น มีเฟอร์นิเจอร์ครบ, แอร์ 1 ตัว..."
+          rows={3}
+          defaultValue={room?.description ?? ''}
+        />
+      </div>
+
+      <Button type="submit" className="w-full" disabled={pending}>
+        {pending ? 'กำลังบันทึก...' : submitLabel}
+      </Button>
+    </form>
+  )
+}

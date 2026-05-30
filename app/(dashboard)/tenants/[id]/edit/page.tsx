@@ -1,0 +1,49 @@
+import { notFound } from 'next/navigation'
+import Link from 'next/link'
+import { ChevronLeft } from 'lucide-react'
+import { createClient } from '@/lib/supabase/server'
+import { updateTenant } from '@/app/actions/tenants'
+import { TenantForm } from '../../_components/tenant-form'
+import { type TenantFormState } from '@/lib/definitions'
+
+export default async function EditTenantPage({
+  params,
+}: {
+  params: Promise<{ id: string }>
+}) {
+  const { id } = await params
+  const supabase = await createClient()
+
+  const { data: tenant } = await supabase
+    .from('tenants')
+    .select('*')
+    .eq('id', id)
+    .single()
+
+  if (!tenant) notFound()
+
+  const boundAction = async (
+    state: TenantFormState,
+    formData: FormData
+  ): Promise<TenantFormState> => {
+    'use server'
+    return updateTenant(id, state, formData)
+  }
+
+  return (
+    <div className="p-5 md:p-8 max-w-2xl space-y-6">
+      <div>
+        <Link href={`/admin/tenants/${id}`}
+          className="inline-flex items-center gap-1 text-xs font-medium text-slate-400 hover:text-slate-700 mb-5 transition-colors">
+          <ChevronLeft className="size-3.5" /> กลับ
+        </Link>
+        <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-1">แก้ไข</p>
+        <h1 className="text-2xl md:text-3xl font-bold text-slate-950 tracking-tight">{tenant.full_name}</h1>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 md:p-6">
+        <TenantForm action={boundAction} tenant={tenant} submitLabel="บันทึกการแก้ไข" />
+      </div>
+    </div>
+  )
+}
