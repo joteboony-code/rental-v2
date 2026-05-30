@@ -157,9 +157,14 @@ export function SettingsForm({ action, settings, lineIntegration }: Props) {
               defaultValue={lineIntegration?.line_oa_basic_id ?? ''}
               placeholder="@yourlineoa" className="font-mono text-xs" />
           </Field>
-          <Field label="LIFF ID" hint="LINE Developers → LIFF → LIFF ID">
+          <Field label="LIFF ID (พอร์ทัลบิل)" hint="LIFF ที่ตั้ง Endpoint = /portal">
             <Input id="line_liff_id" name="line_liff_id"
               defaultValue={lineIntegration?.line_liff_id ?? ''}
+              placeholder="1234567890-xxxxxxxx" className="font-mono text-xs" />
+          </Field>
+          <Field label="LIFF ID (จับคู่ห้อง)" hint="LIFF ที่ตั้ง Endpoint = /portal/pair">
+            <Input id="line_liff_id_pairing" name="line_liff_id_pairing"
+              defaultValue={lineIntegration?.line_liff_id_pairing ?? ''}
               placeholder="1234567890-xxxxxxxx" className="font-mono text-xs" />
           </Field>
           <Field label="URL ของเว็บ" hint="ใช้สร้างลิงก์บิล">

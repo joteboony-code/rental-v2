@@ -100,7 +100,7 @@ export default async function RoomsPage() {
                 {rooms.map((room) => {
                   const activeContract = (room.contracts as { status: string; tenants: { full_name: string } | null }[] | null)
                     ?.find((c) => c.status === 'active')
-                  const roomPairUrl = buildPairUrl({ appOrigin, liffId: line?.line_liff_id, roomNumber: room.room_number })
+                  const roomPairUrl = buildPairUrl({ appOrigin, liffId: line?.line_liff_id_pairing ?? line?.line_liff_id, roomNumber: room.room_number })
                   return (
                     <tr key={room.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/60 transition-colors group">
                       <td className="px-6 py-4">
@@ -142,7 +142,7 @@ export default async function RoomsPage() {
               {rooms.map((room) => {
                 const activeContract = (room.contracts as { status: string; tenants: { full_name: string } | null }[] | null)
                   ?.find((c) => c.status === 'active')
-                const roomPairUrl = buildPairUrl({ appOrigin, liffId: line?.line_liff_id, roomNumber: room.room_number })
+                const roomPairUrl = buildPairUrl({ appOrigin, liffId: line?.line_liff_id_pairing ?? line?.line_liff_id, roomNumber: room.room_number })
                 return (
                   <div key={room.id} className="flex items-center gap-4 p-4">
                     <div className="size-11 rounded-xl bg-slate-100 flex items-center justify-center text-sm font-bold text-slate-700 shrink-0">

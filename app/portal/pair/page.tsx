@@ -47,7 +47,7 @@ export default async function PairPage({
 
       <div className="mx-auto max-w-md -mt-2 space-y-3 px-4 pb-10 pt-4">
         <PairForm
-          liffId={line?.line_liff_id ?? null}
+          liffId={line?.line_liff_id_pairing ?? line?.line_liff_id ?? null}
           initialRoomNumber={room ?? ''}
           alreadyLinked={alreadyLinked}
         />

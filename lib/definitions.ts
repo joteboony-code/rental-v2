@@ -255,6 +255,7 @@ export const LineIntegrationSchema = z.object({
   line_channel_secret:       z.string().optional().default(''),
   line_oa_basic_id:          z.string().optional().default(''),
   line_liff_id:              z.string().optional().default(''),
+  line_liff_id_pairing:      z.string().optional().default(''),
   app_url:                   z.string().url().optional().or(z.literal('')).default(''),
   owner_line_user_id:        z.string().optional().default(''),
 })
@@ -273,6 +274,7 @@ export type SettingsFormState =
         line_channel_secret?:          string[]
         line_oa_basic_id?:             string[]
         line_liff_id?:                 string[]
+        line_liff_id_pairing?:         string[]
         app_url?:                      string[]
         owner_line_user_id?:           string[]
         slipok_branch_id?:             string[]
