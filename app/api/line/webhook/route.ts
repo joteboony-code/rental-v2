@@ -196,63 +196,7 @@ async function handleFollow(replyToken: string, cfg: LineConfig) {
   }])
 }
 
-async function handleText(lineUserId: string, text: string, replyToken: string, cfg: LineConfig, supabase: SupabaseClient) {
-  const upper = text.trim().toUpperCase()
-
-  // ตรวจว่าเป็น pairing code (6 ตัวอักษร A-Z0-9)
-  if (/^[A-Z0-9]{6}$/.test(upper)) {
-    const now = new Date().toISOString()
-    const { data: tokenRow } = await supabase
-      .from('pairing_tokens')
-      .select('id, tenant_id')
-      .eq('token', upper)
-      .is('used_at', null)
-      .is('cancelled_at', null)
-      .gt('expires_at', now)
-      .maybeSingle()
-
-    if (tokenRow) {
-      const { error } = await supabase
-        .from('tenants')
-        .update({ line_user_id: lineUserId })
-        .eq('id', tokenRow.tenant_id)
-
-      if (!error) {
-        const displayName = await getDisplayName(lineUserId, cfg.channelAccessToken)
-        await supabase
-          .from('pairing_tokens')
-          .update({ used_at: now, line_user_id: lineUserId, display_name: displayName })
-          .eq('id', tokenRow.id)
-
-        // ดึงข้อมูลผู้เช่าและห้อง
-        const { data: tenantInfo } = await supabase
-          .from('tenants')
-          .select('full_name, contracts(rooms(room_number))')
-          .eq('id', tokenRow.tenant_id)
-          .eq('contracts.status', 'active')
-          .maybeSingle()
-
-        type ContractJoin = { rooms: { room_number: string } | null }
-        const contracts = tenantInfo?.contracts as unknown as ContractJoin[] | null
-        const roomNumber = contracts?.[0]?.rooms?.room_number ?? '—'
-
-        await reply(replyToken, cfg.channelAccessToken, [{
-          type: 'text',
-          text: `✅ จับคู่สำเร็จแล้วครับ!\n\n🏠 ห้อง ${roomNumber}\n👤 ${tenantInfo?.full_name ?? ''}\n\nตอนนี้คุณจะได้รับใบแจ้งค่าเช่าและแจ้งเตือนต่างๆ ทาง LINE นี้ครับ 😊`,
-        }])
-        return
-      }
-    }
-
-    // code ไม่ถูกต้องหรือหมดอายุ
-    await reply(replyToken, cfg.channelAccessToken, [{
-      type: 'text',
-      text: 'รหัสไม่ถูกต้องหรือหมดอายุแล้วครับ\nกรุณาสแกน QR อีกครั้งเพื่อรับรหัสใหม่ครับ',
-    }])
-    return
-  }
-
-  // ข้อความทั่วไป — ตรวจสถานะการจับคู่
+async function handleText(lineUserId: string, _text: string, replyToken: string, cfg: LineConfig, supabase: SupabaseClient) {
   const { data: existing } = await supabase
     .from('tenants')
     .select('full_name')
@@ -262,7 +206,7 @@ async function handleText(lineUserId: string, text: string, replyToken: string, 
   await reply(replyToken, cfg.channelAccessToken, [{
     type: 'text',
     text: existing
-      ? `บัญชีของคุณ (${existing.full_name}) จับคู่กับห้องแล้ว\nส่งรูปสลิปเพื่อแจ้งชำระค่าเช่าได้เลยครับ 😊`
+      ? `บัญชีของคุณ (${existing.full_name}) จับคู่กับห้องแล้วครับ\nส่งรูปสลิปเพื่อแจ้งชำระค่าเช่าได้เลยครับ 😊`
       : 'กรุณาสแกน QR จากห้องเช่าของท่านเพื่อจับคู่บัญชี LINE\n\nหากมีปัญหา กรุณาติดต่อเจ้าของหอครับ',
   }])
 }

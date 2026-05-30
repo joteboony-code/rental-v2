@@ -3,42 +3,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 
-function randomToken() {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789' // ตัดตัวที่ดูคล้ายกัน (O/0, I/1)
-  return Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
-}
-
-export type GeneratePairingTokenResult = {
-  success: boolean
-  token?: string
-  expiresAt?: string
-  message?: string
-}
-
-export async function generatePairingToken(tenantId: string): Promise<GeneratePairingTokenResult> {
-  const supabase = await createClient()
-
-  // mark token เก่าเป็น cancelled แทนการลบ (เก็บ audit trail)
-  await supabase
-    .from('pairing_tokens')
-    .update({ cancelled_at: new Date().toISOString(), cancel_reason: 'replaced_by_new_qr' })
-    .eq('tenant_id', tenantId)
-    .is('used_at', null)
-    .is('cancelled_at', null)
-
-  const token = randomToken()
-  const { error } = await supabase.from('pairing_tokens').insert({
-    tenant_id: tenantId,
-    token,
-  })
-
-  if (error) return { success: false, message: error.message }
-
-  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
-  revalidatePath(`/tenants/${tenantId}`)
-  return { success: true, token, expiresAt }
-}
-
 export async function unlinkTenantLine(tenantId: string): Promise<{ success: boolean; message?: string }> {
   const supabase = await createClient()
   const { error } = await supabase
@@ -92,4 +56,3 @@ export async function pairTenantLine(
     roomNumber: result?.room_number ?? null,
   }
 }
-
