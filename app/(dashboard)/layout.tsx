@@ -14,7 +14,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   return (
     <div className="flex min-h-screen bg-slate-50">
       {/* Sidebar (desktop) */}
-      <aside className="hidden md:flex w-60 flex-col border-r border-slate-100 bg-white">
+      <aside className="hidden md:flex w-16 flex-col border-r border-slate-100 bg-white">
         <div className="px-5 py-5 border-b border-slate-100">
           <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest">ระบบจัดการ</p>
           <h1 className="text-base font-bold text-slate-900 mt-0.5">ห้องเช่า</h1>
