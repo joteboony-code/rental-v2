@@ -3,7 +3,7 @@ import { Suspense } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { buttonVariants } from '@/components/ui/button'
 import { BillStatusBadge } from './_components/bill-status-badge'
-import { ClipboardList, Download, History } from 'lucide-react'
+import { ClipboardList, Download, History, ArrowRight } from 'lucide-react'
 import { roomRow } from '@/lib/room-utils'
 import { BulkLineButton } from './_components/bulk-line-button'
 import { BillingMonthNav } from './_components/billing-month-nav'
@@ -262,8 +262,8 @@ export default async function BillsPage({ searchParams }: Props) {
                       </td>
                       <td className="px-5 py-4 text-right">
                         <Link href={`/bills/${bill.id}`}
-                          className="text-xs font-semibold text-slate-500 hover:text-slate-900 hover:bg-slate-200 px-3 py-1.5 rounded-lg transition-colors">
-                          ดูบิล →
+                          className="inline-flex items-center gap-1 whitespace-nowrap text-xs font-semibold text-slate-500 hover:text-slate-900 hover:bg-slate-200 px-3 py-1.5 rounded-lg transition-colors">
+                          ดูบิล <ArrowRight className="size-3.5" strokeWidth={1.8} />
                         </Link>
                       </td>
                     </tr>

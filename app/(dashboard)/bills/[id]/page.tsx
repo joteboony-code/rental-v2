@@ -8,6 +8,7 @@ import { DeletePaymentButton } from './_components/delete-payment-button'
 import { ChevronLeft, Droplets, Zap, Home, User, Receipt, CreditCard, MessageCircle } from 'lucide-react'
 import { roomRow } from '@/lib/room-utils'
 import { LineNotifyButton } from './_components/line-notify-button'
+import { EditBillForm } from './_components/edit-bill-form'
 
 export default async function BillDetailPage({
   params,
@@ -78,7 +79,25 @@ export default async function BillDetailPage({
               {tenant && <span className="flex items-center gap-1"><User className="size-3.5" /> {tenant.full_name}</span>}
             </p>
           </div>
-          <BillStatusBadge status={bill.status} />
+          <div className="flex items-center gap-3">
+            {bill.status !== 'cancelled' && (
+              <EditBillForm
+                billId={id}
+                rentAmount={Number(bill.rent_amount)}
+                waterPrev={Number(meter?.water_prev ?? 0)}
+                waterCurr={Number(meter?.water_curr ?? 0)}
+                electricityPrev={Number(meter?.electricity_prev ?? 0)}
+                electricityCurr={Number(meter?.electricity_curr ?? 0)}
+                wifiAmount={Number(bill.wifi_amount ?? 0)}
+                trashAmount={Number(bill.trash_amount ?? 0)}
+                otherAmount={Number(bill.other_amount ?? 0)}
+                otherNote={bill.other_note ?? null}
+                waterRate={Number(settings?.water_unit_price ?? 18)}
+                electricityRate={Number(settings?.electricity_unit_price ?? 8)}
+              />
+            )}
+            <BillStatusBadge status={bill.status} />
+          </div>
         </div>
       </div>
 
