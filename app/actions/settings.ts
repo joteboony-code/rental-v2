@@ -27,6 +27,7 @@ export async function updateSettings(
     reminder_enabled:           formData.get('reminder_enabled') === 'on',
     anomaly_threshold_pct:      formData.get('anomaly_threshold_pct'),
     slipok_branch_id:           formData.get('slipok_branch_id'),
+    bank_accounts_text:         formData.get('bank_accounts_text'),
   }
   const slipokApiKey = String(formData.get('slipok_api_key') ?? '').trim()
   const lineRaw = {

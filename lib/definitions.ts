@@ -247,6 +247,7 @@ export const SettingsSchema = z.object({
   reminder_enabled:             z.boolean().default(true),
   anomaly_threshold_pct:        z.coerce.number().int().min(10).max(500).default(50),
   slipok_branch_id:             z.string().optional().default(''),
+  bank_accounts_text:           z.string().optional().default(''),
 })
 
 export const LineIntegrationSchema = z.object({
@@ -296,6 +297,7 @@ export type Settings = {
   reminder_enabled:               boolean
   anomaly_threshold_pct:          number    // % increase to flag as anomaly
   slipok_branch_id:                string | null
+  bank_accounts_text:             string | null
   updated_at:                     string
 }
 
