@@ -6,11 +6,11 @@ import { Home, Users, FileText, ClipboardList, Wrench, Settings, History, Megaph
 
 const navItems = [
   {
-    href:     '/',
+    href:     '/home',
     label:    'หน้าหลัก',
     icon:     LayoutDashboard,
     dot:      'bg-slate-400',
-    match:    (p: string) => p === '/',
+    match:    (p: string) => p === '/home',
   },
   {
     href:     '/rooms',
