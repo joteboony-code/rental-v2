@@ -14,11 +14,27 @@ export interface SlipVerifyResult {
  *  transDate: "28/05/2026" (CE) or "28/05/2569" (BE)
  *  transTime: "17:10"
  */
-function slipToDatetimeLocal(transDate: string, transTime: string): string {
-  const [dd, mm, yyyyStr] = transDate.split('/')
-  let year = parseInt(yyyyStr)
-  if (year > 2500) year -= 543   // Buddhist Era → CE
-  return `${year}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}T${transTime}`
+function slipToDatetimeLocal(transDate: string, transTime: string): string | undefined {
+  try {
+    if (transDate.includes('/')) {
+      const parts = transDate.split('/')
+      if (parts.length !== 3) return undefined
+      const [dd, mm, yyyyStr] = parts
+      if (!dd || !mm || !yyyyStr) return undefined
+      let year = parseInt(yyyyStr)
+      if (isNaN(year)) return undefined
+      if (year > 2500) year -= 543
+      const result = `${year}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}T${transTime}`
+      const d = new Date(result)
+      return isNaN(d.getTime()) ? undefined : result
+    }
+    // ISO or other format
+    const candidate = new Date(`${transDate}T${transTime}`)
+    if (!isNaN(candidate.getTime())) return `${transDate}T${transTime}`
+    return undefined
+  } catch {
+    return undefined
+  }
 }
 
 export async function verifySlip(formData: FormData): Promise<SlipVerifyResult> {
@@ -95,7 +111,7 @@ export async function verifySlip(formData: FormData): Promise<SlipVerifyResult> 
       success:    true,
       amount:     d.amount,
       paidAt:     d.transDate && d.transTime
-                    ? slipToDatetimeLocal(d.transDate, d.transTime)
+                    ? slipToDatetimeLocal(d.transDate, d.transTime) ?? undefined
                     : undefined,
       senderName: d.sender?.name,
     }
