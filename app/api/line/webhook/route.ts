@@ -392,10 +392,27 @@ async function handleSlipImage(
   // Format slip date/time
   let paidDate: Date | null = null
   try {
-    const [dd, mm, yyyy] = transDate.split('/')
-    const year = Number(yyyy) > 2500 ? Number(yyyy) - 543 : Number(yyyy)
-    paidDate = new Date(`${year}-${mm}-${dd}T${transTime}`)
-  } catch { /* use now */ }
+    if (transDate && transTime) {
+      if (transDate.includes('/')) {
+        // DD/MM/YYYY (SlipOK standard, may use Buddhist year)
+        const parts = transDate.split('/')
+        if (parts.length === 3) {
+          const [dd, mm, yyyy] = parts
+          const year = Number(yyyy) > 2500 ? Number(yyyy) - 543 : Number(yyyy)
+          const candidate = new Date(`${year}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}T${transTime}`)
+          if (!isNaN(candidate.getTime())) paidDate = candidate
+        }
+      } else {
+        // ISO or other format — try direct parse
+        const candidate = new Date(`${transDate}T${transTime}`)
+        if (!isNaN(candidate.getTime())) paidDate = candidate
+        else {
+          const candidate2 = new Date(transDate)
+          if (!isNaN(candidate2.getTime())) paidDate = candidate2
+        }
+      }
+    }
+  } catch { /* fallback to now */ }
 
   const thDate = paidDate ? thaiDate(paidDate) : transDate
   const paidAt = paidDate?.toISOString() ?? new Date().toISOString()
