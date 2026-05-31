@@ -2,6 +2,25 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import type { SupabaseClient } from '@supabase/supabase-js'
+
+async function uploadMeterPhoto(
+  supabase: SupabaseClient,
+  file: File,
+  roomId: string,
+  billingMonth: string,
+  type: 'water' | 'electricity'
+): Promise<string | null> {
+  if (!file || file.size === 0) return null
+  const ext  = file.name.split('.').pop() ?? 'jpg'
+  const path = `${roomId}/${billingMonth}/${type}.${ext}`
+  const buf  = await file.arrayBuffer()
+  const { data: up } = await supabase.storage
+    .from('meter-photos')
+    .upload(path, buf, { contentType: file.type, upsert: true })
+  if (!up) return null
+  return supabase.storage.from('meter-photos').getPublicUrl(up.path).data.publicUrl
+}
 
 // ─── Save Meter Readings + Generate Bills ────────────────────
 export async function saveMeterAndGenerateBills(
@@ -61,21 +80,30 @@ export async function saveMeterAndGenerateBills(
       continue
     }
 
+    // Upload meter photos (optional)
+    const waterImgFile = formData.get(`room_${roomId}_water_image`) as File | null
+    const elecImgFile  = formData.get(`room_${roomId}_elec_image`)  as File | null
+    const [water_image_url, electricity_image_url] = await Promise.all([
+      waterImgFile ? uploadMeterPhoto(supabase, waterImgFile, roomId, billing_month, 'water') : Promise.resolve(null),
+      elecImgFile  ? uploadMeterPhoto(supabase, elecImgFile,  roomId, billing_month, 'electricity') : Promise.resolve(null),
+    ])
+
     // Upsert meter reading
+    const meterPayload: Record<string, unknown> = {
+      room_id: roomId,
+      billing_month,
+      water_prev,
+      water_curr,
+      electricity_prev,
+      electricity_curr,
+      recorded_by: user?.id ?? null,
+    }
+    if (water_image_url)       meterPayload.water_image_url       = water_image_url
+    if (electricity_image_url) meterPayload.electricity_image_url = electricity_image_url
+
     const { data: meter, error: meterError } = await supabase
       .from('meter_readings')
-      .upsert(
-        {
-          room_id: roomId,
-          billing_month,
-          water_prev,
-          water_curr,
-          electricity_prev,
-          electricity_curr,
-          recorded_by: user?.id ?? null,
-        },
-        { onConflict: 'room_id,billing_month' }
-      )
+      .upsert(meterPayload, { onConflict: 'room_id,billing_month' })
       .select('id')
       .single()
 

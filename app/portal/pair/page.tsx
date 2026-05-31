@@ -22,12 +22,26 @@ async function getAlreadyLinked(roomNumber: string): Promise<boolean> {
   return !!tenant?.line_user_id
 }
 
+function parseLiffStateRoom(liffState?: string | string[]): string | undefined {
+  if (!liffState) return undefined
+  const raw = Array.isArray(liffState) ? liffState[0] : liffState
+  try {
+    // liff.state is a relative URL like "/?room=101" or "?room=101"
+    const qs = raw.replace(/^\/?\??/, '')
+    return new URLSearchParams(qs).get('room') ?? undefined
+  } catch {
+    return undefined
+  }
+}
+
 export default async function PairPage({
   searchParams,
 }: {
-  searchParams: Promise<{ room?: string }>
+  searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
-  const { room } = await searchParams
+  const params = await searchParams
+  const room = (params.room as string | undefined)
+    ?? parseLiffStateRoom(params['liff.state'])
   const line = await getLineIntegrationPublic()
   const alreadyLinked = room ? await getAlreadyLinked(room) : false
 
@@ -47,7 +61,7 @@ export default async function PairPage({
 
       <div className="mx-auto max-w-md -mt-2 space-y-3 px-4 pb-10 pt-4">
         <PairForm
-          liffId={line?.line_liff_id_pairing ?? line?.line_liff_id ?? null}
+          liffId={line?.line_liff_id_pairing ?? null}
           initialRoomNumber={room ?? ''}
           alreadyLinked={alreadyLinked}
         />

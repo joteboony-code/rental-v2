@@ -34,6 +34,7 @@ export function PairForm({
   const [scriptReady, setScriptReady] = useState(false)
   const [lineUserId, setLineUserId] = useState('')
   const [lineDisplayName, setLineDisplayName] = useState('')
+  const [linePictureUrl, setLinePictureUrl] = useState('')
   const [liffStatus, setLiffStatus] = useState<LiffStatus>(liffId ? 'loading' : 'no-liff')
   const [friendStatus, setFriendStatus] = useState<FriendStatus>('unchecked')
 
@@ -53,6 +54,7 @@ export function PairForm({
         if (cancelled) return
         setLineUserId(profile.userId)
         setLineDisplayName(profile.displayName ?? '')
+        setLinePictureUrl(profile.pictureUrl ?? '')
         setLiffStatus('ok')
       } catch {
         if (!cancelled) setLiffStatus('error')
@@ -209,8 +211,10 @@ export function PairForm({
       {/* Confirm form */}
       {lineUserId && (
         <form action={action} className="space-y-3">
-          <input type="hidden" name="room_number" value={initialRoomNumber} />
-          <input type="hidden" name="line_user_id" value={lineUserId} />
+          <input type="hidden" name="room_number"        value={initialRoomNumber} />
+          <input type="hidden" name="line_user_id"       value={lineUserId} />
+          <input type="hidden" name="line_display_name"  value={lineDisplayName} />
+          <input type="hidden" name="line_picture_url"   value={linePictureUrl} />
 
           {state?.message && (
             <Alert variant={state.success ? 'default' : 'destructive'}>

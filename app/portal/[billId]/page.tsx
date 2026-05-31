@@ -2,9 +2,9 @@ export const dynamic = 'force-dynamic'
 
 import { notFound } from 'next/navigation'
 import { createServiceClient } from '@/lib/supabase/service'
-import { Droplets, Zap, Home, User, Phone, CheckCircle, Clock, AlertTriangle } from 'lucide-react'
+import { Droplets, Zap, Wifi, Trash2, Home, User, Phone, CheckCircle, Clock, AlertTriangle } from 'lucide-react'
 import { roomRow } from '@/lib/room-utils'
-import { PromptPayQR } from '@/app/(dashboard)/bills/[id]/_components/promptpay-qr'
+import { QRWrapper } from './_components/qr-wrapper'
 
 export default async function PortalPage({
   params,
@@ -95,39 +95,56 @@ export default async function PortalPage({
 
             <BillRow label="ค่าเช่า" amount={Number(bill.rent_amount)} />
 
-            {Number(bill.water_amount) > 0 && (
+            <BillRow
+              label={
+                <span className="flex items-center gap-1.5 text-blue-600">
+                  <Droplets className="size-3.5" /> ค่าน้ำ
+                  {meter && (
+                    <span className="text-slate-400 text-xs font-normal">
+                      ({meter.water_prev}→{meter.water_curr} = {meter.water_units} หน่วย)
+                    </span>
+                  )}
+                </span>
+              }
+              amount={Number(bill.water_amount)}
+              color="text-blue-700"
+            />
+
+            <BillRow
+              label={
+                <span className="flex items-center gap-1.5 text-amber-600">
+                  <Zap className="size-3.5" /> ค่าไฟ
+                  {meter && (
+                    <span className="text-slate-400 text-xs font-normal">
+                      ({meter.electricity_prev}→{meter.electricity_curr} = {meter.electricity_units} หน่วย)
+                    </span>
+                  )}
+                </span>
+              }
+              amount={Number(bill.electricity_amount)}
+              color="text-amber-700"
+            />
+
+            {Number(bill.wifi_amount) > 0 && (
               <BillRow
                 label={
-                  <span className="flex items-center gap-1.5 text-blue-600">
-                    <Droplets className="size-3.5" /> ค่าน้ำ
-                    {meter && (
-                      <span className="text-slate-400 text-xs font-normal">
-                        ({meter.water_prev}→{meter.water_curr} = {meter.water_units} หน่วย)
-                      </span>
-                    )}
+                  <span className="flex items-center gap-1.5 text-indigo-600">
+                    <Wifi className="size-3.5" /> ค่า WiFi
                   </span>
                 }
-                amount={Number(bill.water_amount)}
-                color="text-blue-700"
+                amount={Number(bill.wifi_amount)}
+                color="text-indigo-700"
               />
             )}
 
-            {Number(bill.electricity_amount) > 0 && (
-              <BillRow
-                label={
-                  <span className="flex items-center gap-1.5 text-amber-600">
-                    <Zap className="size-3.5" /> ค่าไฟ
-                    {meter && (
-                      <span className="text-slate-400 text-xs font-normal">
-                        ({meter.electricity_prev}→{meter.electricity_curr} = {meter.electricity_units} หน่วย)
-                      </span>
-                    )}
-                  </span>
-                }
-                amount={Number(bill.electricity_amount)}
-                color="text-amber-700"
-              />
-            )}
+            <BillRow
+              label={
+                <span className="flex items-center gap-1.5 text-slate-600">
+                  <Trash2 className="size-3.5" /> ค่าขยะ
+                </span>
+              }
+              amount={Number(bill.trash_amount)}
+            />
 
             {Number(bill.other_amount) > 0 && (
               <BillRow label={`อื่นๆ${bill.other_note ? ` (${bill.other_note})` : ''}`} amount={Number(bill.other_amount)} />
@@ -166,7 +183,7 @@ export default async function PortalPage({
         {bill.status !== 'paid' && settings?.promptpay_id && (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
             <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-4 text-center">ชำระผ่าน QR PromptPay</p>
-            <PromptPayQR
+            <QRWrapper
               promptpayId={settings.promptpay_id}
               promptpayName={settings.promptpay_name ?? 'ห้องเช่า'}
               amount={remaining > 0 ? remaining : Number(bill.total_amount)}

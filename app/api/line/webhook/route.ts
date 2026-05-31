@@ -48,7 +48,14 @@ function thaiMonth(dateStr: string) {
   return new Date(dateStr).toLocaleDateString('th-TH', { year: 'numeric', month: 'long' })
 }
 
+// Module-level cache — Worker instance ถูกเก็บไว้ระหว่าง requests (warm)
+// config เปลี่ยนแค่เมื่อ admin แก้ settings ดังนั้น cache 5 นาทีปลอดภัย
+let _lineConfigCache: { config: LineConfig | null; expiresAt: number } | null = null
+
 async function getLineConfig(): Promise<LineConfig | null> {
+  const now = Date.now()
+  if (_lineConfigCache && now < _lineConfigCache.expiresAt) return _lineConfigCache.config
+
   const supabase = createServiceClient()
   const { data } = await supabase
     .from('line_integrations')
@@ -56,15 +63,20 @@ async function getLineConfig(): Promise<LineConfig | null> {
     .eq('dorm_id', DEFAULT_DORM_ID)
     .maybeSingle()
 
-  if (!data?.encrypted_channel_access_token) return null
+  if (!data?.encrypted_channel_access_token) {
+    _lineConfigCache = { config: null, expiresAt: now + 60_000 }
+    return null
+  }
 
-  return {
+  const config: LineConfig = {
     channelAccessToken: await decryptSecret(data.encrypted_channel_access_token),
     channelSecret: data.encrypted_channel_secret ? await decryptSecret(data.encrypted_channel_secret) : null,
     liffId: data.line_liff_id ?? null,
     appUrl: data.app_url ?? null,
     ownerLineUserId: data.owner_line_user_id ?? null,
   }
+  _lineConfigCache = { config, expiresAt: now + 300_000 } // 5 นาที
+  return config
 }
 
 async function isValidSignature(body: string, sig: string, secret: string) {
@@ -127,25 +139,66 @@ function buildPortalFlex(portalUrl: string) {
   }
 }
 
-function paymentConfirmation(opts: {
-  title: string
+function buildPaymentFlex(opts: {
+  fullyPaid: boolean
   roomNumber: string
   billingMonth: string
-  status: string
   paidAmount: number
   remaining: number
-  note?: string
+  ref?: string | null
+  portalUrl: string
 }) {
-  const lines = [
-    `✅ ${opts.title}`,
-    `ห้อง ${opts.roomNumber}`,
-    `รอบบิล ${thaiMonth(opts.billingMonth)}`,
-    `สถานะ: ${opts.status}`,
-    `รับชำระแล้ว: ${fmt(opts.paidAmount)} บาท`,
-    `ยอดคงเหลือ: ${fmt(opts.remaining)} บาท`,
+  const headerBg  = opts.fullyPaid ? '#16a34a' : '#d97706'
+  const headerText = opts.fullyPaid ? '✅  ชำระค่าเช่าครบแล้วครับ!' : '💳  รับชำระบางส่วนแล้วครับ'
+  const altText    = opts.fullyPaid ? 'ชำระค่าเช่าครบแล้ว' : 'รับชำระบางส่วน'
+
+  const row = (label: string, value: string, valueColor = '#111827') => ({
+    type: 'box', layout: 'horizontal', margin: 'sm',
+    contents: [
+      { type: 'text', text: label, color: '#6b7280', size: 'sm', flex: 4 },
+      { type: 'text', text: value, color: valueColor, size: 'sm', weight: 'bold', flex: 5, align: 'end' as const },
+    ],
+  })
+
+  const bodyContents: object[] = [
+    row('🏠  ห้อง', opts.roomNumber),
+    row('📅  รอบบิล', thaiMonth(opts.billingMonth)),
+    { type: 'separator', margin: 'md' },
+    row('💰  ชำระแล้ว', `${fmt(opts.paidAmount)} บาท`, '#16a34a'),
+    opts.fullyPaid
+      ? row('🟢  คงเหลือ', '0 บาท')
+      : row('⏳  ยังค้างชำระ', `${fmt(opts.remaining)} บาท`, '#d97706'),
   ]
-  if (opts.note) lines.push(opts.note)
-  return lines.join('\n')
+  if (opts.ref) bodyContents.push(row('🔢  Ref', opts.ref, '#6b7280'))
+  if (!opts.fullyPaid) bodyContents.push({
+    type: 'text', text: 'กรุณาชำระส่วนที่เหลือด้วยนะครับ 🙏',
+    size: 'xs', color: '#d97706', margin: 'md', wrap: true,
+  })
+
+  return {
+    type: 'flex',
+    altText,
+    contents: {
+      type: 'bubble',
+      size: 'kilo',
+      header: {
+        type: 'box', layout: 'vertical', backgroundColor: headerBg, paddingAll: '16px',
+        contents: [{ type: 'text', text: headerText, color: '#ffffff', weight: 'bold', size: 'md' }],
+      },
+      body: {
+        type: 'box', layout: 'vertical', paddingAll: '16px',
+        contents: bodyContents,
+      },
+      footer: {
+        type: 'box', layout: 'vertical', paddingAll: '12px',
+        contents: [{
+          type: 'button',
+          action: { type: 'uri', label: '🔗  ดูบิล / ชำระเงิน', uri: opts.portalUrl },
+          style: 'primary', color: '#0C1B4D', height: 'sm',
+        }],
+      },
+    },
+  }
 }
 
 async function getImageBlob(messageId: string, token: string) {
@@ -192,11 +245,30 @@ async function verifySlipOk(
 async function handleFollow(replyToken: string, cfg: LineConfig) {
   await reply(replyToken, cfg.channelAccessToken, [{
     type: 'text',
-    text: 'ยินดีต้อนรับ 🏠\n\nกรุณาสแกน QR จากห้องเช่าของท่านเพื่อจับคู่บัญชี LINE กับห้องพัก\n\nเมื่อจับคู่แล้ว ท่านจะได้รับใบแจ้งค่าเช่าและแจ้งเตือนต่างๆ ทาง LINE นี้',
+    text: [
+      '🏠 ยินดีต้อนรับสู่ระบบหอพัก!',
+      '',
+      'กรุณาสแกน QR Code จากห้องเช่าของท่าน',
+      'เพื่อเชื่อมบัญชี LINE กับห้องพักของคุณ',
+      '',
+      'เมื่อเชื่อมแล้วจะได้รับ:',
+      '📄 ใบแจ้งค่าเช่าทุกเดือน',
+      '🔔 แจ้งเตือนยอดค้างชำระ',
+      '✅ ยืนยันการรับชำระเงินทันที',
+    ].join('\n'),
   }])
 }
 
-async function handleText(lineUserId: string, _text: string, replyToken: string, cfg: LineConfig, supabase: SupabaseClient) {
+const BILL_KEYWORDS = ['บิล', 'ค่าเช่า', 'ยอด', 'เงิน', 'ค้าง', 'ชำระ', 'จ่าย', 'โอน', 'สลิป', 'ค่าน้ำ', 'ค่าไฟ']
+
+function matchesBillKeyword(text: string): boolean {
+  const lower = text.toLowerCase()
+  return BILL_KEYWORDS.some((kw) => lower.includes(kw))
+}
+
+async function handleText(lineUserId: string, text: string, replyToken: string, cfg: LineConfig, supabase: SupabaseClient) {
+  if (!matchesBillKeyword(text)) return
+
   const { data: existing } = await supabase
     .from('tenants')
     .select('full_name')
@@ -206,8 +278,19 @@ async function handleText(lineUserId: string, _text: string, replyToken: string,
   await reply(replyToken, cfg.channelAccessToken, [{
     type: 'text',
     text: existing
-      ? `บัญชีของคุณ (${existing.full_name}) จับคู่กับห้องแล้วครับ\nส่งรูปสลิปเพื่อแจ้งชำระค่าเช่าได้เลยครับ 😊`
-      : 'กรุณาสแกน QR จากห้องเช่าของท่านเพื่อจับคู่บัญชี LINE\n\nหากมีปัญหา กรุณาติดต่อเจ้าของหอครับ',
+      ? [
+          `✅ บัญชีของคุณ (${existing.full_name}) เชื่อมกับห้องแล้วครับ`,
+          '',
+          '📎 ส่งรูปสลิปโอนเงิน เพื่อแจ้งชำระค่าเช่าได้เลยครับ 😊',
+        ].join('\n')
+      : [
+          '⚠️ ยังไม่ได้เชื่อมบัญชี LINE กับห้องพักครับ',
+          '',
+          'กรุณาสแกน QR Code จากห้องเช่าของท่าน',
+          'เพื่อเริ่มใช้งานระบบ',
+          '',
+          'หากมีปัญหา กรุณาติดต่อเจ้าของหอครับ',
+        ].join('\n'),
   }])
 }
 
@@ -220,48 +303,54 @@ async function handleSlipImage(
 ) {
   const token = cfg.channelAccessToken
 
-  // Get tenant
-  const { data: tenant } = await supabase
-    .from('tenants')
-    .select('id, full_name')
-    .eq('line_user_id', lineUserId)
-    .maybeSingle()
+  // ดึง tenant + settings พร้อมกัน
+  const [{ data: tenant }, { data: settings }] = await Promise.all([
+    supabase.from('tenants').select('id, full_name').eq('line_user_id', lineUserId).maybeSingle(),
+    supabase.from('settings').select('slipok_api_key, slipok_branch_id').eq('id', 1).maybeSingle(),
+  ])
 
   if (!tenant) {
     await reply(replyToken, token, [{
       type: 'text',
-      text: 'ยังไม่ได้จับคู่บัญชีครับ\nกรุณาสแกน QR จากห้องเช่าของท่านก่อนนะครับ',
+      text: [
+        '⚠️ ยังไม่ได้เชื่อมบัญชี LINE กับห้องพักครับ',
+        '',
+        'กรุณาสแกน QR Code จากห้องเช่าของท่านก่อนนะครับ',
+        'หากมีปัญหา กรุณาติดต่อเจ้าของหอครับ',
+      ].join('\n'),
     }])
     return
   }
 
-  const { data: activeContract } = await supabase
+  // ดึงทุกห้องที่ผู้เช่ากำลังเช่าอยู่ (รองรับผู้เช่าหลายห้อง)
+  const { data: activeContracts } = await supabase
     .from('contracts')
     .select('rooms(room_number)')
     .eq('tenant_id', tenant.id)
     .eq('status', 'active')
-    .maybeSingle()
 
   type RJ = { room_number: string }
-  const room = activeContract?.rooms as unknown as RJ | null
-  const roomNumber = room?.room_number ?? '—'
+  const activeRooms = (activeContracts ?? [])
+    .map((c) => (c.rooms as unknown as RJ | null)?.room_number)
+    .filter((n): n is string => Boolean(n))
+  let roomNumber = activeRooms.length > 0 ? activeRooms.join(', ') : '—'
 
   // Handle room 99 test
-  if (roomNumber === '99') {
+  if (activeRooms.includes('99')) {
     await reply(replyToken, token, [{ type: 'text', text: '🧪 ห้องทดสอบ 99 — ระบบรับสลิปแล้วครับ' }])
     await notifyOwner(cfg, `🧪 [TEST ห้อง 99] ได้รับสลิปจาก ${tenant.full_name}`)
     return
   }
 
-  // Get SlipOK settings
-  const { data: settings } = await supabase
-    .from('settings')
-    .select('slipok_api_key, slipok_branch_id')
-    .eq('id', 1)
-    .maybeSingle()
-
   if (!settings?.slipok_api_key || !settings?.slipok_branch_id) {
-    await reply(replyToken, token, [{ type: 'text', text: 'ได้รับรูปแล้วครับ 😊\nเจ้าของหอจะตรวจสอบให้นะครับ' }])
+    await reply(replyToken, token, [{
+      type: 'text',
+      text: [
+        '📨 ได้รับสลิปแล้วครับ',
+        '',
+        'เจ้าของหอจะตรวจสอบและยืนยันให้นะครับ 😊',
+      ].join('\n'),
+    }])
     await notifyOwner(cfg, `🧾 มีสลิปเข้ามาครับ\n🏠 ห้อง ${roomNumber} — ${tenant.full_name}\n⚠️ ยังไม่ได้ตั้งค่า SlipOK`)
     return
   }
@@ -269,7 +358,7 @@ async function handleSlipImage(
   // Download image
   const image = await getImageBlob(messageId, token)
   if (!image) {
-    await reply(replyToken, token, [{ type: 'text', text: 'ได้รับรูปแล้วครับ แต่ระบบตรวจสลิปอัตโนมัติไม่สำเร็จ กรุณารอเจ้าของตรวจสอบ หรือส่งสลิปที่ชัดเจนอีกครั้งครับ' }])
+    await reply(replyToken, token, [{ type: 'text', text: '📨 ได้รับรูปสลิปแล้วครับ\n\n⚠️ ระบบตรวจสอบอัตโนมัติไม่สำเร็จ\nกรุณารอเจ้าของหอตรวจสอบ หรือส่งรูปสลิปที่ชัดเจนอีกครั้งครับ' }])
     await notifyOwner(cfg, `🧾 มีสลิปเข้ามาครับ\n🏠 ห้อง ${roomNumber} — ${tenant.full_name}\n⚠️ ตรวจไม่ได้\nสาเหตุ: ดาวน์โหลดรูปไม่สำเร็จ`)
     return
   }
@@ -279,7 +368,7 @@ async function handleSlipImage(
   try {
     slipResult = await verifySlipOk(image.blob, image.contentType, settings.slipok_branch_id, settings.slipok_api_key)
   } catch (error) {
-    await reply(replyToken, token, [{ type: 'text', text: 'ได้รับรูปแล้วครับ แต่ระบบตรวจสลิปอัตโนมัติไม่สำเร็จ กรุณารอเจ้าของตรวจสอบ หรือส่งสลิปที่ชัดเจนอีกครั้งครับ' }])
+    await reply(replyToken, token, [{ type: 'text', text: '📨 ได้รับรูปสลิปแล้วครับ\n\n⚠️ ระบบตรวจสอบอัตโนมัติไม่สำเร็จ\nกรุณารอเจ้าของหอตรวจสอบ หรือส่งรูปสลิปที่ชัดเจนอีกครั้งครับ' }])
     await notifyOwner(cfg, `🧾 มีสลิปเข้ามาครับ\n🏠 ห้อง ${roomNumber} — ${tenant.full_name}\n⚠️ ตรวจไม่ได้\nสาเหตุ: ${String(error)}`)
     return
   }
@@ -294,7 +383,11 @@ async function handleSlipImage(
     if (slipResult.code === 1012 || slipResult.message?.toLowerCase().includes('duplicate')) {
       await reply(replyToken, token, [{
         type: 'text',
-        text: `⚠️ สลิปนี้เคยถูกตรวจแล้วครับ\nกรุณาติดต่อเจ้าของหอนะครับ`,
+        text: [
+          '⚠️ สลิปนี้เคยถูกตรวจสอบแล้วครับ',
+          '',
+          'หากมีข้อสงสัย กรุณาติดต่อเจ้าของหอนะครับ',
+        ].join('\n'),
       }])
       await notifyOwner(cfg, `⚠️ SlipOK แจ้งว่าสลิปนี้ซ้ำครับ\n🏠 ห้อง ${roomNumber} — ${tenant.full_name}\nสาเหตุ: ${reason}`)
       return
@@ -302,7 +395,7 @@ async function handleSlipImage(
 
     await reply(replyToken, token, [{
       type: 'text',
-      text: `ได้รับรูปแล้วครับ แต่ระบบตรวจสลิปอัตโนมัติไม่สำเร็จ กรุณารอเจ้าของตรวจสอบ หรือส่งสลิปที่ชัดเจนอีกครั้งครับ`,
+      text: `📨 ได้รับรูปสลิปแล้วครับ\n\n⚠️ ระบบตรวจสอบอัตโนมัติไม่สำเร็จ\nกรุณารอเจ้าของหอตรวจสอบ หรือส่งรูปสลิปที่ชัดเจนอีกครั้งครับ`,
     }])
     await notifyOwner(cfg, `🧾 มีสลิปเข้ามาครับ\n🏠 ห้อง ${roomNumber} — ${tenant.full_name}\n⚠️ ตรวจไม่ได้\nสาเหตุ: ${reason}`)
     return
@@ -326,7 +419,15 @@ async function handleSlipImage(
       const usedRoom = usedBill?.rooms?.room_number ?? '—'
       await reply(replyToken, token, [{
         type: 'text',
-        text: `⚠️ สลิปนี้เคยถูกใช้แล้วครับ\n🏠 ใช้กับห้อง: ${usedRoom}\n💰 ${fmt(amount)} บาท\n🔢 Ref: ${slipRef}\nกรุณาติดต่อเจ้าของหอนะครับ`,
+        text: [
+          '⚠️ สลิปนี้เคยถูกใช้งานแล้วครับ',
+          SEP,
+          `🏠 ห้อง: ${usedRoom}`,
+          `💰 จำนวน: ${fmt(amount)} บาท`,
+          `🔢 Ref: ${slipRef}`,
+          SEP,
+          'กรุณาติดต่อเจ้าของหอนะครับ',
+        ].join('\n'),
       }])
       await notifyOwner(cfg, `⚠️ พบสลิปซ้ำครับ\n🏠 ผู้ส่งปัจจุบัน: ห้อง ${roomNumber} — ${tenant.full_name}\nเคยใช้ที่ห้อง: ${usedRoom}\n💰 ${fmt(amount)} บาท\n🔢 Ref: ${slipRef}`)
       return
@@ -338,7 +439,8 @@ async function handleSlipImage(
   try {
     const [dd, mm, yyyy] = transDate.split('/')
     const year = Number(yyyy) > 2500 ? Number(yyyy) - 543 : Number(yyyy)
-    paidDate = new Date(`${year}-${mm}-${dd}T${transTime}`)
+    const candidate = new Date(`${year}-${mm}-${dd}T${transTime}`)
+    if (!isNaN(candidate.getTime())) paidDate = candidate
   } catch { /* use now */ }
 
   const thDate = paidDate ? thaiDate(paidDate) : transDate
@@ -356,21 +458,27 @@ async function handleSlipImage(
     ? supabase.storage.from('payment-slips').getPublicUrl(upload.path).data.publicUrl
     : null
 
-  // Find matching bill
+  // Find matching bill (ทุกห้องของผู้เช่า — จับคู่ด้วยยอดเงิน)
   const { data: bills } = await supabase
     .from('bills')
-    .select('id, total_amount, billing_month, status')
+    .select('id, total_amount, billing_month, status, rooms(room_number)')
     .eq('tenant_id', tenant.id)
     .in('status', ['pending', 'overdue'])
     .order('billing_month', { ascending: false })
-    .limit(5)
+    .limit(10)
 
   const matchingBill = bills?.find((b) => Math.abs(Number(b.total_amount) - amount) < 1)
+
+  // เมื่อ match บิลได้ ใช้ห้องของบิลนั้นเป็นห้องที่แสดง (แม่นยำกว่าการรวมทุกห้อง)
+  if (matchingBill) {
+    const matchedRoom = matchingBill.rooms as unknown as RJ | null
+    if (matchedRoom?.room_number) roomNumber = matchedRoom.room_number
+  }
 
   if (!matchingBill) {
     await reply(replyToken, token, [{
       type: 'text',
-      text: `ได้รับรูปแล้วครับ แต่ระบบตรวจสลิปอัตโนมัติไม่สำเร็จ กรุณารอเจ้าของตรวจสอบ หรือส่งสลิปที่ชัดเจนอีกครั้งครับ`,
+      text: `📨 ได้รับรูปสลิปแล้วครับ\n\n⚠️ ระบบตรวจสอบอัตโนมัติไม่สำเร็จ\nกรุณารอเจ้าของหอตรวจสอบ หรือส่งรูปสลิปที่ชัดเจนอีกครั้งครับ`,
     }])
     await notifyOwner(cfg, `🧾 ตรวจสลิปสำเร็จครับ แต่ไม่พบบิลที่ตรงกัน\n🏠 ห้อง ${roomNumber} — ${tenant.full_name}\n💰 ${fmt(amount)} บาท\n📅 ${thDate} ${transTime}\n${senderName ? `ผู้โอน: ${senderName}` : ''}\n🔢 Ref: ${slipRef ?? '-'}`)
     return
@@ -388,7 +496,7 @@ async function handleSlipImage(
   })
 
   if (payErr) {
-    await reply(replyToken, token, [{ type: 'text', text: 'ได้รับรูปแล้วครับ แต่ระบบตรวจสลิปอัตโนมัติไม่สำเร็จ กรุณารอเจ้าของตรวจสอบ หรือส่งสลิปที่ชัดเจนอีกครั้งครับ' }])
+    await reply(replyToken, token, [{ type: 'text', text: '📨 ได้รับรูปสลิปแล้วครับ\n\n⚠️ ระบบตรวจสอบอัตโนมัติไม่สำเร็จ\nกรุณารอเจ้าของหอตรวจสอบ หรือส่งรูปสลิปที่ชัดเจนอีกครั้งครับ' }])
     await notifyOwner(cfg, `⚠️ Worker error: บันทึก payment ไม่สำเร็จ\n🏠 ห้อง ${roomNumber}\nError: ${payErr.message}`)
     return
   }
@@ -408,22 +516,18 @@ async function handleSlipImage(
     await supabase.from('bills').update({ status: 'paid' }).eq('id', matchingBill.id)
   }
 
-  const status = fullyPaid ? 'ชำระแล้ว ✅' : 'รับชำระบางส่วน'
-  const confirmText = paymentConfirmation({
-    title: fullyPaid ? 'ชำระเงินครบแล้วครับ!' : 'รับชำระบางส่วนแล้วครับ',
-    roomNumber,
-    billingMonth: matchingBill.billing_month as string,
-    status,
-    paidAmount: totalPaid,
-    remaining,
-    note: slipRef ? `🔢 Ref: ${slipRef}` : undefined,
-  })
-
   const portalUrl = buildBillPortalUrl(matchingBill.id, cfg.liffId, cfg.appUrl)
 
   await reply(replyToken, token, [
-    { type: 'text', text: confirmText },
-    buildPortalFlex(portalUrl),
+    buildPaymentFlex({
+      fullyPaid,
+      roomNumber,
+      billingMonth: matchingBill.billing_month as string,
+      paidAmount: totalPaid,
+      remaining,
+      ref: slipRef,
+      portalUrl,
+    }),
   ])
 
   if (fullyPaid) {

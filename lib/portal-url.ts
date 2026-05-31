@@ -1,6 +1,6 @@
 import { normalizeOrigin } from '@/lib/pair-url'
 
-const DEFAULT_APP_ORIGIN = 'https://rental.joteboony.workers.dev'
+const DEFAULT_APP_ORIGIN = 'https://rental-v2.joteboony.workers.dev'
 
 function getAppOrigin(appUrl: string | null) {
   return (

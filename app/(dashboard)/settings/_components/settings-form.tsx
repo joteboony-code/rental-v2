@@ -6,12 +6,13 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { type SettingsFormState, type Settings } from '@/lib/definitions'
 import { type LineIntegrationPublic } from '@/lib/line-integration'
-import { Loader2, Droplets, Zap, AlertCircle, Calendar, QrCode, MessageCircle, Globe, ShieldCheck, Bell, Banknote } from 'lucide-react'
+import { Loader2, Droplets, Zap, AlertCircle, Calendar, QrCode, MessageCircle, Globe, ShieldCheck, Bell, Banknote, FileText, Download } from 'lucide-react'
 
 interface Props {
   action: (state: SettingsFormState, formData: FormData) => Promise<SettingsFormState>
   settings?: Settings
   lineIntegration?: LineIntegrationPublic
+  hasSlipokKey?: boolean
 }
 
 function Section({ title, icon, badge, children }: {
@@ -50,7 +51,7 @@ function Field({ label, hint, error, children }: {
   )
 }
 
-export function SettingsForm({ action, settings, lineIntegration }: Props) {
+export function SettingsForm({ action, settings, lineIntegration, hasSlipokKey }: Props) {
   const [state, formAction, isPending] = useActionState(action, undefined)
   const lineConnected = Boolean(lineIntegration?.token_last4)
 
@@ -217,9 +218,15 @@ export function SettingsForm({ action, settings, lineIntegration }: Props) {
               defaultValue={settings?.slipok_branch_id ?? ''}
               placeholder="เช่น 12345" className="font-mono text-xs" />
           </Field>
-          <Field label="API Key" hint="ระบบไม่แสดง API Key เดิมกลับมาที่ browser">
+          <Field
+            label="API Key"
+            hint={hasSlipokKey
+              ? '✅ ตั้งค่าไว้แล้ว — กรอกใหม่เฉพาะเมื่อต้องการเปลี่ยน'
+              : 'ระบบไม่แสดง API Key เดิมกลับมาที่ browser'}
+          >
             <Input id="slipok_api_key" name="slipok_api_key" type="password"
-              placeholder="กรอกเมื่อตั้งค่า/เปลี่ยน API Key" className="font-mono text-xs" />
+              placeholder={hasSlipokKey ? '•••••••• (ตั้งค่าแล้ว)' : 'กรอกเมื่อตั้งค่า/เปลี่ยน API Key'}
+              className="font-mono text-xs" />
           </Field>
         </div>
         <p className="text-xs text-slate-400">
@@ -228,6 +235,29 @@ export function SettingsForm({ action, settings, lineIntegration }: Props) {
             slipok.com
           </a>
         </p>
+      </Section>
+
+      {/* ── เอกสาร ── */}
+      <Section title="เอกสารแบบฟอร์ม" icon={<FileText className="size-4 text-slate-500" />}>
+        <div className="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3">
+          <div className="flex items-center gap-3">
+            <div className="flex size-9 items-center justify-center rounded-lg bg-rose-100">
+              <FileText className="size-4 text-rose-600" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-slate-800">สัญญาเช่าห้องพัก</p>
+              <p className="text-xs text-slate-400">Rental_Agreement_V3.pdf</p>
+            </div>
+          </div>
+          <a
+            href="/docs/rental-agreement.pdf"
+            download="สัญญาเช่าห้องพัก.pdf"
+            className="inline-flex items-center gap-1.5 rounded-xl bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200 hover:bg-slate-50 transition-colors"
+          >
+            <Download className="size-3.5" />
+            ดาวน์โหลด
+          </a>
+        </div>
       </Section>
 
       {/* ── Result ── */}
