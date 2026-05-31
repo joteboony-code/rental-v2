@@ -35,7 +35,11 @@ export function PaymentForm({ billId, remainingAmount }: Props) {
   // Controlled field state (so SlipOK can auto-fill them)
   const [amount,        setAmount]        = useState(remainingAmount > 0 ? remainingAmount.toFixed(2) : '')
   const [paymentMethod, setPaymentMethod] = useState('cash')
-  const [paidAt,        setPaidAt]        = useState(new Date().toISOString().slice(0, 16))
+  const [paidAt,        setPaidAt]        = useState(() => {
+    const now = new Date()
+    now.setMinutes(now.getMinutes() - now.getTimezoneOffset())
+    return now.toISOString().slice(0, 16)
+  })
 
   // Slip preview + verification state
   const [slipFile,     setSlipFile]     = useState<File | null>(null)
@@ -102,7 +106,7 @@ export function PaymentForm({ billId, remainingAmount }: Props) {
         setVerifyMsg('')
         setAmount(remainingAmount > 0 ? remainingAmount.toFixed(2) : '')
         setPaymentMethod('cash')
-        setPaidAt(new Date().toISOString().slice(0, 16))
+        const now = new Date(); now.setMinutes(now.getMinutes() - now.getTimezoneOffset()); setPaidAt(now.toISOString().slice(0, 16))
         router.refresh()
       }
     })
