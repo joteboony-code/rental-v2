@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 import { updateTenant } from '@/app/actions/tenants'
 import { TenantForm } from '../../_components/tenant-form'
 import { type TenantFormState } from '@/lib/definitions'
+import { DeleteTenantButton } from './_components/delete-tenant-button'
 
 export default async function EditTenantPage({
   params,
@@ -14,13 +15,14 @@ export default async function EditTenantPage({
   const { id } = await params
   const supabase = await createClient()
 
-  const { data: tenant } = await supabase
-    .from('tenants')
-    .select('*')
-    .eq('id', id)
-    .single()
+  const [{ data: tenant }, { data: contracts }] = await Promise.all([
+    supabase.from('tenants').select('*').eq('id', id).single(),
+    supabase.from('contracts').select('status').eq('tenant_id', id).eq('status', 'active').limit(1),
+  ])
 
   if (!tenant) notFound()
+
+  const hasActiveContract = (contracts?.length ?? 0) > 0
 
   const boundAction = async (
     state: TenantFormState,
@@ -43,6 +45,15 @@ export default async function EditTenantPage({
 
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 md:p-6">
         <TenantForm action={boundAction} tenant={tenant} submitLabel="บันทึกการแก้ไข" />
+      </div>
+
+      <div className="border-t border-slate-100 pt-6 space-y-3">
+        <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest">Danger Zone</p>
+        <DeleteTenantButton
+          tenantId={id}
+          tenantName={tenant.full_name}
+          hasActiveContract={hasActiveContract}
+        />
       </div>
     </div>
   )

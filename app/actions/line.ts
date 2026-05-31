@@ -1,5 +1,6 @@
 'use server'
 
+import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { roomRow } from '@/lib/room-utils'
 import { getLineMessagingConfig } from '@/lib/line-integration'
@@ -40,6 +41,8 @@ function buildFlexBubble(data: {
   rentAmt:      number
   waterAmt:     number
   elecAmt:      number
+  wifiAmt:      number
+  trashAmt:     number
   totalAmt:     number
   portalUrl:    string
   tenantPortalUrl: string
@@ -54,8 +57,10 @@ function buildFlexBubble(data: {
     { type: 'separator', margin: 'md', color: '#E2E8F0' },
     billRow('ค่าเช่า', data.rentAmt),
   ]
-  if (data.waterAmt > 0) rows.push(billRow('💧 ค่าน้ำ', data.waterAmt, '#2563EB'))
-  if (data.elecAmt > 0)  rows.push(billRow('⚡ ค่าไฟ',  data.elecAmt,  '#D97706'))
+  rows.push(billRow('💧 ค่าน้ำ', data.waterAmt, '#2563EB'))
+  rows.push(billRow('⚡ ค่าไฟ',  data.elecAmt,  '#D97706'))
+  if (data.wifiAmt > 0) rows.push(billRow('📶 ค่า WiFi', data.wifiAmt, '#4F46E5'))
+  rows.push(billRow('🗑️ ค่าขยะ', data.trashAmt, '#64748B'))
   rows.push({ type: 'separator', margin: 'md', color: '#E2E8F0' })
   rows.push({
     type: 'box', layout: 'horizontal', margin: 'md',
@@ -189,8 +194,10 @@ export async function sendLineBillNotification(
         ``,
         `ค่าเช่า:  ฿${fmt(Number(bill.rent_amount))}`,
       ]
-      if (Number(bill.water_amount) > 0) lines.push(`ค่าน้ำ:   ฿${fmt(Number(bill.water_amount))}`)
-      if (Number(bill.electricity_amount) > 0) lines.push(`ค่าไฟ:   ฿${fmt(Number(bill.electricity_amount))}`)
+      lines.push(`ค่าน้ำ:   ฿${fmt(Number(bill.water_amount))}`)
+      lines.push(`ค่าไฟ:   ฿${fmt(Number(bill.electricity_amount))}`)
+      if (Number(bill.wifi_amount) > 0) lines.push(`ค่า WiFi: ฿${fmt(Number(bill.wifi_amount))}`)
+      lines.push(`ค่าขยะ:  ฿${fmt(Number(bill.trash_amount))}`)
       lines.push(``, `รวม: ฿${fmt(Number(bill.total_amount))}`)
       lines.push(
         `ครบกำหนด: ${new Date(bill.due_date).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })}`
@@ -211,6 +218,8 @@ export async function sendLineBillNotification(
         rentAmt:     Number(bill.rent_amount),
         waterAmt:    Number(bill.water_amount),
         elecAmt:     Number(bill.electricity_amount),
+        wifiAmt:     Number(bill.wifi_amount),
+        trashAmt:    Number(bill.trash_amount),
         totalAmt:    Number(bill.total_amount),
         portalUrl,
         tenantPortalUrl,
@@ -456,6 +465,8 @@ export async function sendBroadcast(
     return { success: false, sent: 0, failed: 0, message: 'ไม่มีผู้เช่าที่เลือก' }
   }
 
+  // กันส่งซ้ำ: ผู้เช่าที่เช่าหลายห้องมี line_user_id เดียว → ส่งครั้งเดียว
+  const sentTo = new Set<string>()
   let sent = 0, failed = 0
 
   for (const c of contracts) {
@@ -463,6 +474,7 @@ export async function sendBroadcast(
     const tenant = c.tenants as unknown as TJ | null
     const lineUserId = tenant?.line_user_id
     if (!lineUserId) { failed++; continue }
+    if (sentTo.has(lineUserId)) continue   // ส่งไปแล้ว (ห้องอื่นของผู้เช่าคนเดียวกัน)
 
     try {
       const msgs: object[] = [{ type: 'text', text: message }]
@@ -470,15 +482,38 @@ export async function sendBroadcast(
         msgs.push({ type: 'image', originalContentUrl: imageUrl, previewImageUrl: imageUrl })
       }
       await pushMessage(lineUserId, lineConfig.channelAccessToken, msgs)
+      sentTo.add(lineUserId)
       sent++
     } catch {
       failed++
     }
   }
 
+  // บันทึกประวัติการประกาศ
+  type RJ = { room_number: string }
+  const targetDesc = roomIds.length === 0
+    ? 'ทุกห้อง'
+    : contracts
+        .map((c) => (c.rooms as unknown as RJ | null)?.room_number)
+        .filter((n): n is string => Boolean(n))
+        .sort((a, b) => (parseInt(a) || 0) - (parseInt(b) || 0))
+        .map((n) => `ห้อง ${n}`)
+        .join(', ')
+
+  await supabase.from('broadcast_history').insert({
+    message,
+    image_url: imageUrl,
+    target_room_numbers: targetDesc,
+    recipient_count: sentTo.size + failed,
+    sent_count: sent,
+    failed_count: failed,
+  })
+
+  revalidatePath('/broadcast')
+
   return {
     success: true, sent, failed,
-    message: `ส่งประกาศสำเร็จ ${sent} ห้อง${failed > 0 ? ` · ส่งไม่ได้ ${failed} ห้อง` : ''}`,
+    message: `ส่งประกาศสำเร็จ ${sent} คน${failed > 0 ? ` · ส่งไม่ได้ ${failed} คน` : ''}`,
   }
 }
 
@@ -495,7 +530,7 @@ export async function sendBulkLineBillNotification(
     .from('bills')
     .select(`
       id,
-      rent_amount, water_amount, electricity_amount, other_amount,
+      rent_amount, water_amount, electricity_amount, wifi_amount, trash_amount, other_amount,
       total_amount, due_date, billing_month,
       rooms   ( room_number, floor ),
       tenants ( full_name, line_user_id )
@@ -538,8 +573,10 @@ export async function sendBulkLineBillNotification(
           ``,
           `ค่าเช่า:  ฿${fmt(Number(bill.rent_amount))}`,
         ]
-        if (Number(bill.water_amount) > 0)       lines.push(`ค่าน้ำ:   ฿${fmt(Number(bill.water_amount))}`)
-        if (Number(bill.electricity_amount) > 0)  lines.push(`ค่าไฟ:   ฿${fmt(Number(bill.electricity_amount))}`)
+        lines.push(`ค่าน้ำ:   ฿${fmt(Number(bill.water_amount))}`)
+        lines.push(`ค่าไฟ:   ฿${fmt(Number(bill.electricity_amount))}`)
+        if (Number(bill.wifi_amount) > 0)         lines.push(`ค่า WiFi: ฿${fmt(Number(bill.wifi_amount))}`)
+        lines.push(`ค่าขยะ:  ฿${fmt(Number(bill.trash_amount))}`)
         if (Number(bill.other_amount) > 0)        lines.push(`อื่นๆ:   ฿${fmt(Number(bill.other_amount))}`)
         lines.push(``, `รวม: ฿${fmt(Number(bill.total_amount))}`)
         lines.push(`ครบกำหนด: ${new Date(bill.due_date as string).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })}`)
@@ -556,6 +593,8 @@ export async function sendBulkLineBillNotification(
           rentAmt:     Number(bill.rent_amount),
           waterAmt:    Number(bill.water_amount),
           elecAmt:     Number(bill.electricity_amount),
+          wifiAmt:     Number(bill.wifi_amount),
+          trashAmt:    Number(bill.trash_amount),
           totalAmt:    Number(bill.total_amount),
           portalUrl,
           tenantPortalUrl,

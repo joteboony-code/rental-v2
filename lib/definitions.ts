@@ -126,6 +126,8 @@ export type Tenant = {
   full_name:          string
   phone:              string | null
   line_user_id:       string | null
+  line_display_name:  string | null
+  line_picture_url:   string | null
   id_card:            string | null
   emergency_contact:  string | null
   emergency_phone:    string | null

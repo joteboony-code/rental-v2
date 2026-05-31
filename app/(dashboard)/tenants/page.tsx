@@ -1,8 +1,10 @@
+import { Fragment } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { buttonVariants } from '@/components/ui/button'
 import { ArrowRight, UserPlus, Users, Home, Phone } from 'lucide-react'
 import { roomRow } from '@/lib/room-utils'
+import { SyncLineButton } from './_components/sync-line-button'
 
 type ContractRow = {
   status: string
@@ -27,15 +29,24 @@ export default async function TenantsPage({ searchParams }: Props) {
       )
     `)
 
+  const getActive = (t: NonNullable<typeof rawTenants>[number]) =>
+    (t.contracts as ContractRow[] | null)?.find((c) => c.status === 'active') ?? null
+
+  const sortRoomNum = (r: string) => {
+    const n = parseInt(r, 10)
+    return isNaN(n) ? r.padStart(10, '0') : String(n).padStart(10, '0')
+  }
+
   const allTenants = rawTenants?.slice().sort((a, b) => {
-    const getRoom = (t: typeof a) =>
-      (t.contracts as ContractRow[] | null)
-        ?.find((c) => c.status === 'active')?.rooms?.room_number
-    const ra = getRoom(a)
-    const rb = getRoom(b)
-    if (ra && rb) return (parseInt(ra) || 0) - (parseInt(rb) || 0)
-    if (ra) return -1
-    if (rb) return 1
+    const ca = getActive(a)
+    const cb = getActive(b)
+    if (ca && cb) {
+      const ra = ca.rooms?.room_number ?? ''
+      const rb = cb.rooms?.room_number ?? ''
+      return sortRoomNum(ra).localeCompare(sortRoomNum(rb))
+    }
+    if (ca) return -1
+    if (cb) return 1
     return a.full_name.localeCompare(b.full_name, 'th')
   })
 
@@ -65,10 +76,13 @@ export default async function TenantsPage({ searchParams }: Props) {
           <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-1">จัดการ</p>
           <h1 className="text-2xl md:text-3xl font-bold text-slate-950 tracking-tight">ผู้เช่า</h1>
         </div>
-        <Link href="/tenants/new"
-          className={buttonVariants({ variant: 'default', size: 'sm' }) + ' gap-1.5 rounded-xl bg-slate-950 hover:bg-slate-800 text-white shadow-md shadow-slate-900/20'}>
-          <UserPlus className="size-4" /> เพิ่มผู้เช่า
-        </Link>
+        <div className="flex items-center gap-2">
+          <SyncLineButton />
+          <Link href="/tenants/new"
+            className={buttonVariants({ variant: 'default', size: 'sm' }) + ' gap-1.5 rounded-xl bg-slate-950 hover:bg-slate-800 text-white shadow-md shadow-slate-900/20'}>
+            <UserPlus className="size-4" /> เพิ่มผู้เช่า
+          </Link>
+        </div>
       </div>
 
       {/* ── Stats ── */}
@@ -138,14 +152,25 @@ export default async function TenantsPage({ searchParams }: Props) {
                   <th className="text-left px-4 py-4 text-xs font-semibold text-slate-400 uppercase tracking-widest">ห้อง</th>
                   <th className="text-left px-4 py-4 text-xs font-semibold text-slate-400 uppercase tracking-widest">เบอร์โทร</th>
                   <th className="text-center px-4 py-4 text-xs font-semibold text-slate-400 uppercase tracking-widest">สถานะ</th>
+                  <th className="text-center px-4 py-4 text-xs font-semibold text-slate-400 uppercase tracking-widest">Portal</th>
                   <th className="px-5 py-4 w-28"></th>
                 </tr>
               </thead>
               <tbody>
-                {tenants.map((tenant) => {
-                  const activeContract = (tenant.contracts as ContractRow[] | null)?.find((c) => c.status === 'active')
+                {tenants.map((tenant, i) => {
+                  const activeContract = getActive(tenant)
+                  const prevActive = i > 0 ? getActive(tenants[i - 1]) : true
+                  const showDivider = !activeContract && !!prevActive && i > 0
                   return (
-                    <tr key={tenant.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/60 transition-colors group">
+                    <Fragment key={tenant.id}>
+                      {showDivider && (
+                        <tr>
+                          <td colSpan={6} className="px-6 py-2 bg-slate-50 border-y border-slate-100">
+                            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">ไม่มีสัญญาเช่า</span>
+                          </td>
+                        </tr>
+                      )}
+                    <tr className="border-b border-slate-50 last:border-0 hover:bg-slate-50/60 transition-colors group">
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
                           <div className="size-9 rounded-xl bg-slate-100 group-hover:bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-600 transition-colors shrink-0">
@@ -188,6 +213,19 @@ export default async function TenantsPage({ searchParams }: Props) {
                           </span>
                         )}
                       </td>
+                      <td className="px-4 py-4 text-center">
+                        {tenant.last_portal_open_at ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200"
+                            title={`เปิดล่าสุด: ${fmtPortalOpen(tenant.last_portal_open_at as string)}`}>
+                            <span className="size-1.5 rounded-full bg-emerald-500" />
+                            เปิดแล้ว
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-400">
+                            ยังไม่เปิด
+                          </span>
+                        )}
+                      </td>
                       <td className="px-5 py-4 text-right">
                         <Link href={`/tenants/${tenant.id}`}
                           className="inline-flex h-8 min-w-24 items-center justify-center gap-1.5 rounded-lg bg-slate-100 px-3 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-950">
@@ -196,6 +234,7 @@ export default async function TenantsPage({ searchParams }: Props) {
                         </Link>
                       </td>
                     </tr>
+                    </Fragment>
                   )
                 })}
               </tbody>
@@ -203,10 +242,18 @@ export default async function TenantsPage({ searchParams }: Props) {
 
             {/* Mobile Cards */}
             <div className="md:hidden divide-y divide-slate-100">
-              {tenants.map((tenant) => {
-                const activeContract = (tenant.contracts as ContractRow[] | null)?.find((c) => c.status === 'active')
+              {tenants.map((tenant, i) => {
+                const activeContract = getActive(tenant)
+                const prevActive = i > 0 ? getActive(tenants[i - 1]) : true
+                const showDivider = !activeContract && !!prevActive && i > 0
                 return (
-                  <Link key={tenant.id} href={`/tenants/${tenant.id}`}
+                  <div key={tenant.id}>
+                    {showDivider && (
+                      <div className="px-4 py-2 bg-slate-50 border-y border-slate-100">
+                        <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">ไม่มีสัญญาเช่า</span>
+                      </div>
+                    )}
+                  <Link href={`/tenants/${tenant.id}`}
                     className="flex items-center gap-4 p-4 hover:bg-slate-50 transition-colors">
                     <div className="size-11 rounded-xl bg-slate-100 flex items-center justify-center text-sm font-bold text-slate-600 shrink-0">
                       {tenant.full_name.slice(0, 2).toUpperCase()}
@@ -226,7 +273,7 @@ export default async function TenantsPage({ searchParams }: Props) {
                         )}
                       </div>
                     </div>
-                    <div className="shrink-0">
+                    <div className="shrink-0 flex flex-col items-end gap-1">
                       {activeContract ? (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-violet-50 text-violet-700 ring-1 ring-violet-200">
                           <span className="size-1.5 rounded-full bg-violet-500" />
@@ -237,8 +284,16 @@ export default async function TenantsPage({ searchParams }: Props) {
                           ไม่มีสัญญา
                         </span>
                       )}
+                      {tenant.last_portal_open_at ? (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-medium text-emerald-600">
+                          <span className="size-1.5 rounded-full bg-emerald-500" /> เปิด Portal แล้ว
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-medium text-slate-300">ยังไม่เปิด Portal</span>
+                      )}
                     </div>
                   </Link>
+                  </div>
                 )
               })}
             </div>
@@ -248,3 +303,10 @@ export default async function TenantsPage({ searchParams }: Props) {
     </div>
   )
 }
+
+function fmtPortalOpen(s: string) {
+  return new Date(s).toLocaleString('th-TH', {
+    day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+  })
+}
+
