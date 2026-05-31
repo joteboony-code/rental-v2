@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { RoomStatusBadge } from './_components/room-status-badge'
 import { DeleteRoomButton } from './_components/delete-room-button'
 import { buttonVariants } from '@/components/ui/button'
-import { Plus, Pencil, Building2, TrendingUp } from 'lucide-react'
+import { Plus, Pencil, Building2, TrendingUp, BarChart2 } from 'lucide-react'
 import { roomRow } from '@/lib/room-utils'
 import { getLineIntegrationPublic } from '@/lib/line-integration'
 import { buildPairUrl, normalizeOrigin } from '@/lib/pair-url'
@@ -124,6 +124,10 @@ export default async function RoomsPage() {
                       <td className="px-5 py-4">
                         <div className="flex items-center justify-end gap-1">
                           <RoomPairQrButton roomNumber={room.room_number} pairUrl={roomPairUrl} />
+                          <Link href={`/rooms/${room.id}/usage`}
+                            className="p-2 rounded-lg text-slate-400 hover:text-teal-600 hover:bg-teal-50 transition-colors" title="กราฟการใช้น้ำ-ไฟ">
+                            <BarChart2 className="size-3.5" />
+                          </Link>
                           <Link href={`/rooms/${room.id}/edit`}
                             className="p-2 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">
                             <Pencil className="size-3.5" />

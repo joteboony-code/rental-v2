@@ -3,7 +3,7 @@ import { Suspense } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { buttonVariants } from '@/components/ui/button'
 import { BillStatusBadge } from './_components/bill-status-badge'
-import { ClipboardList, Download, History, ArrowRight } from 'lucide-react'
+import { ClipboardList, Download, History, ArrowRight, Wallet } from 'lucide-react'
 import { roomRow } from '@/lib/room-utils'
 import { BulkLineButton } from './_components/bulk-line-button'
 import { BillingMonthNav } from './_components/billing-month-nav'
@@ -96,13 +96,21 @@ export default async function BillsPage({ searchParams }: Props) {
             <LineQuotaBadge />
           </Suspense>
           <div className="flex gap-2 flex-wrap">
+          <Link href="/bills/payments"
+            className={buttonVariants({ variant: 'outline', size: 'sm' }) + ' rounded-xl gap-1.5 border-slate-200 text-slate-600 hover:bg-slate-50'}>
+            <Wallet className="size-3.5" /> ประวัติชำระ
+          </Link>
           <Link href="/bills/history"
             className={buttonVariants({ variant: 'outline', size: 'sm' }) + ' rounded-xl gap-1.5 border-slate-200 text-slate-600 hover:bg-slate-50'}>
-            <History className="size-3.5" /> ประวัติ
+            <History className="size-3.5" /> ประวัติบิล
           </Link>
           <a href={`/bills/export?month=${currentMonth}`}
             className={buttonVariants({ variant: 'outline', size: 'sm' }) + ' rounded-xl gap-1.5 border-slate-200 text-slate-600 hover:bg-slate-50'}>
-            <Download className="size-3.5" /> Export
+            <Download className="size-3.5" /> Export เดือน
+          </a>
+          <a href={`/bills/export?year=${yearStr}`}
+            className={buttonVariants({ variant: 'outline', size: 'sm' }) + ' rounded-xl gap-1.5 border-slate-200 text-slate-600 hover:bg-slate-50'}>
+            <Download className="size-3.5" /> Export ทั้งปี
           </a>
           <Link href={`/bills/meter?month=${currentMonth}`}
             className={buttonVariants({ variant: 'default', size: 'sm' }) + ' rounded-xl gap-1.5 bg-slate-950 hover:bg-slate-800 text-white shadow-md shadow-slate-900/20'}>

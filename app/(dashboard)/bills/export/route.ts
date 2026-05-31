@@ -12,23 +12,29 @@ export async function GET(request: NextRequest) {
     .from('profiles').select('role').eq('id', user.id).single()
   if (profile?.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  // Month param
   const month = request.nextUrl.searchParams.get('month')
-  const now = new Date()
-  const billingMonth = month
-    ? `${month}-01`
-    : `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
+  const year  = request.nextUrl.searchParams.get('year')
+  const now   = new Date()
 
-  const { data: bills } = await supabase
+  let billsQuery = supabase
     .from('bills')
-    .select(`
-      billing_month, due_date, status,
-      rent_amount, water_amount, electricity_amount, other_amount, total_amount,
-      rooms ( room_number, floor ),
-      tenants ( full_name, phone )
-    `)
-    .eq('billing_month', billingMonth)
-    .order('created_at')
+    .select(`billing_month, due_date, status, rent_amount, water_amount, electricity_amount, other_amount, total_amount, rooms(room_number,floor), tenants(full_name,phone)`)
+
+  let filename: string
+  if (year) {
+    billsQuery = billsQuery
+      .gte('billing_month', `${year}-01-01`)
+      .lte('billing_month', `${year}-12-31`)
+    filename = `bills-${year}.csv`
+  } else {
+    const billingMonth = month
+      ? `${month}-01`
+      : `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
+    billsQuery = billsQuery.eq('billing_month', billingMonth)
+    filename   = `bills-${billingMonth.substring(0, 7)}.csv`
+  }
+
+  const { data: bills } = await billsQuery.order('billing_month').order('created_at')
 
   if (!bills) return NextResponse.json({ error: 'No data' }, { status: 404 })
 
@@ -37,6 +43,7 @@ export async function GET(request: NextRequest) {
   }
 
   const headers = [
+    ...(year ? ['เดือน'] : []),
     'ห้อง', 'ชั้น', 'ผู้เช่า', 'เบอร์โทร',
     'ค่าเช่า', 'ค่าน้ำ', 'ค่าไฟ', 'อื่นๆ', 'รวม',
     'สถานะ', 'ครบกำหนด',
@@ -49,6 +56,7 @@ export async function GET(request: NextRequest) {
     const room   = b.rooms   as unknown as RoomJoin
     const tenant = b.tenants as unknown as TenantJoin
     return [
+      ...(year ? [b.billing_month?.toString().substring(0, 7) ?? ''] : []),
       room?.room_number  ?? '',
       room?.floor?.toString() ?? '',
       tenant?.full_name  ?? '',
@@ -69,12 +77,10 @@ export async function GET(request: NextRequest) {
     ...csvRows.map((row) => row.map(escape).join(',')),
   ].join('\r\n')
 
-  const monthStr = billingMonth.substring(0, 7)
-
   return new NextResponse('﻿' + csv, {
     headers: {
       'Content-Type':        'text/csv; charset=utf-8',
-      'Content-Disposition': `attachment; filename="bills-${monthStr}.csv"`,
+      'Content-Disposition': `attachment; filename="${filename}"`,
     },
   })
 }

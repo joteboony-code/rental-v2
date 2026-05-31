@@ -5,7 +5,8 @@ import { BillStatusBadge } from '../_components/bill-status-badge'
 import { PromptPayQR } from './_components/promptpay-qr'
 import { PaymentForm } from './_components/payment-form'
 import { DeletePaymentButton } from './_components/delete-payment-button'
-import { ChevronLeft, Droplets, Zap, Home, User, Receipt, CreditCard, MessageCircle } from 'lucide-react'
+import { ChevronLeft, Droplets, Zap, Wifi, Trash2, Home, User, Receipt, CreditCard, MessageCircle } from 'lucide-react'
+import { PrintButton } from './_components/print-button'
 import { roomRow } from '@/lib/room-utils'
 import { LineNotifyButton } from './_components/line-notify-button'
 import { EditBillForm } from './_components/edit-bill-form'
@@ -26,7 +27,7 @@ export default async function BillDetailPage({
         *,
         rooms ( room_number, floor ),
         tenants ( full_name, phone, line_user_id ),
-        meter_readings ( water_prev, water_curr, water_units, electricity_prev, electricity_curr, electricity_units )
+        meter_readings ( water_prev, water_curr, water_units, electricity_prev, electricity_curr, electricity_units, water_image_url, electricity_image_url )
       `)
       .eq('id', id)
       .single(),
@@ -42,7 +43,7 @@ export default async function BillDetailPage({
 
   type RoomJoin   = { room_number: string; floor: number | null }
   type TenantJoin = { full_name: string; phone: string | null; line_user_id: string | null }
-  type MeterJoin  = { water_prev: number; water_curr: number; water_units: number; electricity_prev: number; electricity_curr: number; electricity_units: number }
+  type MeterJoin  = { water_prev: number; water_curr: number; water_units: number; electricity_prev: number; electricity_curr: number; electricity_units: number; water_image_url: string | null; electricity_image_url: string | null }
 
   const room   = bill.rooms          as unknown as RoomJoin   | null
   const tenant = bill.tenants        as unknown as TenantJoin | null
@@ -97,6 +98,7 @@ export default async function BillDetailPage({
                 electricityRate={Number(settings?.electricity_unit_price ?? 8)}
               />
             )}
+            <PrintButton />
             <DeleteBillButton billId={id} roomNumber={room?.room_number ?? '—'} month={monthLabel} />
             <BillStatusBadge status={bill.status} />
           </div>
@@ -116,41 +118,74 @@ export default async function BillDetailPage({
             <div className="space-y-1">
               <BillRow label="ค่าเช่า" amount={Number(bill.rent_amount)} />
 
-              {Number(bill.water_amount) > 0 && (
+              <BillRow
+                label={
+                  <span className="flex items-center gap-1.5">
+                    <Droplets className="size-3.5 text-blue-500" />
+                    <span className="text-blue-700">ค่าน้ำ</span>
+                    {meter && (
+                      <span className="text-slate-400 font-normal text-xs ml-1">
+                        ({meter.water_prev} → {meter.water_curr} = {meter.water_units} หน่วย)
+                      </span>
+                    )}
+                    {meter?.water_image_url && (
+                      <a href={meter.water_image_url} target="_blank" rel="noreferrer" className="ml-1 shrink-0">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={meter.water_image_url} alt="มิเตอร์น้ำ"
+                          className="size-6 rounded object-cover border border-blue-100 hover:opacity-80 transition-opacity" />
+                      </a>
+                    )}
+                  </span>
+                }
+                amount={Number(bill.water_amount)}
+                color="text-blue-700"
+              />
+
+              <BillRow
+                label={
+                  <span className="flex items-center gap-1.5">
+                    <Zap className="size-3.5 text-amber-500" />
+                    <span className="text-amber-700">ค่าไฟ</span>
+                    {meter && (
+                      <span className="text-slate-400 font-normal text-xs ml-1">
+                        ({meter.electricity_prev} → {meter.electricity_curr} = {meter.electricity_units} หน่วย)
+                      </span>
+                    )}
+                    {meter?.electricity_image_url && (
+                      <a href={meter.electricity_image_url} target="_blank" rel="noreferrer" className="ml-1 shrink-0">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={meter.electricity_image_url} alt="มิเตอร์ไฟ"
+                          className="size-6 rounded object-cover border border-amber-100 hover:opacity-80 transition-opacity" />
+                      </a>
+                    )}
+                  </span>
+                }
+                amount={Number(bill.electricity_amount)}
+                color="text-amber-700"
+              />
+
+              {Number(bill.wifi_amount) > 0 && (
                 <BillRow
                   label={
                     <span className="flex items-center gap-1.5">
-                      <Droplets className="size-3.5 text-blue-500" />
-                      <span className="text-blue-700">ค่าน้ำ</span>
-                      {meter && (
-                        <span className="text-slate-400 font-normal text-xs ml-1">
-                          ({meter.water_prev} → {meter.water_curr} = {meter.water_units} หน่วย)
-                        </span>
-                      )}
+                      <Wifi className="size-3.5 text-indigo-500" />
+                      <span className="text-indigo-700">ค่า WiFi</span>
                     </span>
                   }
-                  amount={Number(bill.water_amount)}
-                  color="text-blue-700"
+                  amount={Number(bill.wifi_amount)}
+                  color="text-indigo-700"
                 />
               )}
 
-              {Number(bill.electricity_amount) > 0 && (
-                <BillRow
-                  label={
-                    <span className="flex items-center gap-1.5">
-                      <Zap className="size-3.5 text-amber-500" />
-                      <span className="text-amber-700">ค่าไฟ</span>
-                      {meter && (
-                        <span className="text-slate-400 font-normal text-xs ml-1">
-                          ({meter.electricity_prev} → {meter.electricity_curr} = {meter.electricity_units} หน่วย)
-                        </span>
-                      )}
-                    </span>
-                  }
-                  amount={Number(bill.electricity_amount)}
-                  color="text-amber-700"
-                />
-              )}
+              <BillRow
+                label={
+                  <span className="flex items-center gap-1.5">
+                    <Trash2 className="size-3.5 text-slate-400" />
+                    <span className="text-slate-600">ค่าขยะ</span>
+                  </span>
+                }
+                amount={Number(bill.trash_amount)}
+              />
 
               {Number(bill.other_amount) > 0 && (
                 <BillRow
