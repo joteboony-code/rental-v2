@@ -4,7 +4,17 @@ import { buttonVariants } from '@/components/ui/button'
 import { ArrowRight, UserPlus, Users, Home, Phone } from 'lucide-react'
 import { roomRow } from '@/lib/room-utils'
 
-export default async function TenantsPage() {
+type ContractRow = {
+  status: string
+  rooms: { id: string; room_number: string; floor: number | null } | null
+}
+
+interface Props {
+  searchParams: Promise<{ status?: string }>
+}
+
+export default async function TenantsPage({ searchParams }: Props) {
+  const { status } = await searchParams
   const supabase = await createClient()
 
   const { data: rawTenants } = await supabase
@@ -13,32 +23,42 @@ export default async function TenantsPage() {
       *,
       contracts!left (
         id, status, monthly_rent, start_date,
-        rooms ( room_number, floor )
+        rooms ( id, room_number, floor )
       )
     `)
 
-  // Sort by active contract room_number numerically; tenants without active contract go last
-  const tenants = rawTenants?.slice().sort((a, b) => {
+  const allTenants = rawTenants?.slice().sort((a, b) => {
     const getRoom = (t: typeof a) =>
-      (t.contracts as { status: string; rooms: { room_number: string } | null }[] | null)
+      (t.contracts as ContractRow[] | null)
         ?.find((c) => c.status === 'active')?.rooms?.room_number
     const ra = getRoom(a)
     const rb = getRoom(b)
     if (ra && rb) return (parseInt(ra) || 0) - (parseInt(rb) || 0)
-    if (ra) return -1   // a has room, b doesn't → a first
-    if (rb) return 1    // b has room, a doesn't → b first
+    if (ra) return -1
+    if (rb) return 1
     return a.full_name.localeCompare(b.full_name, 'th')
   })
 
   const stats = {
-    total:  tenants?.length ?? 0,
-    active: tenants?.filter((t) => (t.contracts as { status: string }[] | null)?.some((c) => c.status === 'active')).length ?? 0,
-    inactive: tenants?.filter((t) => !(t.contracts as { status: string }[] | null)?.some((c) => c.status === 'active')).length ?? 0,
+    total:    allTenants?.length ?? 0,
+    active:   allTenants?.filter((t) => (t.contracts as ContractRow[] | null)?.some((c) => c.status === 'active')).length ?? 0,
+    inactive: allTenants?.filter((t) => !(t.contracts as ContractRow[] | null)?.some((c) => c.status === 'active')).length ?? 0,
   }
+
+  const tenants = status === 'active'
+    ? allTenants?.filter((t) => (t.contracts as ContractRow[] | null)?.some((c) => c.status === 'active'))
+    : status === 'inactive'
+    ? allTenants?.filter((t) => !(t.contracts as ContractRow[] | null)?.some((c) => c.status === 'active'))
+    : allTenants
+
+  const filterTabs = [
+    { value: '',         label: 'ทั้งหมด',     count: stats.total    },
+    { value: 'active',   label: 'กำลังเช่า',   count: stats.active   },
+    { value: 'inactive', label: 'ไม่มีสัญญา', count: stats.inactive },
+  ]
 
   return (
     <div className="p-5 md:p-8 space-y-6 max-w-6xl">
-
       {/* ── Header ── */}
       <div className="flex items-end justify-between flex-wrap gap-3">
         <div>
@@ -76,6 +96,24 @@ export default async function TenantsPage() {
         </div>
       </div>
 
+      {/* ── Filter tabs ── */}
+      <div className="flex gap-2 overflow-x-auto pb-1">
+        {filterTabs.map(({ value, label, count }) => (
+          <Link key={value}
+            href={`/tenants${value ? `?status=${value}` : ''}`}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all whitespace-nowrap border ${
+              (status ?? '') === value
+                ? 'bg-slate-950 text-white border-slate-950 shadow-sm'
+                : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400'
+            }`}>
+            {label}
+            <span className={`text-xs px-1.5 py-0.5 rounded-md font-bold ${
+              (status ?? '') === value ? 'bg-white/15 text-white' : 'bg-slate-100 text-slate-500'
+            }`}>{count}</span>
+          </Link>
+        ))}
+      </div>
+
       {/* ── List ── */}
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
         {!tenants || tenants.length === 0 ? (
@@ -83,8 +121,8 @@ export default async function TenantsPage() {
             <div className="size-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-5">
               <Users className="size-7 text-slate-300" />
             </div>
-            <p className="font-semibold text-slate-600 mb-1">ยังไม่มีผู้เช่า</p>
-            <p className="text-sm text-slate-400 mb-5">เริ่มต้นด้วยการเพิ่มผู้เช่าคนแรก</p>
+            <p className="font-semibold text-slate-600 mb-1">ไม่พบผู้เช่า</p>
+            <p className="text-sm text-slate-400 mb-5">ลองเปลี่ยนตัวกรอง หรือเพิ่มผู้เช่าใหม่</p>
             <Link href="/tenants/new"
               className={buttonVariants({ variant: 'default', size: 'sm' }) + ' rounded-xl bg-slate-950 hover:bg-slate-800'}>
               <UserPlus className="size-4 mr-1.5" /> เพิ่มผู้เช่าคนแรก
@@ -105,8 +143,7 @@ export default async function TenantsPage() {
               </thead>
               <tbody>
                 {tenants.map((tenant) => {
-                  const activeContract = (tenant.contracts as { status: string; rooms: { room_number: string; floor: number | null } | null }[] | null)
-                    ?.find((c) => c.status === 'active')
+                  const activeContract = (tenant.contracts as ContractRow[] | null)?.find((c) => c.status === 'active')
                   return (
                     <tr key={tenant.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/60 transition-colors group">
                       <td className="px-6 py-4">
@@ -119,11 +156,12 @@ export default async function TenantsPage() {
                       </td>
                       <td className="px-4 py-4 text-slate-600">
                         {activeContract?.rooms ? (
-                          <span className="flex items-center gap-1.5">
+                          <Link href={`/rooms/${activeContract.rooms.id}`}
+                            className="flex items-center gap-1.5 hover:text-indigo-600 transition-colors">
                             <Home className="size-3.5 text-slate-400" />
                             ห้อง {activeContract.rooms.room_number}
                             {` แถวที่ ${roomRow(activeContract.rooms.room_number)}`}
-                          </span>
+                          </Link>
                         ) : (
                           <span className="text-slate-300 text-xs">—</span>
                         )}
@@ -166,8 +204,7 @@ export default async function TenantsPage() {
             {/* Mobile Cards */}
             <div className="md:hidden divide-y divide-slate-100">
               {tenants.map((tenant) => {
-                const activeContract = (tenant.contracts as { status: string; rooms: { room_number: string; floor: number | null } | null }[] | null)
-                  ?.find((c) => c.status === 'active')
+                const activeContract = (tenant.contracts as ContractRow[] | null)?.find((c) => c.status === 'active')
                 return (
                   <Link key={tenant.id} href={`/tenants/${tenant.id}`}
                     className="flex items-center gap-4 p-4 hover:bg-slate-50 transition-colors">
@@ -211,5 +248,3 @@ export default async function TenantsPage() {
     </div>
   )
 }
-
-
