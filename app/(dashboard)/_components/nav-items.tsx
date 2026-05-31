@@ -2,9 +2,16 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, Users, FileText, ClipboardList, Wrench, Settings, History, Megaphone } from 'lucide-react'
+import { LayoutDashboard, Home, Users, FileText, ClipboardList, Wrench, Settings, History, Megaphone } from 'lucide-react'
 
 const navItems = [
+  {
+    href:     '/',
+    label:    'แดชบอร์ด',
+    icon:     LayoutDashboard,
+    dot:      'bg-slate-400',
+    match:    (p: string) => p === '/',
+  },
   {
     href:     '/rooms',
     label:    'ห้องเช่า',

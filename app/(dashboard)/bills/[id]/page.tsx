@@ -8,6 +8,7 @@ import { DeletePaymentButton } from './_components/delete-payment-button'
 import { ChevronLeft, Droplets, Zap, Home, User, Receipt, CreditCard, MessageCircle } from 'lucide-react'
 import { roomRow } from '@/lib/room-utils'
 import { LineNotifyButton } from './_components/line-notify-button'
+import { CopyBillButton } from './_components/copy-bill-button'
 
 export default async function BillDetailPage({
   params,
@@ -78,7 +79,23 @@ export default async function BillDetailPage({
               {tenant && <span className="flex items-center gap-1"><User className="size-3.5" /> {tenant.full_name}</span>}
             </p>
           </div>
-          <BillStatusBadge status={bill.status} />
+          <div className="flex items-center gap-2 flex-wrap">
+            <CopyBillButton
+              roomNumber={room?.room_number ?? '—'}
+              tenantName={tenant?.full_name ?? '—'}
+              monthLabel={monthLabel}
+              rentAmount={Number(bill.rent_amount)}
+              waterAmount={Number(bill.water_amount)}
+              waterUnits={meter?.water_units}
+              electricityAmount={Number(bill.electricity_amount)}
+              electricityUnits={meter?.electricity_units}
+              otherAmount={Number(bill.other_amount)}
+              otherNote={bill.other_note as string | null}
+              totalAmount={Number(bill.total_amount)}
+              dueDate={bill.due_date}
+            />
+            <BillStatusBadge status={bill.status} />
+          </div>
         </div>
       </div>
 
