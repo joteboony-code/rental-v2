@@ -9,6 +9,7 @@ import { ChevronLeft, Droplets, Zap, Wifi, Trash2, Home, User, Receipt, CreditCa
 import { PrintButton } from './_components/print-button'
 import { roomRow } from '@/lib/room-utils'
 import { LineNotifyButton } from './_components/line-notify-button'
+import { SendPaymentConfirmedButton } from './_components/send-payment-confirmed-button'
 import { EditBillForm } from './_components/edit-bill-form'
 import { DeleteBillButton } from './_components/delete-bill-button'
 
@@ -276,6 +277,14 @@ export default async function BillDetailPage({
               <p className="text-xs text-emerald-600 mt-1 font-semibold">
                 ฿{Number(bill.total_amount).toLocaleString('th-TH', { minimumFractionDigits: 2 })}
               </p>
+              {tenant?.line_user_id && (
+                <div className="mt-4 flex justify-center">
+                  <SendPaymentConfirmedButton
+                    billId={id}
+                    hasLineUserId={!!tenant.line_user_id}
+                  />
+                </div>
+              )}
             </div>
           )}
 
