@@ -4,9 +4,17 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { logout } from '@/app/actions/auth'
-import { Building2, Home, Users, FileText, ClipboardList, Wrench, Settings, Menu, X, LogOut, History, Megaphone } from 'lucide-react'
+import { Building2, LayoutDashboard, Home, Users, FileText, ClipboardList, Wrench, Settings, Menu, X, LogOut, History, Megaphone } from 'lucide-react'
 
 const navItems = [
+  {
+    href:    '/',
+    label:   'แดชบอร์ด',
+    icon:    LayoutDashboard,
+    accent:  'text-slate-600',
+    bg:      'bg-slate-100',
+    match:   (p: string) => p === '/',
+  },
   {
     href:    '/rooms',
     label:   'ห้องเช่า',
