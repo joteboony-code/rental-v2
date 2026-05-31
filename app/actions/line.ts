@@ -261,47 +261,66 @@ export async function sendPaymentConfirmedNotification(
 
   const roomNumber = room?.room_number ?? '—'
   const month      = thaiMonth(bill.billing_month as string)
-  const total      = fmt(Number(bill.total_amount))
+  const totalAmt   = Number(bill.total_amount)
+  const total      = fmt(totalAmt)
+  const portalUrl  = buildBillPortalUrl(billId, lineConfig.liffId, lineConfig.appUrl)
 
   const flexMsg = {
     type: 'flex',
-    altText: `✅ ยืนยันรับชำระแล้ว ห้อง ${roomNumber} ฿${total}`,
+    altText: `✅ ชำระค่าเช่าครบแล้วครับ! ห้อง ${roomNumber} ฿${total}`,
     contents: {
       type: 'bubble',
       size: 'mega',
       header: {
-        type: 'box', layout: 'vertical',
-        backgroundColor: '#059669',
-        paddingAll: '20px',
+        type: 'box', layout: 'horizontal',
+        backgroundColor: '#16A34A',
+        paddingAll: '16px',
         contents: [
-          { type: 'text', text: '✅ ยืนยันรับชำระแล้ว', color: '#FFFFFF', size: 'lg', weight: 'bold' },
-          { type: 'text', text: `ห้อง ${roomNumber} · ${month}`, color: '#D1FAE5', size: 'sm', margin: 'xs' },
+          { type: 'text', text: '✅', size: 'xl', flex: 0, margin: 'none' },
+          { type: 'text', text: 'ชำระค่าเช่าครบแล้วครับ!', color: '#FFFFFF', size: 'lg', weight: 'bold', margin: 'md', flex: 1 },
         ],
       },
       body: {
-        type: 'box', layout: 'vertical', paddingAll: '20px', spacing: 'md',
+        type: 'box', layout: 'vertical', paddingAll: '16px', spacing: 'md',
         contents: [
           {
             type: 'box', layout: 'horizontal',
             contents: [
-              { type: 'text', text: '👤 ผู้เช่า', size: 'sm', color: '#64748B', flex: 1 },
-              { type: 'text', text: tenant.full_name, size: 'sm', color: '#0F172A', align: 'end', weight: 'bold' },
+              { type: 'text', text: '🏠 ห้อง', size: 'sm', color: '#64748B', flex: 1 },
+              { type: 'text', text: roomNumber, size: 'sm', color: '#0F172A', align: 'end', weight: 'bold' },
             ],
           },
           {
             type: 'box', layout: 'horizontal',
             contents: [
-              { type: 'text', text: '💰 ยอดชำระ', size: 'sm', color: '#64748B', flex: 1 },
-              { type: 'text', text: `฿${total}`, size: 'xl', color: '#059669', align: 'end', weight: 'bold' },
+              { type: 'text', text: '📅 รอบบิล', size: 'sm', color: '#64748B', flex: 1 },
+              { type: 'text', text: month, size: 'sm', color: '#0F172A', align: 'end', weight: 'bold' },
             ],
           },
           { type: 'separator', color: '#E2E8F0' },
           {
-            type: 'text',
-            text: 'ขอบคุณที่ชำระค่าเช่าตรงเวลา 🙏',
-            size: 'sm', color: '#64748B', align: 'center', wrap: true,
+            type: 'box', layout: 'horizontal',
+            contents: [
+              { type: 'text', text: '💰 ชำระแล้ว', size: 'sm', color: '#64748B', flex: 1 },
+              { type: 'text', text: `${total} บาท`, size: 'sm', color: '#16A34A', align: 'end', weight: 'bold' },
+            ],
+          },
+          {
+            type: 'box', layout: 'horizontal',
+            contents: [
+              { type: 'text', text: '🟢 คงเหลือ', size: 'sm', color: '#64748B', flex: 1 },
+              { type: 'text', text: '0 บาท', size: 'sm', color: '#0F172A', align: 'end', weight: 'bold' },
+            ],
           },
         ],
+      },
+      footer: {
+        type: 'box', layout: 'vertical', paddingAll: '12px',
+        contents: [{
+          type: 'button',
+          action: { type: 'uri', label: '🔗 ดูบิล / ชำระเงิน', uri: portalUrl },
+          style: 'primary', color: '#0C1B4D', height: 'sm',
+        }],
       },
     },
   }
