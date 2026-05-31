@@ -229,7 +229,7 @@ export async function sendLineBillNotification(
 
 export async function sendPaymentConfirmedNotification(
   billId: string
-): Promise<void> {
+): Promise<{ success: boolean; message: string }> {
   const supabase = createServiceClient()
 
   const { data: bill } = await supabase
@@ -238,17 +238,17 @@ export async function sendPaymentConfirmedNotification(
     .eq('id', billId)
     .single()
 
-  if (!bill) return
+  if (!bill) return { success: false, message: 'ไม่พบบิล' }
 
   type RoomJoin   = { room_number: string; floor: number | null }
   type TenantJoin = { full_name: string; line_user_id: string | null }
   const room   = bill.rooms   as unknown as RoomJoin   | null
   const tenant = bill.tenants as unknown as TenantJoin | null
 
-  if (!tenant?.line_user_id) return
+  if (!tenant?.line_user_id) return { success: false, message: 'ผู้เช่าไม่มี LINE User ID' }
 
   const lineConfig = await getLineMessagingConfig()
-  if (!lineConfig) return
+  if (!lineConfig) return { success: false, message: 'ยังไม่ได้ตั้งค่า LINE Channel Access Token' }
 
   const roomNumber = room?.room_number ?? '—'
   const month      = thaiMonth(bill.billing_month as string)
@@ -299,8 +299,9 @@ export async function sendPaymentConfirmedNotification(
 
   try {
     await pushMessage(tenant.line_user_id, lineConfig.channelAccessToken, [flexMsg])
-  } catch {
-    // silent — notification failure should not break payment recording
+    return { success: true, message: 'ส่ง LINE ยืนยันชำระแล้วสำเร็จ' }
+  } catch (err) {
+    return { success: false, message: String(err) }
   }
 }
 

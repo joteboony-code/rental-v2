@@ -8,6 +8,7 @@ import { DeletePaymentButton } from './_components/delete-payment-button'
 import { ChevronLeft, Droplets, Zap, Home, User, Receipt, CreditCard, MessageCircle } from 'lucide-react'
 import { roomRow } from '@/lib/room-utils'
 import { LineNotifyButton } from './_components/line-notify-button'
+import { SendPaymentConfirmedButton } from './_components/send-payment-confirmed-button'
 import { CopyBillButton } from './_components/copy-bill-button'
 
 export default async function BillDetailPage({
@@ -237,6 +238,14 @@ export default async function BillDetailPage({
               <p className="text-xs text-emerald-600 mt-1 font-semibold">
                 ฿{Number(bill.total_amount).toLocaleString('th-TH', { minimumFractionDigits: 2 })}
               </p>
+              {tenant?.line_user_id && (
+                <div className="mt-4 flex justify-center">
+                  <SendPaymentConfirmedButton
+                    billId={id}
+                    hasLineUserId={!!tenant.line_user_id}
+                  />
+                </div>
+              )}
             </div>
           )}
 
