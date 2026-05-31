@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/service'
 import { roomRow } from '@/lib/room-utils'
 import { getLineMessagingConfig } from '@/lib/line-integration'
 import { buildBillPortalUrl, buildTenantPortalUrl } from '@/lib/portal-url'
@@ -229,7 +230,7 @@ export async function sendLineBillNotification(
 export async function sendPaymentConfirmedNotification(
   billId: string
 ): Promise<void> {
-  const supabase = await createClient()
+  const supabase = createServiceClient()
 
   const { data: bill } = await supabase
     .from('bills')
