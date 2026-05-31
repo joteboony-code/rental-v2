@@ -5,7 +5,7 @@ import { ChevronLeft, Home, User, Calendar } from 'lucide-react'
 import { roomRow } from '@/lib/room-utils'
 import { RepairStatusBadge, RepairPriorityBadge } from '../_components/repair-status-badge'
 import { StatusUpdater } from '../_components/status-updater'
-import { deleteRepair } from '@/app/actions/repairs'
+import { DeleteRepairButton } from './_components/delete-repair-button'
 
 export default async function RepairDetailPage({
   params,
@@ -31,8 +31,6 @@ export default async function RepairDetailPage({
   type TenantJoin = { full_name: string }
   const room   = repair.rooms   as unknown as RoomJoin   | null
   const tenant = repair.tenants as unknown as TenantJoin | null
-
-  const deleteWithId = deleteRepair.bind(null, id)
 
   return (
     <div className="p-5 md:p-8 space-y-6 max-w-4xl">
@@ -134,17 +132,7 @@ export default async function RepairDetailPage({
           {/* Danger zone */}
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
             <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-3">ลบรายการ</p>
-            <form action={deleteWithId}>
-              <button
-                type="submit"
-                onClick={(e) => {
-                  if (!confirm('ลบรายการนี้? ไม่สามารถกู้คืนได้')) e.preventDefault()
-                }}
-                className="text-xs text-rose-500 hover:text-rose-700 font-medium transition-colors hover:underline"
-              >
-                ลบการแจ้งซ่อมนี้
-              </button>
-            </form>
+            <DeleteRepairButton repairId={id} />
           </div>
         </div>
       </div>

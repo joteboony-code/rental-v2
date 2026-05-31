@@ -4,10 +4,9 @@ import { getLineMessagingConfig } from '@/lib/line-integration'
 import { buildBillPortalUrl } from '@/lib/portal-url'
 import { parseReminderDays } from '@/lib/reminder-utils'
 
-// Verify cron secret to prevent unauthorized calls
 function isAuthorized(req: NextRequest) {
   const secret = process.env.CRON_SECRET
-  if (!secret) return true // dev mode
+  if (!secret) return true
   return req.headers.get('x-cron-secret') === secret || req.nextUrl.searchParams.get('secret') === secret
 }
 
@@ -56,7 +55,6 @@ export async function GET(req: NextRequest) {
 
   const supabase = createServiceClient()
 
-  // Check settings
   const { data: settings } = await supabase
     .from('settings')
     .select('reminder_enabled, reminder_days, bank_accounts_text, water_unit_price, electricity_unit_price')
@@ -67,7 +65,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: true, skipped: 'reminders disabled' })
   }
 
-  // Check if today is a reminder day
   const todayDay = new Date().getDate()
   const reminderDays = parseReminderDays(settings.reminder_days ?? '5,10,15,20,25')
   if (!reminderDays.includes(todayDay)) {
@@ -79,98 +76,119 @@ export async function GET(req: NextRequest) {
 
   const today = new Date().toISOString().split('T')[0]
   const todayThai = thaiDate(today)
-
-  // Get current billing month (first day of current month)
-  const now = new Date()
-  const billingMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
-  const monthLabel = thaiMonth(billingMonth)
   const bankText = settings.bank_accounts_text ?? ''
 
+  // Get ALL pending/overdue bills across all months
   const { data: bills } = await supabase
     .from('bills')
     .select(`
       id, total_amount, due_date, billing_month,
-      rent_amount, water_amount, electricity_amount, other_amount, other_note,
-      snooze_until, tenant_id,
+      rent_amount, water_amount, electricity_amount, wifi_amount, trash_amount, other_amount, other_note,
+      snooze_until, tenant_id, status,
       rooms   ( room_number ),
       tenants ( full_name, line_user_id ),
       meter_readings ( water_units, electricity_units, water_unit_price, electricity_unit_price )
     `)
-    .eq('billing_month', billingMonth)
     .in('status', ['pending', 'overdue'])
+    .order('billing_month', { ascending: true })
 
   if (!bills || bills.length === 0) {
     return NextResponse.json({ ok: true, sent: 0, message: 'no pending bills' })
   }
 
-  let sent = 0, failed = 0, snoozed = 0, noLine = 0
+  // Group bills by tenant
+  type TJ = { full_name: string; line_user_id: string | null }
+  type RJ = { room_number: string }
+  type MJ = { water_units: number | null; electricity_units: number | null; water_unit_price: number | null; electricity_unit_price: number | null }
+
+  const byTenant = new Map<string, typeof bills>()
+  for (const bill of bills) {
+    const tid = bill.tenant_id as string
+    if (!byTenant.has(tid)) byTenant.set(tid, [])
+    byTenant.get(tid)!.push(bill)
+  }
+
+  let sent = 0, failed = 0, snoozed = 0, noLine = 0, totalReminded = 0
   const sentRooms: string[] = []
 
-  for (const bill of bills) {
-    type TJ = { full_name: string; line_user_id: string | null }
-    type RJ = { room_number: string }
-    type MJ = { water_units: number | null; electricity_units: number | null; water_unit_price: number | null; electricity_unit_price: number | null }
-
-    const tenant = bill.tenants as unknown as TJ | null
-    const room = bill.rooms as unknown as RJ | null
-    const meter = bill.meter_readings as unknown as MJ | null
+  for (const [, tenantBills] of byTenant) {
+    const firstBill = tenantBills[0]
+    const tenant = firstBill.tenants as unknown as TJ | null
+    const room = firstBill.rooms as unknown as RJ | null
     const lineUserId = tenant?.line_user_id
 
     if (!lineUserId) { noLine++; continue }
 
-    const snoozeUntil = bill.snooze_until as string | null
-    if (snoozeUntil && snoozeUntil >= today) { snoozed++; continue }
+    // Snooze: skip if ALL bills are snoozed
+    const activeBills = tenantBills.filter((b) => {
+      const s = b.snooze_until as string | null
+      return !s || s < today
+    })
+    if (activeBills.length === 0) { snoozed++; continue }
 
-    const roomNumber = room?.room_number ?? '—'
-    const remaining = Number(bill.total_amount)
-    const portalUrl = buildBillPortalUrl(bill.id, lineConfig.liffId, lineConfig.appUrl)
+    const allRoomNumbers = [...new Set(
+      tenantBills.map((b) => (b.rooms as unknown as RJ | null)?.room_number).filter((n): n is string => Boolean(n))
+    )]
+    const roomNumber = allRoomNumbers.join(', ') || '—'
+    const tenantName = tenant?.full_name ?? '—'
+    const totalOwed = activeBills.reduce((s, b) => s + Number(b.total_amount), 0)
+    const hasOverdue = activeBills.some((b) => b.status === 'overdue')
 
-    // Old balance
-    const { data: olderBills } = await supabase
-      .from('bills')
-      .select('total_amount')
-      .eq('tenant_id', bill.tenant_id as string)
-      .in('status', ['pending', 'overdue'])
-      .lt('billing_month', billingMonth)
-
-    const oldBalance = (olderBills ?? []).reduce((s, b) => s + Number(b.total_amount), 0)
+    // Use the latest bill's portal URL
+    const latestBill = activeBills[activeBills.length - 1]
+    const portalUrl = buildBillPortalUrl(latestBill.id, lineConfig.liffId, lineConfig.appUrl)
 
     const lines: string[] = [
-      `🔔 แจ้งเตือนค่าเช่า — ห้อง ${roomNumber}`,
-      `👤 ${tenant?.full_name ?? '—'}`,
-      `📅 รอบบิล ${monthLabel}`,
-      `🗓️ วันที่แจ้ง ${todayThai}`,
+      hasOverdue ? '🚨 แจ้งเตือนค่าเช่าค้างชำระ' : '🔔 แจ้งเตือนค่าเช่า',
+      SEP,
+      `🏠 ห้อง ${roomNumber}  ·  ${tenantName}`,
       SEP,
     ]
 
-    if (oldBalance > 0) lines.push(`📌 ยอดค้างเก่า: ${fmt(oldBalance)}฿`)
+    for (const bill of activeBills) {
+      const meter = bill.meter_readings as unknown as MJ | null
+      const isOverdue = bill.status === 'overdue'
+      const monthLabel = thaiMonth(bill.billing_month as string)
+      const billTotal = Number(bill.total_amount)
 
-    const elecAmt = Number(bill.electricity_amount)
-    const waterAmt = Number(bill.water_amount)
-    const rentAmt = Number(bill.rent_amount)
-    const otherAmt = Number(bill.other_amount)
+      lines.push(`${isOverdue ? '🔴' : '🟡'} ${monthLabel}${isOverdue ? ' (เกินกำหนด)' : ''}`)
 
-    if (elecAmt > 0) {
-      const units = meter?.electricity_units
-      const rate = meter?.electricity_unit_price ?? settings.electricity_unit_price ?? 8
-      lines.push(`⚡ ค่าไฟ: ${units != null ? `${units} หน่วย × ${fmt(rate)}฿ = ` : ''}${fmt(elecAmt)}฿`)
-    }
-    if (waterAmt > 0) {
-      const units = meter?.water_units
-      const rate = meter?.water_unit_price ?? settings.water_unit_price ?? 18
-      lines.push(`💧 ค่าน้ำ: ${units != null ? `${units} หน่วย × ${fmt(rate)}฿ = ` : ''}${fmt(waterAmt)}฿`)
-    }
+      const rentAmt = Number(bill.rent_amount)
+      const elecAmt = Number(bill.electricity_amount)
+      const waterAmt = Number(bill.water_amount)
+      const wifiAmt = Number(bill.wifi_amount)
+      const trashAmt = Number(bill.trash_amount)
+      const otherAmt = Number(bill.other_amount)
 
-    lines.push(`🏠 ค่าเช่า: ${fmt(rentAmt)}฿`)
+      lines.push(`   🏠 ค่าเช่า: ${fmt(rentAmt)} บาท`)
 
-    if (otherAmt > 0) {
-      lines.push(`🗑️ ${(bill.other_note as string | null) || 'อื่นๆ'}: ${fmt(otherAmt)}฿`)
+      {
+        const units = meter?.electricity_units
+        const rate = meter?.electricity_unit_price ?? settings.electricity_unit_price ?? 8
+        const unitsText = units != null ? `${units} หน่วย × ${fmt(rate)} = ` : ''
+        lines.push(`   ⚡ ค่าไฟ: ${unitsText}${fmt(elecAmt)} บาท`)
+      }
+      {
+        const units = meter?.water_units
+        const rate = meter?.water_unit_price ?? settings.water_unit_price ?? 18
+        const unitsText = units != null ? `${units} หน่วย × ${fmt(rate)} = ` : ''
+        lines.push(`   💧 ค่าน้ำ: ${unitsText}${fmt(waterAmt)} บาท`)
+      }
+      if (wifiAmt > 0) lines.push(`   📶 ค่า WiFi: ${fmt(wifiAmt)} บาท`)
+      lines.push(`   🗑️ ค่าขยะ: ${fmt(trashAmt)} บาท`)
+      if (otherAmt > 0) {
+        lines.push(`   📦 ${(bill.other_note as string | null) || 'อื่นๆ'}: ${fmt(otherAmt)} บาท`)
+      }
+      lines.push(`   📌 รวม: ${fmt(billTotal)} บาท`)
+      lines.push(`   🗓️ ครบกำหนด: ${thaiDate(bill.due_date as string)}`)
     }
 
     lines.push(SEP)
-    lines.push(`💰 ยอดคงเหลือที่ต้องชำระ: ${fmt(remaining)}฿`)
+    lines.push(`💰 ยอดที่ต้องชำระทั้งหมด: ${fmt(totalOwed)} บาท`)
     lines.push(SEP)
-    if (bankText) lines.push(`📲 โอนเข้า ${bankText}`)
+
+    if (bankText) lines.push(`📲 ${bankText}`)
+    lines.push('📎 ส่งสลิปผ่านแชทนี้ได้เลยครับ 🙏')
 
     try {
       await pushMessage(lineUserId, lineConfig.channelAccessToken, [
@@ -178,7 +196,8 @@ export async function GET(req: NextRequest) {
         buildPortalFlex(portalUrl),
       ])
       sent++
-      sentRooms.push(`ห้อง ${roomNumber}: ${fmt(remaining)}฿`)
+      totalReminded += totalOwed
+      sentRooms.push(`ห้อง ${roomNumber}: ${fmt(totalOwed)} บาท${hasOverdue ? ' 🔴' : ''}`)
     } catch {
       failed++
     }
@@ -186,15 +205,18 @@ export async function GET(req: NextRequest) {
 
   // Summary to owner
   if (lineConfig.ownerLineUserId) {
-    const totalAmt = bills.reduce((s, b) => s + Number(b.total_amount), 0)
+    const totalAmt = totalReminded
+    const overdueCount = [...byTenant.values()].filter((bs) => bs.some((b) => b.status === 'overdue')).length
     const ownerLines = [
       `📋 สรุปแจ้งเตือนอัตโนมัติ`,
-      `วันที่ ${todayThai} รอบบิล ${monthLabel}`,
+      `🗓️ วันที่ ${todayThai}`,
+      SEP,
       `✅ ส่งสำเร็จ: ${sent} ห้อง`,
+      `🔴 มียอดค้าง: ${overdueCount} ห้อง`,
       `❌ ส่งไม่สำเร็จ: ${failed} ห้อง`,
-      `📅 งดแจ้งเตือน: ${snoozed} ห้อง`,
-      `⚠️ ไม่มี User ID: ${noLine} ห้อง`,
-      `💰 ยอดค้างที่แจ้งรวม: ${fmt(totalAmt)}฿`,
+      `😴 งดแจ้งเตือน: ${snoozed} ห้อง`,
+      `⚠️ ไม่มี LINE: ${noLine} ห้อง`,
+      `💰 ยอดค้างรวม: ${fmt(totalAmt)} บาท`,
     ]
     if (sentRooms.length > 0) { ownerLines.push(SEP); ownerLines.push(...sentRooms) }
     try {

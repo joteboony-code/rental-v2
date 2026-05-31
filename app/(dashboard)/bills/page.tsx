@@ -3,7 +3,7 @@ import { Suspense } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { buttonVariants } from '@/components/ui/button'
 import { BillStatusBadge } from './_components/bill-status-badge'
-import { ClipboardList, Download, History } from 'lucide-react'
+import { ClipboardList, Download, History, ArrowRight, Wallet } from 'lucide-react'
 import { roomRow } from '@/lib/room-utils'
 import { BulkLineButton } from './_components/bulk-line-button'
 import { BillingMonthNav } from './_components/billing-month-nav'
@@ -19,13 +19,15 @@ interface Props {
 export default async function BillsPage({ searchParams }: Props) {
   const { month, status } = await searchParams
 
-  // Load current billing month from settings (used as default)
-  const supabaseForSettings = await createClient()
-  const { data: settingsRow } = await supabaseForSettings
+  const supabase = await createClient()
+
+  // ดึง settings และ bills พร้อมกัน (แต่ billing month ต้องรู้ก่อน query bills)
+  const { data: settingsRow } = await supabase
     .from('settings')
     .select('current_billing_month, reminder_days, reminder_enabled')
     .eq('id', 1)
     .single()
+
   const settingsMonth = settingsRow?.current_billing_month
     ? (settingsRow.current_billing_month as string).slice(0, 7)
     : null
@@ -39,29 +41,26 @@ export default async function BillsPage({ searchParams }: Props) {
   const [yearStr, monthStr] = currentMonth.split('-')
   const billingMonth = `${yearStr}-${monthStr}-01`
 
-  const supabase = await createClient()
-
-  let query = supabase
+  let billsQuery = supabase
     .from('bills')
     .select(`*, rooms ( room_number, floor ), tenants ( full_name, phone ), snooze_until, snooze_note`)
     .eq('billing_month', billingMonth)
 
   if (status && ['pending', 'paid', 'overdue', 'cancelled'].includes(status)) {
-    query = query.eq('status', status)
+    billsQuery = billsQuery.eq('status', status)
   }
 
-  const { data: rawBills } = await query
+  // ดึง filtered bills + all bills stats พร้อมกัน
+  const [{ data: rawBills }, { data: allBills }] = await Promise.all([
+    billsQuery,
+    supabase.from('bills').select('status, total_amount').eq('billing_month', billingMonth),
+  ])
   // numeric sort by room_number (stored as text → "10" < "2" alphabetically)
   const bills = rawBills?.slice().sort((a, b) => {
     const ra = (a.rooms as { room_number: string } | null)?.room_number ?? ''
     const rb = (b.rooms as { room_number: string } | null)?.room_number ?? ''
     return (parseInt(ra) || 0) - (parseInt(rb) || 0)
   })
-  const { data: allBills } = await supabase
-    .from('bills')
-    .select('status, total_amount')
-    .eq('billing_month', billingMonth)
-
   const stats = {
     total:   allBills?.length ?? 0,
     pending: allBills?.filter((b) => b.status === 'pending').length  ?? 0,
@@ -97,13 +96,21 @@ export default async function BillsPage({ searchParams }: Props) {
             <LineQuotaBadge />
           </Suspense>
           <div className="flex gap-2 flex-wrap">
+          <Link href="/bills/payments"
+            className={buttonVariants({ variant: 'outline', size: 'sm' }) + ' rounded-xl gap-1.5 border-slate-200 text-slate-600 hover:bg-slate-50'}>
+            <Wallet className="size-3.5" /> ประวัติชำระ
+          </Link>
           <Link href="/bills/history"
             className={buttonVariants({ variant: 'outline', size: 'sm' }) + ' rounded-xl gap-1.5 border-slate-200 text-slate-600 hover:bg-slate-50'}>
-            <History className="size-3.5" /> ประวัติ
+            <History className="size-3.5" /> ประวัติบิล
           </Link>
           <a href={`/bills/export?month=${currentMonth}`}
             className={buttonVariants({ variant: 'outline', size: 'sm' }) + ' rounded-xl gap-1.5 border-slate-200 text-slate-600 hover:bg-slate-50'}>
-            <Download className="size-3.5" /> Export
+            <Download className="size-3.5" /> Export เดือน
+          </a>
+          <a href={`/bills/export?year=${yearStr}`}
+            className={buttonVariants({ variant: 'outline', size: 'sm' }) + ' rounded-xl gap-1.5 border-slate-200 text-slate-600 hover:bg-slate-50'}>
+            <Download className="size-3.5" /> Export ทั้งปี
           </a>
           <Link href={`/bills/meter?month=${currentMonth}`}
             className={buttonVariants({ variant: 'default', size: 'sm' }) + ' rounded-xl gap-1.5 bg-slate-950 hover:bg-slate-800 text-white shadow-md shadow-slate-900/20'}>
@@ -262,8 +269,8 @@ export default async function BillsPage({ searchParams }: Props) {
                       </td>
                       <td className="px-5 py-4 text-right">
                         <Link href={`/bills/${bill.id}`}
-                          className="text-xs font-semibold text-slate-500 hover:text-slate-900 hover:bg-slate-200 px-3 py-1.5 rounded-lg transition-colors">
-                          ดูบิล →
+                          className="inline-flex items-center gap-1 whitespace-nowrap text-xs font-semibold text-slate-500 hover:text-slate-900 hover:bg-slate-200 px-3 py-1.5 rounded-lg transition-colors">
+                          ดูบิล <ArrowRight className="size-3.5" strokeWidth={1.8} />
                         </Link>
                       </td>
                     </tr>

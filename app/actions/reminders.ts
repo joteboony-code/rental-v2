@@ -101,7 +101,7 @@ export async function sendOverdueReminders(
     .from('bills')
     .select(`
       id, total_amount, due_date, billing_month,
-      rent_amount, water_amount, electricity_amount, other_amount, other_note,
+      rent_amount, water_amount, electricity_amount, wifi_amount, trash_amount, other_amount, other_note,
       snooze_until, snooze_note,
       rooms   ( room_number ),
       tenants ( full_name, line_user_id ),
@@ -162,46 +162,51 @@ export async function sendOverdueReminders(
     const portalUrl = buildBillPortalUrl(bill.id, lineConfig.liffId, lineConfig.appUrl)
 
     // Build message lines
-    const lines: string[] = [
-      `🔔 แจ้งเตือนค่าเช่า — ห้อง ${roomNumber}`,
-      `👤 ${tenantName}`,
-      `📅 รอบบิล ${monthLabel}`,
-      `🗓️ วันที่แจ้ง ${todayThai}`,
-      SEP,
-    ]
-
-    if (oldBalance > 0) lines.push(`📌 ยอดค้างเก่า: ${fmt(oldBalance)}฿`)
-
     const elecAmt = Number(bill.electricity_amount)
     const waterAmt = Number(bill.water_amount)
     const rentAmt = Number(bill.rent_amount)
+    const wifiAmt = Number(bill.wifi_amount)
+    const trashAmt = Number(bill.trash_amount)
     const otherAmt = Number(bill.other_amount)
 
-    if (elecAmt > 0) {
+    const lines: string[] = [
+      `🔔 แจ้งเตือนค่าเช่า`,
+      SEP,
+      `🏠 ห้อง ${roomNumber}  ·  ${tenantName}`,
+      `📅 รอบบิล ${monthLabel}`,
+      SEP,
+    ]
+
+    if (oldBalance > 0) lines.push(`📌 ยอดค้างเก่า: ${fmt(oldBalance)} บาท`)
+
+    lines.push(`🏠 ค่าเช่า: ${fmt(rentAmt)} บาท`)
+
+    {
       const units = meter?.electricity_units ?? null
       const rate = meter?.electricity_unit_price ?? settings?.electricity_unit_price ?? 8
-      const unitsText = units != null ? `${units} หน่วย × ${fmt(rate)}฿ = ` : ''
-      lines.push(`⚡ ค่าไฟ: ${unitsText}${fmt(elecAmt)}฿`)
+      const unitsText = units != null ? `${units} หน่วย × ${fmt(rate)} = ` : ''
+      lines.push(`⚡ ค่าไฟ: ${unitsText}${fmt(elecAmt)} บาท`)
     }
-    if (waterAmt > 0) {
+    {
       const units = meter?.water_units ?? null
       const rate = meter?.water_unit_price ?? settings?.water_unit_price ?? 18
-      const unitsText = units != null ? `${units} หน่วย × ${fmt(rate)}฿ = ` : ''
-      lines.push(`💧 ค่าน้ำ: ${unitsText}${fmt(waterAmt)}฿`)
+      const unitsText = units != null ? `${units} หน่วย × ${fmt(rate)} = ` : ''
+      lines.push(`💧 ค่าน้ำ: ${unitsText}${fmt(waterAmt)} บาท`)
     }
-
-    lines.push(`🏠 ค่าเช่า: ${fmt(rentAmt)}฿`)
-
+    if (wifiAmt > 0) lines.push(`📶 ค่า WiFi: ${fmt(wifiAmt)} บาท`)
+    lines.push(`🗑️ ค่าขยะ: ${fmt(trashAmt)} บาท`)
     if (otherAmt > 0) {
       const note = (bill.other_note as string | null) ?? ''
-      lines.push(`🗑️ ${note || 'อื่นๆ'}: ${fmt(otherAmt)}฿`)
+      lines.push(`📦 ${note || 'อื่นๆ'}: ${fmt(otherAmt)} บาท`)
     }
 
     lines.push(SEP)
-    lines.push(`💰 ยอดคงเหลือที่ต้องชำระ: ${fmt(remaining)}฿`)
+    lines.push(`💰 ยอดที่ต้องชำระ: ${fmt(remaining)} บาท`)
+    lines.push(`🗓️ ครบกำหนด: ${thaiDate(bill.due_date as string)}`)
     lines.push(SEP)
 
-    if (bankText) lines.push(`📲 โอนเข้า ${bankText}`)
+    if (bankText) lines.push(`📲 ${bankText}`)
+    lines.push('📎 ส่งสลิปผ่านแชทนี้ได้เลยครับ 🙏')
 
     try {
       await pushMessage(lineUserId, lineConfig.channelAccessToken, [

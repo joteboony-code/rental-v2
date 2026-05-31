@@ -78,7 +78,7 @@ export default async function MeterReadingPage({ searchParams }: Props) {
 
   const { data: thisMonthReadings } = await supabase
     .from('meter_readings')
-    .select('room_id, water_prev, water_curr, electricity_prev, electricity_curr')
+    .select('room_id, water_prev, water_curr, electricity_prev, electricity_curr, water_image_url, electricity_image_url')
     .in('room_id', roomIds)
     .eq('billing_month', billingMonth)
 
@@ -110,10 +110,12 @@ export default async function MeterReadingPage({ searchParams }: Props) {
       contract_id:       c.id,
       tenant_id:         c.tenant_id,
       rent:              Number(c.monthly_rent),
-      water_prev:        Number(curr?.water_prev ?? prev?.water_curr ?? 0),
-      electricity_prev:  Number(curr?.electricity_prev ?? prev?.electricity_curr ?? 0),
-      water_curr:        Number(curr?.water_curr ?? 0),
-      electricity_curr:  Number(curr?.electricity_curr ?? 0),
+      water_prev:            Number(curr?.water_prev ?? prev?.water_curr ?? 0),
+      electricity_prev:      Number(curr?.electricity_prev ?? prev?.electricity_curr ?? 0),
+      water_curr:            Number(curr?.water_curr ?? 0),
+      electricity_curr:      Number(curr?.electricity_curr ?? 0),
+      water_image_url:       (curr as { water_image_url?: string | null } | undefined)?.water_image_url ?? null,
+      electricity_image_url: (curr as { electricity_image_url?: string | null } | undefined)?.electricity_image_url ?? null,
       // Anomaly
       prev_water_units:  prevWaterUnits,
       prev_elec_units:   prevElecUnits,

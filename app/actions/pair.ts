@@ -1,49 +1,15 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/service'
 import { revalidatePath } from 'next/cache'
-
-function randomToken() {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789' // ตัดตัวที่ดูคล้ายกัน (O/0, I/1)
-  return Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
-}
-
-export type GeneratePairingTokenResult = {
-  success: boolean
-  token?: string
-  expiresAt?: string
-  message?: string
-}
-
-export async function generatePairingToken(tenantId: string): Promise<GeneratePairingTokenResult> {
-  const supabase = await createClient()
-
-  // mark token เก่าเป็น cancelled แทนการลบ (เก็บ audit trail)
-  await supabase
-    .from('pairing_tokens')
-    .update({ cancelled_at: new Date().toISOString(), cancel_reason: 'replaced_by_new_qr' })
-    .eq('tenant_id', tenantId)
-    .is('used_at', null)
-    .is('cancelled_at', null)
-
-  const token = randomToken()
-  const { error } = await supabase.from('pairing_tokens').insert({
-    tenant_id: tenantId,
-    token,
-  })
-
-  if (error) return { success: false, message: error.message }
-
-  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
-  revalidatePath(`/tenants/${tenantId}`)
-  return { success: true, token, expiresAt }
-}
+import { getLineMessagingConfig } from '@/lib/line-integration'
 
 export async function unlinkTenantLine(tenantId: string): Promise<{ success: boolean; message?: string }> {
   const supabase = await createClient()
   const { error } = await supabase
     .from('tenants')
-    .update({ line_user_id: null })
+    .update({ line_user_id: null, line_display_name: null, line_picture_url: null })
     .eq('id', tenantId)
 
   if (error) return { success: false, message: error.message }
@@ -64,8 +30,10 @@ export async function pairTenantLine(
   state: PairLineState,
   formData: FormData
 ): Promise<PairLineState> {
-  const roomNumber = String(formData.get('room_number') ?? '').trim()
-  const lineUserId = String(formData.get('line_user_id') ?? '').trim()
+  const roomNumber   = String(formData.get('room_number')    ?? '').trim()
+  const lineUserId   = String(formData.get('line_user_id')   ?? '').trim()
+  const displayName  = String(formData.get('line_display_name') ?? '').trim() || null
+  const pictureUrl   = String(formData.get('line_picture_url')  ?? '').trim() || null
 
   if (!roomNumber || !lineUserId) {
     return {
@@ -76,8 +44,10 @@ export async function pairTenantLine(
 
   const supabase = await createClient()
   const { data, error } = await supabase.rpc('pair_tenant_line', {
-    p_room_number: roomNumber,
-    p_line_user_id: lineUserId,
+    p_room_number:   roomNumber,
+    p_line_user_id:  lineUserId,
+    p_display_name:  displayName,
+    p_picture_url:   pictureUrl,
   })
 
   if (error) {
@@ -93,3 +63,38 @@ export async function pairTenantLine(
   }
 }
 
+export async function syncLineProfiles(): Promise<{ success: boolean; updated: number; message: string }> {
+  const lineConfig = await getLineMessagingConfig()
+  if (!lineConfig) return { success: false, updated: 0, message: 'ยังไม่ได้ตั้งค่า LINE' }
+
+  const supabase = createServiceClient()
+
+  const { data: tenants } = await supabase
+    .from('tenants')
+    .select('id, line_user_id')
+    .not('line_user_id', 'is', null)
+
+  if (!tenants?.length) return { success: true, updated: 0, message: 'ไม่มีผู้เช่าที่จับคู่ LINE' }
+
+  const results = await Promise.allSettled(
+    tenants.map(async (tenant) => {
+      const res = await fetch(`https://api.line.me/v2/bot/profile/${tenant.line_user_id}`, {
+        headers: { Authorization: `Bearer ${lineConfig.channelAccessToken}` },
+      })
+      if (!res.ok) return false
+      const profile = await res.json() as { displayName?: string; pictureUrl?: string }
+      await supabase
+        .from('tenants')
+        .update({
+          line_display_name: profile.displayName ?? null,
+          line_picture_url:  profile.pictureUrl  ?? null,
+        })
+        .eq('id', tenant.id)
+      return true
+    })
+  )
+  const updated = results.filter((r) => r.status === 'fulfilled' && r.value === true).length
+
+  revalidatePath('/tenants')
+  return { success: true, updated, message: `อัปเดตสำเร็จ ${updated} จาก ${tenants.length} คน` }
+}

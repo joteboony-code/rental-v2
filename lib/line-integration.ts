@@ -7,6 +7,7 @@ export type LineIntegrationPublic = {
   dorm_id: string
   line_oa_basic_id: string | null
   line_liff_id: string | null
+  line_liff_id_pairing: string | null
   app_url: string | null
   owner_line_user_id: string | null
   token_last4: string | null
@@ -30,7 +31,7 @@ export async function getLineIntegrationPublic(
   const { data } = await supabase
     .from('line_integrations')
     .select(
-      'dorm_id, line_oa_basic_id, line_liff_id, app_url, owner_line_user_id, token_last4, channel_secret_last4, connected_at, updated_at'
+      'dorm_id, line_oa_basic_id, line_liff_id, line_liff_id_pairing, app_url, owner_line_user_id, token_last4, channel_secret_last4, connected_at, updated_at'
     )
     .eq('dorm_id', dormId)
     .maybeSingle()
@@ -49,6 +50,7 @@ export async function getLineIntegrationPublic(
     dorm_id: dormId,
     line_oa_basic_id: null,
     line_liff_id: legacySettings.line_liff_id ?? null,
+    line_liff_id_pairing: null,
     app_url: legacySettings.app_url ?? null,
     owner_line_user_id: null,
     token_last4: null,

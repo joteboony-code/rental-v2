@@ -4,129 +4,102 @@ import Script from 'next/script'
 import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useState, useTransition } from 'react'
 import {
-  AlertCircle,
-  CalendarDays,
-  CheckCircle2,
-  Clock,
-  Droplets,
-  ExternalLink,
-  Home,
-  Loader2,
-  Wallet,
-  Zap,
+  AlertCircle, CalendarDays, CheckCircle2, Clock,
+  Droplets, ExternalLink, Home, Loader2, Receipt,
+  Wallet, Wrench, Wifi, Trash2, Zap,
 } from 'lucide-react'
-import { getTenantPortalDashboard, type TenantPortalData } from '@/app/actions/portal'
+import { getTenantPortalDashboard, getPortalRepairs, getPortalRooms, type TenantPortalData, type PortalRepairItem, type PortalRoom } from '@/app/actions/portal'
 import { Badge } from '@/components/ui/badge'
+import { RepairSubmit } from './repair-submit'
+import { RepairHistory } from './repair-history'
 import type { LiffClient } from '@/lib/liff-types'
 
-declare global {
-  interface Window {
-    liff?: LiffClient
-  }
-}
+declare global { interface Window { liff?: LiffClient } }
 
-type TenantPortalProps = {
-  liffId?: string | null
-}
+type TenantPortalProps = { liffId?: string | null }
+type Tab = 'bills' | 'repairs'
 
-const money = new Intl.NumberFormat('th-TH', {
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-})
-
-const monthFmt = new Intl.DateTimeFormat('th-TH', {
-  year: 'numeric',
-  month: 'long',
-})
-
-const dateFmt = new Intl.DateTimeFormat('th-TH', {
-  day: 'numeric',
-  month: 'short',
-  year: 'numeric',
-})
+const money = new Intl.NumberFormat('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+const monthFmt = new Intl.DateTimeFormat('th-TH', { year: 'numeric', month: 'long' })
+const dateFmt = new Intl.DateTimeFormat('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })
 
 const statusLabel: Record<string, string> = {
-  paid: 'ชำระแล้ว',
-  pending: 'รอชำระ',
-  overdue: 'เกินกำหนด',
-  cancelled: 'ยกเลิก',
+  paid: 'ชำระแล้ว', pending: 'รอชำระ', overdue: 'เกินกำหนด', cancelled: 'ยกเลิก',
 }
 
 export function TenantPortal({ liffId }: TenantPortalProps) {
-  const [scriptReady, setScriptReady] = useState(false)
-  const [lineUserId, setLineUserId] = useState('')
-  const [status, setStatus] = useState(
-    liffId ? 'กำลังเชื่อมต่อ LINE' : 'กำลังเตรียมข้อมูลห้อง'
-  )
-  const [data, setData] = useState<TenantPortalData | null>(null)
-  const [error, setError] = useState('')
-  const [, startTransition] = useTransition()
+  const [scriptReady, setScriptReady]       = useState(false)
+  const [lineUserId, setLineUserId]         = useState('')
+  const [status, setStatus]                 = useState(liffId ? 'กำลังเชื่อมต่อ LINE' : 'กำลังเตรียมข้อมูลห้อง')
+  const [data, setData]                     = useState<TenantPortalData | null>(null)
+  const [error, setError]                   = useState('')
+  const [tab, setTab]                       = useState<Tab>('bills')
+  const [repairs, setRepairs]               = useState<PortalRepairItem[] | null>(null)
+  const [repairsLoading, setRepairsLoading] = useState(false)
+  const [rooms, setRooms]                   = useState<PortalRoom[]>([])
+  const [selectedRoomId, setSelectedRoomId] = useState<string | undefined>(undefined)
+  const [, startTransition]                 = useTransition()
 
-  const loadDashboard = useCallback((userId = lineUserId) => {
+  const loadDashboard = useCallback((userId = lineUserId, roomId?: string) => {
     const trimmed = userId.trim()
     if (!trimmed) return
-
     setError('')
     startTransition(async () => {
-      const result = await getTenantPortalDashboard(trimmed)
-      if (!result.success) {
-        setData(null)
-        setError(result.message)
-        return
-      }
+      const result = await getTenantPortalDashboard(trimmed, roomId)
+      if (!result.success) { setData(null); setError(result.message); return }
       setData(result.data)
     })
   }, [lineUserId])
 
+  const loadRepairs = useCallback(async (userId = lineUserId) => {
+    const trimmed = userId.trim()
+    if (!trimmed) return
+    setRepairsLoading(true)
+    const result = await getPortalRepairs(trimmed)
+    setRepairsLoading(false)
+    if (result.success) setRepairs(result.repairs ?? [])
+  }, [lineUserId])
+
   useEffect(() => {
     if (!liffId || !scriptReady) return
-
-    const currentLiffId = liffId
     let cancelled = false
-
     async function loadLineProfile() {
       try {
         const liff = window.liff
-        if (!liff) {
-          setStatus('โหลด LIFF SDK ไม่สำเร็จ')
-          return
-        }
-
-        await liff.init({ liffId: currentLiffId })
+        if (!liff) { setStatus('โหลด LIFF SDK ไม่สำเร็จ'); return }
+        await liff.init({ liffId: liffId! })
         if (cancelled) return
-
-        if (!liff.isLoggedIn()) {
-          setStatus('กำลังเข้าสู่ระบบ LINE')
-          liff.login({ redirectUri: window.location.href })
-          return
-        }
-
+        if (!liff.isLoggedIn()) { setStatus('กำลังเข้าสู่ระบบ LINE'); liff.login({ redirectUri: window.location.href }); return }
         const profile = await liff.getProfile()
         if (cancelled) return
         setLineUserId(profile.userId)
         setStatus('เชื่อมต่อ LINE แล้ว')
-        loadDashboard(profile.userId)
+        // Load rooms first to check if multiple
+        const { rooms: activeRooms } = await getPortalRooms(profile.userId)
+        setRooms(activeRooms)
+        const firstRoomId = activeRooms[0]?.room_id
+        setSelectedRoomId(firstRoomId)
+        loadDashboard(profile.userId, firstRoomId)
       } catch (err) {
         console.error(err)
-        if (!cancelled) {
-          setStatus('ยังดึงข้อมูลจาก LINE ไม่ได้')
-        }
+        if (!cancelled) setStatus('ยังดึงข้อมูลจาก LINE ไม่ได้')
       }
     }
-
     loadLineProfile()
-
-    return () => {
-      cancelled = true
-    }
+    return () => { cancelled = true }
   }, [liffId, loadDashboard, scriptReady])
 
-  const currentBill = data?.bills[0] ?? null
-  const monthlyRent = data?.contract?.monthly_rent ?? 0
-  const totalOutstanding = useMemo(
-    () => data?.bills.reduce((sum, bill) => sum + bill.remaining_amount, 0) ?? 0,
-    [data]
-  )
+  // Load repairs when switching to repair tab
+  useEffect(() => {
+    if (tab === 'repairs' && repairs === null && lineUserId) {
+      loadRepairs(lineUserId)
+    }
+  }, [tab, repairs, lineUserId, loadRepairs])
+
+  const currentBill    = data?.bills[0] ?? null
+  const monthlyRent    = data?.contract?.monthly_rent ?? 0
+  const totalOutstanding = useMemo(() =>
+    data?.bills.reduce((sum, b) => sum + b.remaining_amount, 0) ?? 0, [data])
 
   return (
     <>
@@ -140,9 +113,7 @@ export function TenantPortal({ liffId }: TenantPortalProps) {
       )}
 
       <div className="space-y-4">
-        {!data && !error && (
-          <PortalLoadingState status={status} />
-        )}
+        {!data && !error && <PortalLoadingState status={status} />}
 
         {error && (
           <div className="flex items-start gap-2 rounded-2xl border border-rose-100 bg-rose-50 p-3 text-sm text-rose-700">
@@ -153,60 +124,124 @@ export function TenantPortal({ liffId }: TenantPortalProps) {
 
         {data && (
           <>
+            {/* Room card */}
             <section className="rounded-2xl bg-slate-950 p-5 text-white shadow-sm">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">
-                    ห้องพักปัจจุบัน
-                  </p>
-                  <h2 className="mt-1 text-4xl font-bold tracking-tight">
-                    {data.room?.room_number ?? '-'}
-                  </h2>
+                  <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">ห้องพักปัจจุบัน</p>
+                  <h2 className="mt-1 text-4xl font-bold tracking-tight">{data.room?.room_number ?? '-'}</h2>
                   <p className="mt-1 text-sm text-slate-300">
-                    {data.tenant.full_name}
-                    {data.room?.floor ? ` · ชั้น ${data.room.floor}` : ''}
+                    {data.tenant.full_name}{data.room?.floor ? ` · ชั้น ${data.room.floor}` : ''}
                   </p>
                 </div>
-                <div className="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-white">
-                  เชื่อม LINE แล้ว
-                </div>
+                <div className="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-white">เชื่อม LINE แล้ว</div>
               </div>
-
               <div className="mt-5 grid grid-cols-2 gap-3">
                 <Metric label="ค่าเช่าต่อเดือน" value={`฿${money.format(monthlyRent)}`} />
                 <Metric label="ค้างชำระ" value={`฿${money.format(totalOutstanding)}`} tone={totalOutstanding > 0 ? 'warn' : 'ok'} />
               </div>
             </section>
 
-            {currentBill && <CurrentBillCard bill={currentBill} />}
-
-            {!data.contract && (
-              <div className="flex items-start gap-2 rounded-2xl border border-amber-100 bg-amber-50 p-3 text-sm text-amber-700">
-                <AlertCircle className="mt-0.5 size-4 shrink-0" />
-                ยังไม่พบสัญญาเช่าที่กำลังใช้งานสำหรับบัญชี LINE นี้
+            {/* Room selector — แสดงเฉพาะเมื่อมีหลายห้อง */}
+            {rooms.length > 1 && (
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                {rooms.map((r) => (
+                  <button
+                    key={r.room_id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedRoomId(r.room_id)
+                      setRepairs(null)
+                      loadDashboard(lineUserId, r.room_id)
+                    }}
+                    className={`shrink-0 rounded-xl border px-4 py-2 text-sm font-semibold transition-colors ${
+                      selectedRoomId === r.room_id
+                        ? 'border-slate-950 bg-slate-950 text-white'
+                        : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    🏠 ห้อง {r.room_number}
+                  </button>
+                ))}
               </div>
             )}
 
-            <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
-              <div className="mb-3 flex items-center gap-2">
-                <Clock className="size-4 text-slate-400" />
-                <h2 className="text-sm font-semibold text-slate-800">ประวัติค่าเช่าและการชำระ</h2>
-              </div>
+            {/* Tabs */}
+            <div className="flex gap-2 rounded-2xl bg-slate-100 p-1">
+              <TabBtn active={tab === 'bills'} onClick={() => setTab('bills')}>
+                <Receipt className="size-3.5" /> บิล &amp; ชำระเงิน
+              </TabBtn>
+              <TabBtn active={tab === 'repairs'} onClick={() => setTab('repairs')}>
+                <Wrench className="size-3.5" /> แจ้งซ่อม
+              </TabBtn>
+            </div>
 
-              <div className="space-y-3">
-                {data.bills.length > 0 ? (
-                  data.bills.map((bill) => <BillHistoryItem key={bill.id} bill={bill} />)
-                ) : (
-                  <p className="rounded-xl bg-slate-50 p-4 text-center text-sm text-slate-400">
-                    ยังไม่มีประวัติบิล
-                  </p>
+            {/* Bills tab */}
+            {tab === 'bills' && (
+              <>
+                {!data.contract && (
+                  <div className="flex items-start gap-2 rounded-2xl border border-amber-100 bg-amber-50 p-3 text-sm text-amber-700">
+                    <AlertCircle className="mt-0.5 size-4 shrink-0" />
+                    ยังไม่พบสัญญาเช่าที่กำลังใช้งาน
+                  </div>
                 )}
-              </div>
-            </section>
+                {currentBill && <CurrentBillCard bill={currentBill} />}
+                <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+                  <div className="mb-3 flex items-center gap-2">
+                    <Clock className="size-4 text-slate-400" />
+                    <h2 className="text-sm font-semibold text-slate-800">ประวัติบิลและการชำระ</h2>
+                  </div>
+                  <div className="space-y-3">
+                    {data.bills.length > 0
+                      ? data.bills.map((bill) => <BillHistoryItem key={bill.id} bill={bill} />)
+                      : <p className="rounded-xl bg-slate-50 p-4 text-center text-sm text-slate-400">ยังไม่มีประวัติบิล</p>
+                    }
+                  </div>
+                </section>
+              </>
+            )}
+
+            {/* Repairs tab */}
+            {tab === 'repairs' && (
+              <>
+                <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+                  <div className="mb-4 flex items-center gap-2">
+                    <Wrench className="size-4 text-slate-400" />
+                    <h2 className="text-sm font-semibold text-slate-800">แจ้งซ่อม / แจ้งปัญหา</h2>
+                  </div>
+                  <RepairSubmit lineUserId={lineUserId} roomId={selectedRoomId} onSuccess={() => loadRepairs(lineUserId)} />
+                </section>
+
+                <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+                  <div className="mb-3 flex items-center gap-2">
+                    <Clock className="size-4 text-slate-400" />
+                    <h2 className="text-sm font-semibold text-slate-800">ประวัติการแจ้งซ่อม</h2>
+                  </div>
+                  {repairsLoading
+                    ? <div className="flex justify-center py-8"><Loader2 className="size-5 animate-spin text-slate-400" /></div>
+                    : <RepairHistory repairs={repairs ?? []} />
+                  }
+                </section>
+              </>
+            )}
           </>
         )}
       </div>
     </>
+  )
+}
+
+function TabBtn({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2 text-sm font-semibold transition-colors ${
+        active ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+      }`}
+    >
+      {children}
+    </button>
   )
 }
 
@@ -252,27 +287,34 @@ function CurrentBillCard({ bill }: { bill: TenantPortalData['bills'][number] }) 
       <div className="mb-4 flex items-start justify-between gap-3">
         <div>
           <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">บิลล่าสุด</p>
-          <h2 className="text-xl font-bold text-slate-950">
-            {monthFmt.format(new Date(bill.billing_month))}
-          </h2>
+          <h2 className="text-xl font-bold text-slate-950">{monthFmt.format(new Date(bill.billing_month))}</h2>
         </div>
         <StatusBadge status={bill.status} />
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        <InfoBox icon={Home} label="ค่าห้อง" value={`฿${money.format(bill.rent_amount)}`} />
-        <InfoBox icon={Wallet} label="ยอดรวม" value={`฿${money.format(bill.total_amount)}`} />
+        <InfoBox icon={Home}   label="ค่าห้อง" value={`฿${money.format(bill.rent_amount)}`} />
+        <InfoBox icon={Wallet} label="ยอดรวม"  value={`฿${money.format(bill.total_amount)}`} />
         <InfoBox icon={Droplets} label="ค่าน้ำ" value={`฿${money.format(bill.water_amount)}`} />
-        <InfoBox icon={Zap} label="ค่าไฟ" value={`฿${money.format(bill.electricity_amount)}`} />
+        <InfoBox icon={Zap}   label="ค่าไฟ"    value={`฿${money.format(bill.electricity_amount)}`} />
+        {(bill.wifi_amount || 0) > 0 && (
+          <InfoBox icon={Wifi} label="ค่า WiFi" value={`฿${money.format(bill.wifi_amount || 0)}`} />
+        )}
+        <InfoBox icon={Trash2} label="ค่าขยะ" value={`฿${money.format(bill.trash_amount || 0)}`} />
       </div>
 
       <MeterBlock bill={bill} />
 
-      <div className="mt-4 flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2">
+      {bill.remaining_amount > 0 && (
+        <div className="mt-3 flex items-center justify-between rounded-xl bg-amber-50 px-3 py-2">
+          <span className="text-xs text-amber-600 font-medium">ยังค้างชำระ</span>
+          <span className="text-sm font-bold text-amber-700">฿{money.format(bill.remaining_amount)}</span>
+        </div>
+      )}
+
+      <div className="mt-3 flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2">
         <span className="text-xs text-slate-500">ครบกำหนด</span>
-        <span className="text-sm font-semibold text-slate-800">
-          {dateFmt.format(new Date(bill.due_date))}
-        </span>
+        <span className="text-sm font-semibold text-slate-800">{dateFmt.format(new Date(bill.due_date))}</span>
       </div>
     </section>
   )
@@ -282,8 +324,7 @@ function InfoBox({ icon: Icon, label, value }: { icon: React.ElementType; label:
   return (
     <div className="rounded-xl bg-slate-50 p-3">
       <div className="mb-1 flex items-center gap-1.5 text-xs text-slate-400">
-        <Icon className="size-3.5" />
-        {label}
+        <Icon className="size-3.5" />{label}
       </div>
       <p className="font-bold text-slate-900">{value}</p>
     </div>
@@ -292,9 +333,7 @@ function InfoBox({ icon: Icon, label, value }: { icon: React.ElementType; label:
 
 function MeterBlock({ bill }: { bill: TenantPortalData['bills'][number] }) {
   if (!bill.meter) return null
-
-  const meterImages = [bill.meter.water_image_url, bill.meter.electricity_image_url].filter(Boolean)
-
+  const imgs = [bill.meter.water_image_url, bill.meter.electricity_image_url].filter(Boolean)
   return (
     <div className="mt-4 rounded-xl border border-slate-100 p-3">
       <div className="mb-2 flex items-center gap-2">
@@ -305,7 +344,7 @@ function MeterBlock({ bill }: { bill: TenantPortalData['bills'][number] }) {
         <MeterLine label="น้ำ" prev={bill.meter.water_prev} curr={bill.meter.water_curr} units={bill.meter.water_units} />
         <MeterLine label="ไฟ" prev={bill.meter.electricity_prev} curr={bill.meter.electricity_curr} units={bill.meter.electricity_units} />
       </div>
-      {meterImages.length > 0 && (
+      {imgs.length > 0 && (
         <div className="mt-3 grid grid-cols-2 gap-2">
           {bill.meter.water_image_url && <MeterImage label="รูปมิเตอร์น้ำ" src={bill.meter.water_image_url} />}
           {bill.meter.electricity_image_url && <MeterImage label="รูปมิเตอร์ไฟ" src={bill.meter.electricity_image_url} />}
@@ -319,9 +358,7 @@ function MeterLine({ label, prev, curr, units }: { label: string; prev: number; 
   return (
     <div className="rounded-lg bg-slate-50 p-2">
       <p className="font-medium text-slate-700">{label}</p>
-      <p className="text-slate-500">
-        {prev} → {curr}
-      </p>
+      <p className="text-slate-500">{prev} → {curr}</p>
       <p className="font-semibold text-slate-900">{units} หน่วย</p>
     </div>
   )
@@ -342,9 +379,7 @@ function BillHistoryItem({ bill }: { bill: TenantPortalData['bills'][number] }) 
     <div className="rounded-xl border border-slate-100 p-3">
       <div className="flex items-start justify-between gap-2">
         <div>
-          <p className="font-semibold text-slate-900">
-            {monthFmt.format(new Date(bill.billing_month))}
-          </p>
+          <p className="font-semibold text-slate-900">{monthFmt.format(new Date(bill.billing_month))}</p>
           <p className="text-xs text-slate-400">
             ยอดรวม ฿{money.format(bill.total_amount)} · ชำระแล้ว ฿{money.format(bill.paid_amount)}
           </p>
@@ -353,30 +388,19 @@ function BillHistoryItem({ bill }: { bill: TenantPortalData['bills'][number] }) 
       </div>
 
       <div className="mt-3 flex items-center justify-between gap-2">
-        <p className="text-xs text-slate-500">
-          คงเหลือ ฿{money.format(bill.remaining_amount)}
-        </p>
+        <p className="text-xs text-slate-500">คงเหลือ ฿{money.format(bill.remaining_amount)}</p>
         <Link href={`/portal/${bill.id}`} className="inline-flex items-center gap-1 text-xs font-semibold text-slate-700">
-          ดูบิล
-          <ExternalLink className="size-3" />
+          ดูบิล <ExternalLink className="size-3" />
         </Link>
       </div>
 
       {bill.payments.length > 0 && (
         <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
-          {bill.payments.map((payment) => (
-            <div key={payment.id} className="flex items-center justify-between gap-2 text-xs">
-              <span className="text-slate-500">
-                {dateFmt.format(new Date(payment.paid_at))} · {payment.payment_method}
-              </span>
-              <span className="font-semibold text-emerald-700">
-                ฿{money.format(payment.amount)}
-              </span>
-              {payment.slip_url && (
-                <a href={payment.slip_url} target="_blank" rel="noreferrer" className="text-slate-400 underline">
-                  สลิป
-                </a>
-              )}
+          {bill.payments.map((p) => (
+            <div key={p.id} className="flex items-center justify-between gap-2 text-xs">
+              <span className="text-slate-500">{dateFmt.format(new Date(p.paid_at))} · {p.payment_method}</span>
+              <span className="font-semibold text-emerald-700">฿{money.format(p.amount)}</span>
+              {p.slip_url && <a href={p.slip_url} target="_blank" rel="noreferrer" className="text-slate-400 underline">สลิป</a>}
             </div>
           ))}
         </div>
@@ -386,28 +410,7 @@ function BillHistoryItem({ bill }: { bill: TenantPortalData['bills'][number] }) 
 }
 
 function StatusBadge({ status }: { status: string }) {
-  if (status === 'paid') {
-    return (
-      <Badge className="bg-emerald-50 text-emerald-700">
-        <CheckCircle2 className="size-3" />
-        {statusLabel[status]}
-      </Badge>
-    )
-  }
-
-  if (status === 'overdue') {
-    return (
-      <Badge className="bg-rose-50 text-rose-700">
-        <AlertCircle className="size-3" />
-        {statusLabel[status]}
-      </Badge>
-    )
-  }
-
-  return (
-    <Badge className="bg-amber-50 text-amber-700">
-      <Clock className="size-3" />
-      {statusLabel[status] ?? status}
-    </Badge>
-  )
+  if (status === 'paid')    return <Badge className="bg-emerald-50 text-emerald-700"><CheckCircle2 className="size-3" />{statusLabel[status]}</Badge>
+  if (status === 'overdue') return <Badge className="bg-rose-50 text-rose-700"><AlertCircle className="size-3" />{statusLabel[status]}</Badge>
+  return <Badge className="bg-amber-50 text-amber-700"><Clock className="size-3" />{statusLabel[status] ?? status}</Badge>
 }

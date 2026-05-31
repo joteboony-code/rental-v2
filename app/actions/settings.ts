@@ -35,6 +35,7 @@ export async function updateSettings(
     line_channel_secret:       formData.get('line_channel_secret'),
     line_oa_basic_id:          formData.get('line_oa_basic_id'),
     line_liff_id:              formData.get('line_liff_id'),
+    line_liff_id_pairing:      formData.get('line_liff_id_pairing'),
     app_url:                   formData.get('app_url'),
     owner_line_user_id:        formData.get('owner_line_user_id'),
   }
@@ -66,6 +67,7 @@ export async function updateSettings(
     dorm_id:          DEFAULT_DORM_ID,
     line_oa_basic_id: lineData.line_oa_basic_id || null,
     line_liff_id:     lineData.line_liff_id || null,
+    line_liff_id_pairing: lineData.line_liff_id_pairing || null,
     app_url:          lineData.app_url || null,
     owner_line_user_id: lineData.owner_line_user_id || null,
   }

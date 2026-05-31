@@ -1,16 +1,19 @@
 'use client'
 
 import { useTransition, useState } from 'react'
-import { MessageCircle, Link2Off } from 'lucide-react'
+import Image from 'next/image'
+import { MessageCircle, Link2Off, UserRound } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { unlinkTenantLine } from '@/app/actions/pair'
 
 type Props = {
   tenantId: string
   lineUserId: string | null
+  lineDisplayName?: string | null
+  linePictureUrl?: string | null
 }
 
-export function LinePairCard({ tenantId, lineUserId }: Props) {
+export function LinePairCard({ tenantId, lineUserId, lineDisplayName, linePictureUrl }: Props) {
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
 
@@ -35,10 +38,35 @@ export function LinePairCard({ tenantId, lineUserId }: Props) {
             <span className="size-2 rounded-full bg-emerald-500 shrink-0" />
             <span className="text-xs font-semibold text-emerald-700">จับคู่แล้ว</span>
           </div>
-          <div className="px-3 py-2 bg-slate-50 rounded-lg">
-            <p className="text-[10px] text-slate-400 mb-0.5">LINE User ID</p>
-            <p className="text-xs font-mono text-slate-600 break-all">{lineUserId}</p>
+
+          {/* LINE profile */}
+          <div className="flex items-center gap-3 px-3 py-3 bg-slate-50 rounded-xl">
+            <div className="shrink-0">
+              {linePictureUrl ? (
+                <Image
+                  src={linePictureUrl}
+                  alt={lineDisplayName ?? 'LINE profile'}
+                  width={40}
+                  height={40}
+                  className="size-10 rounded-full object-cover ring-2 ring-white shadow-sm"
+                  unoptimized
+                />
+              ) : (
+                <div className="size-10 rounded-full bg-slate-200 flex items-center justify-center">
+                  <UserRound className="size-5 text-slate-400" />
+                </div>
+              )}
+            </div>
+            <div className="min-w-0 flex-1">
+              {lineDisplayName ? (
+                <p className="text-sm font-semibold text-slate-800 truncate">{lineDisplayName}</p>
+              ) : (
+                <p className="text-xs text-slate-400">ไม่มีชื่อ LINE</p>
+              )}
+              <p className="text-[10px] text-slate-400 font-mono truncate mt-0.5">{lineUserId}</p>
+            </div>
           </div>
+
           <Button
             type="button"
             variant="outline"

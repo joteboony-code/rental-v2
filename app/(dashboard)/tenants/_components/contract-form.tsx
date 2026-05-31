@@ -1,6 +1,6 @@
 'use client'
 
-import { useActionState } from 'react'
+import { useActionState, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -12,13 +12,24 @@ import { roomRow } from '@/lib/room-utils'
 interface ContractFormProps {
   action: (state: ContractFormState, formData: FormData) => Promise<ContractFormState>
   tenantId: string
-  availableRooms: Pick<Room, 'id' | 'room_number' | 'monthly_rent' | 'floor'>[]
+  availableRooms: Pick<Room, 'id' | 'room_number' | 'monthly_rent' | 'floor' | 'deposit'>[]
 }
 
 export function ContractForm({ action, tenantId, availableRooms }: ContractFormProps) {
   const [state, formAction, isPending] = useActionState(action, undefined)
+  const [rent, setRent] = useState('')
+  const [deposit, setDeposit] = useState('')
 
   const today = new Date().toISOString().split('T')[0]
+
+  // เมื่อเลือกห้อง → เติมค่าเช่า + ค่ามัดจำจากห้องให้อัตโนมัติ (แก้ได้)
+  function handleRoomChange(e: React.ChangeEvent<HTMLSelectElement>) {
+    const room = availableRooms.find((r) => r.id === e.target.value)
+    if (room) {
+      setRent(String(room.monthly_rent))
+      setDeposit(String(room.deposit ?? 0))
+    }
+  }
 
   return (
     <form action={formAction} className="space-y-4">
@@ -30,6 +41,7 @@ export function ContractForm({ action, tenantId, availableRooms }: ContractFormP
           id="room_id"
           name="room_id"
           required
+          onChange={handleRoomChange}
           className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
           <option value="">-- เลือกห้อง --</option>
@@ -78,6 +90,8 @@ export function ContractForm({ action, tenantId, availableRooms }: ContractFormP
             min="0"
             step="0.01"
             placeholder="5000"
+            value={rent}
+            onChange={(e) => setRent(e.target.value)}
           />
           {state?.errors?.monthly_rent && (
             <p className="text-xs text-red-500">{state.errors.monthly_rent[0]}</p>
@@ -91,8 +105,11 @@ export function ContractForm({ action, tenantId, availableRooms }: ContractFormP
             type="number"
             min="0"
             step="0.01"
-            defaultValue="0"
+            placeholder="0"
+            value={deposit}
+            onChange={(e) => setDeposit(e.target.value)}
           />
+          <p className="text-xs text-gray-400">เติมจากค่ามัดจำของห้องให้อัตโนมัติ — แก้ได้ตามจริง</p>
         </div>
       </div>
 

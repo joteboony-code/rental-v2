@@ -7,20 +7,26 @@ import { roomRow } from '@/lib/room-utils'
 
 export default async function CheckoutPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>
+  searchParams: Promise<{ contractId?: string }>
 }) {
   const { id } = await params
+  const { contractId } = await searchParams
   const supabase = await createClient()
+
+  let contractQuery = supabase
+    .from('contracts')
+    .select('id, status, deposit_paid, start_date, rooms ( id, room_number, floor, deposit )')
+    .eq('tenant_id', id)
+    .eq('status', 'active')
+
+  if (contractId) contractQuery = contractQuery.eq('id', contractId)
 
   const [{ data: tenant }, { data: contract }] = await Promise.all([
     supabase.from('tenants').select('id, full_name, phone, line_user_id').eq('id', id).single(),
-    supabase
-      .from('contracts')
-      .select('id, status, deposit_paid, start_date, rooms ( id, room_number, floor, deposit )')
-      .eq('tenant_id', id)
-      .eq('status', 'active')
-      .maybeSingle(),
+    contractQuery.maybeSingle(),
   ])
 
   if (!tenant) notFound()
@@ -28,8 +34,8 @@ export default async function CheckoutPage({
   type RoomJoin = { id: string; room_number: string; floor: number | null; deposit: number }
   const room = contract?.rooms as unknown as RoomJoin | null
 
-  // deposit_paid from contract → fallback to room.deposit (default)
-  const depositPaid = Number(contract?.deposit_paid) || Number(room?.deposit) || 0
+  // เงินมัดจำที่รับจริง = contract.deposit_paid เท่านั้น (ไม่ fallback ไปค่าห้อง)
+  const depositPaid = Number(contract?.deposit_paid) || 0
 
   // If no active contract, show message
   if (!contract) {

@@ -1,6 +1,8 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/service'
+import { revalidatePath } from 'next/cache'
 
 export type TenantPortalData = {
   tenant: {
@@ -28,6 +30,8 @@ export type TenantPortalData = {
     rent_amount: number
     water_amount: number
     electricity_amount: number
+    wifi_amount: number
+    trash_amount: number
     other_amount: number
     other_note: string | null
     total_amount: number
@@ -57,7 +61,42 @@ type PortalResult =
   | { success: true; data: TenantPortalData }
   | { success: false; message: string }
 
-export async function getTenantPortalDashboard(lineUserId: string): Promise<PortalResult> {
+export type PortalRoom = {
+  room_id: string
+  room_number: string
+  floor: number | null
+  monthly_rent: number
+}
+
+export async function getPortalRooms(lineUserId: string): Promise<{ rooms: PortalRoom[] }> {
+  const supabase = createServiceClient()
+  const { data: tenant } = await supabase
+    .from('tenants').select('id').eq('line_user_id', lineUserId.trim()).maybeSingle()
+  if (!tenant) return { rooms: [] }
+
+  const { data } = await supabase
+    .from('contracts')
+    .select('room_id, monthly_rent, rooms(room_number, floor)')
+    .eq('tenant_id', tenant.id)
+    .eq('status', 'active')
+    .order('start_date', { ascending: true })
+
+  type Row = { room_id: string; monthly_rent: number; rooms: unknown }
+  return {
+    rooms: (data ?? []).map((r) => {
+      const row = r as Row
+      const room = row.rooms as { room_number: string; floor: number | null } | null
+      return {
+        room_id: row.room_id,
+        room_number: room?.room_number ?? '—',
+        floor: room?.floor ?? null,
+        monthly_rent: Number(row.monthly_rent),
+      }
+    }),
+  }
+}
+
+export async function getTenantPortalDashboard(lineUserId: string, roomId?: string): Promise<PortalResult> {
   const trimmed = lineUserId.trim()
   if (!trimmed) {
     return { success: false, message: 'ไม่พบ LINE User ID' }
@@ -66,6 +105,7 @@ export async function getTenantPortalDashboard(lineUserId: string): Promise<Port
   const supabase = await createClient()
   const { data, error } = await supabase.rpc('get_tenant_portal_by_line_user', {
     p_line_user_id: trimmed,
+    p_room_id: roomId ?? null,
   })
 
   if (error) {
@@ -76,5 +116,97 @@ export async function getTenantPortalDashboard(lineUserId: string): Promise<Port
     return { success: false, message: 'ยังไม่ได้เชื่อม LINE กับห้องพัก' }
   }
 
+  // บันทึกเวลาที่เปิด portal ล่าสุด (ใช้ service client เพราะ portal เป็น public/anon)
+  try {
+    const svc = createServiceClient()
+    await svc.from('tenants').update({ last_portal_open_at: new Date().toISOString() }).eq('line_user_id', trimmed)
+  } catch { /* ไม่ critical — เปิด portal ต่อได้ */ }
+
   return { success: true, data: data as TenantPortalData }
+}
+
+// ── Repair requests ──────────────────────────────────────────
+
+export type PortalRepairItem = {
+  id: string
+  title: string
+  description: string | null
+  photo_url: string | null
+  status: 'pending' | 'in_progress' | 'done' | 'cancelled'
+  priority: 'low' | 'normal' | 'high' | 'urgent'
+  admin_note: string | null
+  created_at: string
+}
+
+export async function getPortalRepairs(
+  lineUserId: string
+): Promise<{ success: boolean; repairs?: PortalRepairItem[]; message?: string }> {
+  const supabase = createServiceClient()
+
+  const { data: tenant } = await supabase
+    .from('tenants').select('id').eq('line_user_id', lineUserId).maybeSingle()
+  if (!tenant) return { success: false, message: 'ไม่พบข้อมูลผู้เช่า' }
+
+  const { data, error } = await supabase
+    .from('repair_requests')
+    .select('id, title, description, photo_url, status, priority, admin_note, created_at')
+    .eq('tenant_id', tenant.id)
+    .order('created_at', { ascending: false })
+    .limit(20)
+
+  if (error) return { success: false, message: error.message }
+  return { success: true, repairs: (data ?? []) as PortalRepairItem[] }
+}
+
+export async function submitPortalRepair(
+  lineUserId: string,
+  formData: FormData,
+  roomId?: string
+): Promise<{ success: boolean; message: string }> {
+  const supabase = createServiceClient()
+
+  const { data: tenant } = await supabase
+    .from('tenants').select('id').eq('line_user_id', lineUserId).maybeSingle()
+  if (!tenant) return { success: false, message: 'ไม่พบข้อมูลผู้เช่า' }
+
+  let contractQuery = supabase
+    .from('contracts').select('room_id')
+    .eq('tenant_id', tenant.id).eq('status', 'active')
+  if (roomId) contractQuery = contractQuery.eq('room_id', roomId)
+  const { data: contract } = await contractQuery.maybeSingle()
+  if (!contract) return { success: false, message: 'ไม่พบสัญญาเช่าที่ใช้งานอยู่' }
+
+  const title = String(formData.get('title') ?? '').trim()
+  const description = String(formData.get('description') ?? '').trim() || null
+  const priority = String(formData.get('priority') ?? 'normal')
+  if (!title) return { success: false, message: 'กรุณาระบุหัวข้อ' }
+
+  let photo_url: string | null = null
+  const photoFile = formData.get('photo') as File | null
+  if (photoFile && photoFile.size > 0) {
+    const buffer = await photoFile.arrayBuffer()
+    const ext = photoFile.name.split('.').pop() ?? 'jpg'
+    const path = `portal/${tenant.id}/${Date.now()}.${ext}`
+    const { data: upload } = await supabase.storage
+      .from('repair-photos')
+      .upload(path, buffer, { contentType: photoFile.type, upsert: false })
+    if (upload) {
+      photo_url = supabase.storage.from('repair-photos').getPublicUrl(upload.path).data.publicUrl
+    }
+  }
+
+  const { error } = await supabase.from('repair_requests').insert({
+    room_id: contract.room_id,
+    tenant_id: tenant.id,
+    title,
+    description,
+    priority,
+    photo_url,
+    status: 'pending',
+  })
+
+  if (error) return { success: false, message: error.message }
+
+  revalidatePath('/repairs')
+  return { success: true, message: 'แจ้งซ่อมเรียบร้อยแล้ว ทีมงานจะติดต่อกลับครับ' }
 }

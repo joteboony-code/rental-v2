@@ -1,23 +1,25 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useRef, useState, useTransition } from 'react'
 import { saveMeterAndGenerateBills } from '@/app/actions/bills'
 import { Input } from '@/components/ui/input'
-import { Loader2, Zap, Droplets, Check, AlertCircle, AlertTriangle, CalendarDays } from 'lucide-react'
+import { Loader2, Zap, Droplets, Check, AlertCircle, AlertTriangle, CalendarDays, Camera, X } from 'lucide-react'
 import { roomRow } from '@/lib/room-utils'
 
 export interface RoomRow {
-  room_id:           string
-  room_number:       string
-  floor:             number | null
-  tenant_name:       string
-  contract_id:       string
-  tenant_id:         string
-  rent:              number
-  water_prev:        number
-  electricity_prev:  number
-  water_curr:        number
-  electricity_curr:  number
+  room_id:             string
+  room_number:         string
+  floor:               number | null
+  tenant_name:         string
+  contract_id:         string
+  tenant_id:           string
+  rent:                number
+  water_prev:          number
+  electricity_prev:    number
+  water_curr:          number
+  electricity_curr:    number
+  water_image_url:     string | null
+  electricity_image_url: string | null
   // Anomaly detection
   prev_water_units:  number | null
   prev_elec_units:   number | null
@@ -44,10 +46,36 @@ function calcProRated(rent: number, startDate: string, billingMonth: string): { 
   return { days, amount }
 }
 
+// ย่อรูปก่อนส่ง — กล้องมือถือให้ ~5MB แต่ต้องการแค่ ~300KB
+async function compressImage(file: File, maxPx = 1200, quality = 0.82): Promise<File> {
+  return new Promise((resolve) => {
+    const img = new Image()
+    const url = URL.createObjectURL(file)
+    img.onload = () => {
+      URL.revokeObjectURL(url)
+      const scale = Math.min(1, maxPx / Math.max(img.width, img.height))
+      const w = Math.round(img.width  * scale)
+      const h = Math.round(img.height * scale)
+      const canvas = document.createElement('canvas')
+      canvas.width = w; canvas.height = h
+      canvas.getContext('2d')!.drawImage(img, 0, 0, w, h)
+      canvas.toBlob(
+        (blob) => resolve(blob ? new File([blob], file.name, { type: 'image/jpeg' }) : file),
+        'image/jpeg', quality
+      )
+    }
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(file) }
+    img.src = url
+  })
+}
+
 type SaveStatus = 'idle' | 'loading' | 'saved' | 'error'
+type PhotoSlot = { file: File | null; preview: string | null; existing: string | null }
+type RoomPhotos = { water: PhotoSlot; elec: PhotoSlot }
 
 export function MeterForm({ rooms, billingMonth, waterRate, electricityRate, anomalyThreshold }: Props) {
   const [, startTransition] = useTransition()
+  const fileRefs = useRef<Record<string, { water: HTMLInputElement | null; elec: HTMLInputElement | null }>>({})
 
   // Per-room input values
   const [curr, setCurr] = useState<Record<string, { water: string; elec: string }>>(() => {
@@ -60,6 +88,37 @@ export function MeterForm({ rooms, billingMonth, waterRate, electricityRate, ano
     })
     return init
   })
+
+  // Per-room photos
+  const [photos, setPhotos] = useState<Record<string, RoomPhotos>>(() => {
+    const init: Record<string, RoomPhotos> = {}
+    rooms.forEach((r) => {
+      init[r.room_id] = {
+        water: { file: null, preview: null, existing: r.water_image_url ?? null },
+        elec:  { file: null, preview: null, existing: r.electricity_image_url ?? null },
+      }
+    })
+    return init
+  })
+
+  async function handlePhoto(roomId: string, slot: 'water' | 'elec', file: File | null) {
+    if (!file) return
+    const compressed = await compressImage(file, 1200, 0.82)
+    const preview = URL.createObjectURL(compressed)
+    setPhotos(prev => ({
+      ...prev,
+      [roomId]: { ...prev[roomId], [slot]: { file: compressed, preview, existing: prev[roomId]?.[slot]?.existing ?? null } },
+    }))
+  }
+
+  function clearPhoto(roomId: string, slot: 'water' | 'elec') {
+    setPhotos(prev => ({
+      ...prev,
+      [roomId]: { ...prev[roomId], [slot]: { file: null, preview: null, existing: null } },
+    }))
+    const ref = fileRefs.current[roomId]?.[slot]
+    if (ref) ref.value = ''
+  }
 
   // Per-room save status — pre-mark rooms that already have this month's reading
   const [saveStatus, setSaveStatus] = useState<Record<string, SaveStatus>>(() => {
@@ -117,6 +176,10 @@ export function MeterForm({ rooms, billingMonth, waterRate, electricityRate, ano
       fd.append(`room_${room.room_id}_electricity_prev`,   String(room.electricity_prev))
       fd.append(`room_${room.room_id}_electricity_curr`,   String(eCurrVal))
       fd.append(`room_${room.room_id}_start_date`,          room.start_date)
+
+      const roomPhotos = photos[room.room_id]
+      if (roomPhotos?.water.file)  fd.append(`room_${room.room_id}_water_image`, roomPhotos.water.file)
+      if (roomPhotos?.elec.file)   fd.append(`room_${room.room_id}_elec_image`,  roomPhotos.elec.file)
 
       const res = await saveMeterAndGenerateBills(fd)
       setSaveStatus(prev => ({ ...prev, [room.room_id]: res.success ? 'saved' : 'error' }))
@@ -226,6 +289,16 @@ export function MeterForm({ rooms, billingMonth, waterRate, electricityRate, ano
                       )}
                     </div>
                   )}
+                  <PhotoPicker
+                    slot={photos[room.room_id]?.water}
+                    accentClass="border-blue-200 text-blue-500 hover:bg-blue-50"
+                    inputRef={(el) => {
+                      if (!fileRefs.current[room.room_id]) fileRefs.current[room.room_id] = { water: null, elec: null }
+                      fileRefs.current[room.room_id].water = el
+                    }}
+                    onChange={(f) => handlePhoto(room.room_id, 'water', f)}
+                    onClear={() => clearPhoto(room.room_id, 'water')}
+                  />
                 </div>
 
                 {/* Electricity */}
@@ -258,6 +331,16 @@ export function MeterForm({ rooms, billingMonth, waterRate, electricityRate, ano
                       )}
                     </div>
                   )}
+                  <PhotoPicker
+                    slot={photos[room.room_id]?.elec}
+                    accentClass="border-amber-200 text-amber-500 hover:bg-amber-50"
+                    inputRef={(el) => {
+                      if (!fileRefs.current[room.room_id]) fileRefs.current[room.room_id] = { water: null, elec: null }
+                      fileRefs.current[room.room_id].elec = el
+                    }}
+                    onChange={(f) => handlePhoto(room.room_id, 'elec', f)}
+                    onClear={() => clearPhoto(room.room_id, 'elec')}
+                  />
                 </div>
               </div>
 
@@ -356,6 +439,17 @@ export function MeterForm({ rooms, billingMonth, waterRate, electricityRate, ano
                       step="0.01"
                       placeholder={String(room.water_prev)}
                     />
+                    <PhotoPicker
+                      slot={photos[room.room_id]?.water}
+                      accentClass="border-blue-200 text-blue-500 hover:bg-blue-50"
+                      compact
+                      inputRef={(el) => {
+                        if (!fileRefs.current[room.room_id]) fileRefs.current[room.room_id] = { water: null, elec: null }
+                        fileRefs.current[room.room_id].water = el
+                      }}
+                      onChange={(f) => handlePhoto(room.room_id, 'water', f)}
+                      onClear={() => clearPhoto(room.room_id, 'water')}
+                    />
                   </td>
                   {/* Water calc + anomaly */}
                   <td className="px-3 py-3 text-center">
@@ -390,6 +484,17 @@ export function MeterForm({ rooms, billingMonth, waterRate, electricityRate, ano
                       min={room.electricity_prev}
                       step="0.01"
                       placeholder={String(room.electricity_prev)}
+                    />
+                    <PhotoPicker
+                      slot={photos[room.room_id]?.elec}
+                      accentClass="border-amber-200 text-amber-500 hover:bg-amber-50"
+                      compact
+                      inputRef={(el) => {
+                        if (!fileRefs.current[room.room_id]) fileRefs.current[room.room_id] = { water: null, elec: null }
+                        fileRefs.current[room.room_id].elec = el
+                      }}
+                      onChange={(f) => handlePhoto(room.room_id, 'elec', f)}
+                      onClear={() => clearPhoto(room.room_id, 'elec')}
                     />
                   </td>
                   {/* Electricity calc + anomaly */}
@@ -444,6 +549,67 @@ export function MeterForm({ rooms, billingMonth, waterRate, electricityRate, ano
           </tfoot>
         </table>
       </div>
+    </div>
+  )
+}
+
+// ── PhotoPicker component ─────────────────────────────────────
+function PhotoPicker({
+  slot, accentClass, compact = false, inputRef, onChange, onClear,
+}: {
+  slot: PhotoSlot | undefined
+  accentClass: string
+  compact?: boolean
+  inputRef: (el: HTMLInputElement | null) => void
+  onChange: (f: File) => void
+  onClear: () => void
+}) {
+  const localRef = useRef<HTMLInputElement | null>(null)
+  const preview  = slot?.preview ?? slot?.existing ?? null
+
+  function combinedRef(el: HTMLInputElement | null) {
+    localRef.current = el
+    inputRef(el)
+  }
+
+  return (
+    <div className="mt-1.5">
+      {preview ? (
+        <div className="relative inline-block">
+          <a href={preview} target="_blank" rel="noreferrer">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={preview}
+              alt="มิเตอร์"
+              className={`rounded-lg object-cover border border-slate-200 ${compact ? 'size-10' : 'h-20 w-full'}`}
+            />
+          </a>
+          <button
+            type="button"
+            onClick={onClear}
+            className="absolute -top-1 -right-1 size-4 rounded-full bg-rose-500 text-white flex items-center justify-center shadow"
+          >
+            <X className="size-2.5" />
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => localRef.current?.click()}
+          className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[10px] font-medium transition-colors ${accentClass}`}
+        >
+          <Camera className="size-3" />
+          {!compact && 'ถ่ายรูปมิเตอร์'}
+        </button>
+      )}
+      <input
+        ref={combinedRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) onChange(f) }}
+      />
     </div>
   )
 }

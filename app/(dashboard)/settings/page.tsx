@@ -6,7 +6,7 @@ import { getLineIntegrationPublic } from '@/lib/line-integration'
 
 export default async function SettingsPage() {
   const supabase = await createClient()
-  const [{ data: settings }, lineIntegration] = await Promise.all([
+  const [{ data: settings }, { data: slipokRow }, lineIntegration] = await Promise.all([
     supabase
       .from('settings')
       .select(
@@ -14,8 +14,12 @@ export default async function SettingsPage() {
       )
       .eq('id', 1)
       .single(),
+    supabase.from('settings').select('slipok_api_key').eq('id', 1).single(),
     getLineIntegrationPublic(),
   ])
+
+  // เช็คว่ามี API key แล้วหรือยัง โดยไม่ส่งค่าจริงไป browser
+  const hasSlipokKey = !!(slipokRow?.slipok_api_key && String(slipokRow.slipok_api_key).trim())
 
   return (
     <div className="p-5 md:p-8 space-y-6 max-w-3xl">
@@ -33,6 +37,7 @@ export default async function SettingsPage() {
         action={updateSettings}
         settings={settings ?? undefined}
         lineIntegration={lineIntegration ?? undefined}
+        hasSlipokKey={hasSlipokKey}
       />
     </div>
   )
