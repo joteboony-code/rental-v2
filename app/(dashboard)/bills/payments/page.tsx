@@ -118,12 +118,12 @@ export default async function PaymentHistoryPage({
         </div>
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm px-4 py-4">
           <p className="text-xs text-slate-400 mb-1">ยอดรวม</p>
-          <p className="text-2xl font-bold text-emerald-600">฿{fmt(totalAmount)}</p>
+          <p className="text-lg font-bold text-emerald-600 break-all leading-tight">฿{fmt(totalAmount)}</p>
           <p className="text-xs text-slate-400">{month ? monthFmt(month + '-01') : 'ทุกเดือน'}</p>
         </div>
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm px-4 py-4">
           <p className="text-xs text-slate-400 mb-1">เดือนนี้</p>
-          <p className="text-2xl font-bold text-slate-950">฿{fmt(thisMonthAmt)}</p>
+          <p className="text-lg font-bold text-slate-950 break-all leading-tight">฿{fmt(thisMonthAmt)}</p>
           <p className="text-xs text-slate-400">{monthFmt(thisMonth + '-01')}</p>
         </div>
       </div>
