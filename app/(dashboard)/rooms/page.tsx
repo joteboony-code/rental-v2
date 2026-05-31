@@ -15,7 +15,7 @@ export default async function RoomsPage() {
   const [{ data: rawRooms }, line, headerList] = await Promise.all([
     supabase
       .from('rooms')
-      .select(`*, contracts!left ( status, monthly_rent, tenants ( full_name ) )`),
+      .select(`*, contracts!left ( status, monthly_rent, tenants ( id, full_name ) )`),
     getLineIntegrationPublic(),
     headers(),
   ])
@@ -98,7 +98,7 @@ export default async function RoomsPage() {
               </thead>
               <tbody>
                 {rooms.map((room) => {
-                  const activeContract = (room.contracts as { status: string; tenants: { full_name: string } | null }[] | null)
+                  const activeContract = (room.contracts as { status: string; tenants: { id: string; full_name: string } | null }[] | null)
                     ?.find((c) => c.status === 'active')
                   const roomPairUrl = buildPairUrl({ appOrigin, liffId: line?.line_liff_id_pairing, roomNumber: room.room_number })
                   return (
@@ -112,7 +112,14 @@ export default async function RoomsPage() {
                         </div>
                       </td>
                       <td className="px-4 py-4 text-slate-700 font-medium">
-                        {activeContract?.tenants?.full_name ?? <span className="text-slate-300 text-xs font-normal">—</span>}
+                        {activeContract?.tenants ? (
+                          <Link href={`/tenants/${activeContract.tenants.id}`}
+                            className="hover:text-indigo-600 hover:underline transition-colors">
+                            {activeContract.tenants.full_name}
+                          </Link>
+                        ) : (
+                          <span className="text-slate-300 text-xs font-normal">—</span>
+                        )}
                       </td>
                       <td className="px-4 py-4 text-right font-semibold text-slate-800">
                         ฿{Number(room.monthly_rent).toLocaleString()}
@@ -144,7 +151,7 @@ export default async function RoomsPage() {
             {/* Mobile Cards */}
             <div className="md:hidden divide-y divide-slate-100">
               {rooms.map((room) => {
-                const activeContract = (room.contracts as { status: string; tenants: { full_name: string } | null }[] | null)
+                const activeContract = (room.contracts as { status: string; tenants: { id: string; full_name: string } | null }[] | null)
                   ?.find((c) => c.status === 'active')
                 const roomPairUrl = buildPairUrl({ appOrigin, liffId: line?.line_liff_id_pairing, roomNumber: room.room_number })
                 return (
@@ -158,7 +165,14 @@ export default async function RoomsPage() {
                         {room.floor && <span className="text-xs text-slate-400">ชั้น {room.floor}</span>}
                         <RoomStatusBadge status={room.status} />
                       </div>
-                      <p className="text-xs text-slate-500 truncate">{activeContract?.tenants?.full_name ?? 'ว่าง'}</p>
+                      {activeContract?.tenants ? (
+                        <Link href={`/tenants/${activeContract.tenants.id}`}
+                          className="text-xs text-slate-500 truncate hover:text-indigo-600 hover:underline transition-colors">
+                          {activeContract.tenants.full_name}
+                        </Link>
+                      ) : (
+                        <p className="text-xs text-slate-500 truncate">ว่าง</p>
+                      )}
                       <p className="text-xs font-semibold text-slate-700 mt-0.5">฿{Number(room.monthly_rent).toLocaleString()}/เดือน</p>
                     </div>
                     <div className="flex items-center gap-1">

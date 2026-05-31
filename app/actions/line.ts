@@ -224,7 +224,86 @@ export async function sendLineBillNotification(
   }
 }
 
-// ── Checkout / Move-out LINE notification ────────────────────────────────────
+// ── Payment confirmed notification ──────────────────────────────────────────
+
+export async function sendPaymentConfirmedNotification(
+  billId: string
+): Promise<void> {
+  const supabase = await createClient()
+
+  const { data: bill } = await supabase
+    .from('bills')
+    .select(`*, rooms ( room_number, floor ), tenants ( full_name, line_user_id )`)
+    .eq('id', billId)
+    .single()
+
+  if (!bill) return
+
+  type RoomJoin   = { room_number: string; floor: number | null }
+  type TenantJoin = { full_name: string; line_user_id: string | null }
+  const room   = bill.rooms   as unknown as RoomJoin   | null
+  const tenant = bill.tenants as unknown as TenantJoin | null
+
+  if (!tenant?.line_user_id) return
+
+  const lineConfig = await getLineMessagingConfig()
+  if (!lineConfig) return
+
+  const roomNumber = room?.room_number ?? '—'
+  const month      = thaiMonth(bill.billing_month as string)
+  const total      = fmt(Number(bill.total_amount))
+
+  const flexMsg = {
+    type: 'flex',
+    altText: `✅ ยืนยันรับชำระแล้ว ห้อง ${roomNumber} ฿${total}`,
+    contents: {
+      type: 'bubble',
+      size: 'mega',
+      header: {
+        type: 'box', layout: 'vertical',
+        backgroundColor: '#059669',
+        paddingAll: '20px',
+        contents: [
+          { type: 'text', text: '✅ ยืนยันรับชำระแล้ว', color: '#FFFFFF', size: 'lg', weight: 'bold' },
+          { type: 'text', text: `ห้อง ${roomNumber} · ${month}`, color: '#D1FAE5', size: 'sm', margin: 'xs' },
+        ],
+      },
+      body: {
+        type: 'box', layout: 'vertical', paddingAll: '20px', spacing: 'md',
+        contents: [
+          {
+            type: 'box', layout: 'horizontal',
+            contents: [
+              { type: 'text', text: '👤 ผู้เช่า', size: 'sm', color: '#64748B', flex: 1 },
+              { type: 'text', text: tenant.full_name, size: 'sm', color: '#0F172A', align: 'end', weight: 'bold' },
+            ],
+          },
+          {
+            type: 'box', layout: 'horizontal',
+            contents: [
+              { type: 'text', text: '💰 ยอดชำระ', size: 'sm', color: '#64748B', flex: 1 },
+              { type: 'text', text: `฿${total}`, size: 'xl', color: '#059669', align: 'end', weight: 'bold' },
+            ],
+          },
+          { type: 'separator', color: '#E2E8F0' },
+          {
+            type: 'text',
+            text: 'ขอบคุณที่ชำระค่าเช่าตรงเวลา 🙏',
+            size: 'sm', color: '#64748B', align: 'center', wrap: true,
+          },
+        ],
+      },
+    },
+  }
+
+  try {
+    await pushMessage(tenant.line_user_id, lineConfig.channelAccessToken, [flexMsg])
+  } catch {
+    // silent — notification failure should not break payment recording
+  }
+}
+
+
 
 export interface CheckoutLineData {
   tenantId:         string
