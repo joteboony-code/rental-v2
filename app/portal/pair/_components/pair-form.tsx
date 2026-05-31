@@ -135,16 +135,26 @@ export function PairForm({
         </button>
       )}
 
-      {/* Already-linked warning */}
+      {/* Already-linked — hard block */}
       {alreadyLinked && inLiff && (
-        <div className="flex items-start gap-3 rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-700">
-          <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-          <span>ห้องนี้มี LINE จับคู่อยู่แล้ว การยืนยันจะแทนที่บัญชีเดิม</span>
+        <div className="rounded-2xl bg-white px-5 py-6 shadow-sm space-y-3 text-center">
+          <div className="flex justify-center">
+            <div className="flex size-14 items-center justify-center rounded-full bg-amber-50">
+              <AlertTriangle className="size-7 text-amber-500" />
+            </div>
+          </div>
+          <div>
+            <p className="font-bold text-slate-800">ห้องนี้จับคู่ LINE แล้ว</p>
+            <p className="mt-1 text-sm text-slate-500">
+              ห้อง {initialRoomNumber} มีบัญชี LINE ผูกอยู่แล้ว<br />
+              กรุณาติดต่อเจ้าของหอเพื่อยกเลิกการจับคู่ก่อน
+            </p>
+          </div>
         </div>
       )}
 
       {/* Room info */}
-      {initialRoomNumber && inLiff && (
+      {initialRoomNumber && inLiff && !alreadyLinked && (
         <div className="rounded-2xl bg-white px-5 py-4 shadow-sm">
           <p className="text-xs font-medium text-slate-400">ห้องที่จะจับคู่</p>
           <div className="mt-1 flex items-center justify-between">
@@ -159,11 +169,16 @@ export function PairForm({
       )}
 
       {/* LINE account */}
-      {inLiff && (
+      {inLiff && !alreadyLinked && (
         <div className="rounded-2xl bg-white px-5 py-4 shadow-sm">
           <div className="flex items-center gap-3">
-            <div className="flex size-12 shrink-0 items-center justify-center rounded-full bg-slate-100">
-              <UserRound className="size-6 text-slate-400" />
+            <div className="flex size-12 shrink-0 items-center justify-center rounded-full bg-slate-100 overflow-hidden">
+              {linePictureUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={linePictureUrl} alt="" className="size-12 object-cover" referrerPolicy="no-referrer" />
+              ) : (
+                <UserRound className="size-6 text-slate-400" />
+              )}
             </div>
             <div className="min-w-0 flex-1">
               <p className="font-semibold text-slate-800">
@@ -186,7 +201,7 @@ export function PairForm({
       )}
 
       {/* Add friend / refresh */}
-      {inLiff && !isFriend && (
+      {inLiff && !alreadyLinked && !isFriend && (
         <button
           type="button"
           onClick={handleRequestFriendship}
@@ -197,7 +212,7 @@ export function PairForm({
         </button>
       )}
 
-      {inLiff && (
+      {inLiff && !alreadyLinked && (
         <button
           type="button"
           onClick={checkFriendship}
@@ -209,7 +224,7 @@ export function PairForm({
       )}
 
       {/* Confirm form */}
-      {lineUserId && (
+      {lineUserId && !alreadyLinked && (
         <form action={action} className="space-y-3">
           <input type="hidden" name="room_number"        value={initialRoomNumber} />
           <input type="hidden" name="line_user_id"       value={lineUserId} />
@@ -244,7 +259,7 @@ export function PairForm({
       )}
 
       {/* Steps */}
-      {inLiff && (
+      {inLiff && !alreadyLinked && (
         <div className="space-y-2.5 pb-4">
           {[
             'เพิ่ม LINE OA ของหอพักให้เรียบร้อย (กดปุ่มสีเขียวด้านบน)',

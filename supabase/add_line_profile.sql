@@ -47,6 +47,16 @@ begin
     return;
   end if;
 
+  -- Block if this room's tenant already has a LINE account paired
+  if exists (
+    select 1 from public.tenants
+    where id = v_tenant_id
+      and line_user_id is not null
+  ) then
+    return query select false, 'ห้องนี้มีการจับคู่ LINE แล้ว กรุณาติดต่อเจ้าของหอ', null::text, null::text;
+    return;
+  end if;
+
   update public.tenants
      set line_user_id      = trim(p_line_user_id),
          line_display_name = p_display_name,
