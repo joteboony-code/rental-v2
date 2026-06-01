@@ -5,13 +5,15 @@ import { BillStatusBadge } from '../_components/bill-status-badge'
 import { PromptPayQR } from './_components/promptpay-qr'
 import { PaymentForm } from './_components/payment-form'
 import { DeletePaymentButton } from './_components/delete-payment-button'
-import { ChevronLeft, Droplets, Zap, Wifi, Trash2, Home, User, Receipt, CreditCard, MessageCircle } from 'lucide-react'
+import { ChevronLeft, Droplets, Zap, Wifi, Trash2, Home, User, Receipt, CreditCard, MessageCircle, CalendarClock } from 'lucide-react'
 import { PrintButton } from './_components/print-button'
 import { roomRow } from '@/lib/room-utils'
 import { LineNotifyButton } from './_components/line-notify-button'
 import { SendPaymentConfirmedButton } from './_components/send-payment-confirmed-button'
 import { EditBillForm } from './_components/edit-bill-form'
 import { DeleteBillButton } from './_components/delete-bill-button'
+import { PromiseButton } from './_components/promise-button'
+import { getActivePromiseForBill } from '@/app/actions/promises'
 
 export default async function BillDetailPage({
   params,
@@ -41,6 +43,8 @@ export default async function BillDetailPage({
   ])
 
   if (!bill) notFound()
+
+  const activePromise = bill.status !== 'paid' ? await getActivePromiseForBill(id) : null
 
   type RoomJoin   = { room_number: string; floor: number | null }
   type TenantJoin = { full_name: string; phone: string | null; line_user_id: string | null }
@@ -306,6 +310,21 @@ export default async function BillDetailPage({
                 promptpayId={settings?.promptpay_id ?? ''}
                 promptpayName={settings?.promptpay_name ?? 'ห้องเช่า'}
                 amount={remaining > 0 ? remaining : Number(bill.total_amount)}
+              />
+            </div>
+          )}
+
+          {bill.status !== 'paid' && (
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                <CalendarClock className="size-3.5 text-amber-500" /> นัดจ่าย
+              </p>
+              <PromiseButton
+                billId={id}
+                tenantId={(bill.tenant_id as string) ?? null}
+                roomId={(bill.room_id as string) ?? null}
+                remainingAmount={remaining}
+                activePromise={activePromise}
               />
             </div>
           )}

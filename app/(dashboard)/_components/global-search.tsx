@@ -2,7 +2,7 @@
 
 import { useRef, useState, useEffect, useTransition } from 'react'
 import Link from 'next/link'
-import { Search, Loader2, User, Home } from 'lucide-react'
+import { Search, Loader2, User, Home, FileText, Wallet, Inbox, Wrench } from 'lucide-react'
 import { searchAction, type SearchResult } from '@/app/actions/search'
 
 const statusLabel: Record<string, string> = {
@@ -11,6 +11,9 @@ const statusLabel: Record<string, string> = {
 const statusColor: Record<string, string> = {
   available: 'text-emerald-600', occupied: 'text-indigo-600', maintenance: 'text-amber-600',
 }
+
+const fmt = (n: number) => n.toLocaleString('th-TH', { maximumFractionDigits: 0 })
+const thaiMonth = (s: string) => new Date(s).toLocaleDateString('th-TH', { month: 'short', year: '2-digit' })
 
 export function GlobalSearch() {
   const [query, setQuery]     = useState('')
@@ -46,7 +49,10 @@ export function GlobalSearch() {
     }, 280)
   }
 
-  const hasResults = result && (result.tenants.length > 0 || result.rooms.length > 0)
+  const hasResults = result && (
+    result.tenants.length > 0 || result.rooms.length > 0 || result.bills.length > 0 ||
+    result.payments.length > 0 || result.slips.length > 0 || result.repairs.length > 0
+  )
 
   return (
     <div ref={wrapRef} className="relative w-full max-w-xs">
@@ -64,7 +70,7 @@ export function GlobalSearch() {
       </div>
 
       {open && (
-        <div className="absolute top-full left-0 right-0 mt-1.5 z-50 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
+        <div className="absolute top-full left-0 right-0 mt-1.5 z-50 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden max-h-[70vh] overflow-y-auto">
           {!hasResults && !loading && (
             <p className="px-4 py-3 text-xs text-slate-400 text-center">ไม่พบผลลัพธ์</p>
           )}
@@ -105,6 +111,73 @@ export function GlobalSearch() {
                   <span className={`ml-auto text-[10px] font-semibold ${statusColor[r.status] ?? 'text-slate-400'}`}>
                     {statusLabel[r.status] ?? r.status}
                   </span>
+                </Link>
+              ))}
+            </div>
+          )}
+
+          {result && result.bills.length > 0 && (
+            <div className="border-t border-slate-50">
+              <p className="px-3 pt-2 pb-1 text-[10px] font-semibold text-slate-400 uppercase tracking-widest">บิล</p>
+              {result.bills.map((b) => (
+                <Link key={b.id} href={`/bills/${b.id}`} onClick={() => { setOpen(false); setQuery('') }}
+                  className="flex items-center gap-2 px-3 py-2 hover:bg-slate-50 transition-colors">
+                  <div className="size-6 rounded-lg bg-emerald-100 flex items-center justify-center shrink-0">
+                    <FileText className="size-3 text-emerald-600" />
+                  </div>
+                  <span className="text-xs font-medium text-slate-700">ห้อง {b.room_number} · {thaiMonth(b.billing_month)}</span>
+                  <span className="ml-auto text-[10px] font-bold text-slate-500">฿{fmt(b.total_amount)}</span>
+                </Link>
+              ))}
+            </div>
+          )}
+
+          {result && result.payments.length > 0 && (
+            <div className="border-t border-slate-50">
+              <p className="px-3 pt-2 pb-1 text-[10px] font-semibold text-slate-400 uppercase tracking-widest">การชำระเงิน</p>
+              {result.payments.map((p) => (
+                <Link key={p.id} href={`/bills/${p.bill_id}`} onClick={() => { setOpen(false); setQuery('') }}
+                  className="flex items-center gap-2 px-3 py-2 hover:bg-slate-50 transition-colors">
+                  <div className="size-6 rounded-lg bg-blue-100 flex items-center justify-center shrink-0">
+                    <Wallet className="size-3 text-blue-600" />
+                  </div>
+                  <span className="text-xs font-medium text-slate-700">
+                    ห้อง {p.room_number}{p.slip_ref ? ` · ${p.slip_ref}` : ''}
+                  </span>
+                  <span className="ml-auto text-[10px] font-bold text-emerald-600">฿{fmt(p.amount)}</span>
+                </Link>
+              ))}
+            </div>
+          )}
+
+          {result && result.slips.length > 0 && (
+            <div className="border-t border-slate-50">
+              <p className="px-3 pt-2 pb-1 text-[10px] font-semibold text-slate-400 uppercase tracking-widest">สลิปรอตรวจ</p>
+              {result.slips.map((s) => (
+                <Link key={s.id} href={`/payment-reviews/${s.id}`} onClick={() => { setOpen(false); setQuery('') }}
+                  className="flex items-center gap-2 px-3 py-2 hover:bg-slate-50 transition-colors">
+                  <div className="size-6 rounded-lg bg-orange-100 flex items-center justify-center shrink-0">
+                    <Inbox className="size-3 text-orange-600" />
+                  </div>
+                  <span className="text-xs font-medium text-slate-700">
+                    {s.tenant_name}{s.slip_ref ? ` · ${s.slip_ref}` : ''}
+                  </span>
+                  {s.amount != null && <span className="ml-auto text-[10px] font-bold text-slate-500">฿{fmt(s.amount)}</span>}
+                </Link>
+              ))}
+            </div>
+          )}
+
+          {result && result.repairs.length > 0 && (
+            <div className="border-t border-slate-50">
+              <p className="px-3 pt-2 pb-1 text-[10px] font-semibold text-slate-400 uppercase tracking-widest">แจ้งซ่อม</p>
+              {result.repairs.map((r) => (
+                <Link key={r.id} href={`/repairs/${r.id}`} onClick={() => { setOpen(false); setQuery('') }}
+                  className="flex items-center gap-2 px-3 py-2 hover:bg-slate-50 transition-colors">
+                  <div className="size-6 rounded-lg bg-amber-100 flex items-center justify-center shrink-0">
+                    <Wrench className="size-3 text-amber-600" />
+                  </div>
+                  <span className="text-xs font-medium text-slate-700 truncate">ห้อง {r.room_number} · {r.title}</span>
                 </Link>
               ))}
             </div>

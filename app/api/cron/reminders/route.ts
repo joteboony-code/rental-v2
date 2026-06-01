@@ -96,13 +96,28 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: true, sent: 0, message: 'no pending bills' })
   }
 
+  // ข้ามบิลที่มีนัดจ่าย (promise) active และยังไม่ถึงกำหนด — ให้เกียรติคำสัญญา
+  const { data: activePromises } = await supabase
+    .from('payment_promises')
+    .select('bill_id, promise_date')
+    .eq('status', 'active')
+    .gte('promise_date', today)
+  const promisedBillIds = new Set(
+    (activePromises ?? []).map((p) => p.bill_id as string | null).filter((id): id is string => Boolean(id))
+  )
+  const skipPromiseCount = bills.filter((b) => promisedBillIds.has(b.id as string)).length
+  const remindableBills = bills.filter((b) => !promisedBillIds.has(b.id as string))
+  if (remindableBills.length === 0) {
+    return NextResponse.json({ ok: true, sent: 0, message: 'all bills have active promises', skipped: skipPromiseCount })
+  }
+
   // Group bills by tenant
   type TJ = { full_name: string; line_user_id: string | null }
   type RJ = { room_number: string }
   type MJ = { water_units: number | null; electricity_units: number | null; water_unit_price: number | null; electricity_unit_price: number | null }
 
   const byTenant = new Map<string, typeof bills>()
-  for (const bill of bills) {
+  for (const bill of remindableBills) {
     const tid = bill.tenant_id as string
     if (!byTenant.has(tid)) byTenant.set(tid, [])
     byTenant.get(tid)!.push(bill)
