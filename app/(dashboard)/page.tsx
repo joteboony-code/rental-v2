@@ -9,9 +9,10 @@ export default async function DashboardPage() {
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
   const monthLabel = now.toLocaleDateString('th-TH', { year: 'numeric', month: 'long' })
 
-  const [{ data: rooms }, { data: bills }, { data: repairs }] = await Promise.all([
+  const [{ data: rooms }, { data: unpaidBills }, { data: paidBills }, { data: repairs }] = await Promise.all([
     supabase.from('rooms').select('status'),
-    supabase.from('bills').select('status, total_amount').eq('billing_month', currentMonth),
+    supabase.from('bills').select('status, total_amount').in('status', ['pending', 'overdue']),
+    supabase.from('bills').select('total_amount').eq('status', 'paid').eq('billing_month', currentMonth),
     supabase.from('repairs').select('status'),
   ])
 
@@ -19,10 +20,10 @@ export default async function DashboardPage() {
     availableRooms: rooms?.filter((r) => r.status === 'available').length ?? 0,
     occupiedRooms:  rooms?.filter((r) => r.status === 'occupied').length  ?? 0,
     totalRooms:     rooms?.length ?? 0,
-    overdueCount:   bills?.filter((b) => b.status === 'overdue').length  ?? 0,
-    overdueAmount:  bills?.filter((b) => b.status === 'overdue').reduce((s, b) => s + Number(b.total_amount), 0) ?? 0,
-    pendingCount:   bills?.filter((b) => b.status === 'pending').length  ?? 0,
-    revenue:        bills?.filter((b) => b.status === 'paid').reduce((s, b) => s + Number(b.total_amount), 0) ?? 0,
+    overdueCount:   unpaidBills?.filter((b) => b.status === 'overdue').length  ?? 0,
+    overdueAmount:  unpaidBills?.filter((b) => b.status === 'overdue').reduce((s, b) => s + Number(b.total_amount), 0) ?? 0,
+    pendingCount:   unpaidBills?.filter((b) => b.status === 'pending').length  ?? 0,
+    revenue:        paidBills?.reduce((s, b) => s + Number(b.total_amount), 0) ?? 0,
     repairsPending: repairs?.filter((r) => r.status === 'pending').length ?? 0,
     repairsInProgress: repairs?.filter((r) => r.status === 'in_progress').length ?? 0,
   }
