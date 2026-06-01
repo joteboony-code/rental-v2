@@ -19,9 +19,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
     <div className="flex min-h-screen bg-slate-50">
       {/* Sidebar (desktop) */}
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-16 flex-col border-r border-slate-100 bg-white md:flex">
-        <div className="px-3 py-3 border-b border-slate-100 text-center">
-          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest leading-tight">ระบบจัดการ</p>
-          <h1 className="text-sm font-bold text-slate-900 mt-0.5">ห้องเช่า</h1>
+        <div className="px-2 py-3 border-b border-slate-100 text-center">
+          <h1 className="text-sm font-bold text-slate-900 leading-tight">ห้องเช่า</h1>
         </div>
         <nav className="flex-1 overflow-y-auto py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <NavItems />
