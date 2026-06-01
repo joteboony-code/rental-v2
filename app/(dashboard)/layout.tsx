@@ -18,12 +18,12 @@ export default async function DashboardLayout({ children }: { children: React.Re
   return (
     <div className="flex min-h-screen bg-slate-50">
       {/* Sidebar (desktop) */}
-      <aside className="hidden md:flex w-16 flex-col border-r border-slate-100 bg-white">
+      <aside className="fixed inset-y-0 left-0 z-40 hidden w-16 flex-col border-r border-slate-100 bg-white md:flex">
         <div className="px-5 py-5 border-b border-slate-100">
           <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest">ระบบจัดการ</p>
           <h1 className="text-base font-bold text-slate-900 mt-0.5">ห้องเช่า</h1>
         </div>
-        <nav className="flex-1 py-3">
+        <nav className="flex-1 overflow-y-auto py-3">
           <NavItems />
         </nav>
 
@@ -53,7 +53,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       </aside>
 
       {/* Main content */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 md:pl-16">
         <div className="hidden md:flex items-center gap-3 border-b border-slate-100 bg-white px-5 py-2">
           <GlobalSearch />
         </div>
