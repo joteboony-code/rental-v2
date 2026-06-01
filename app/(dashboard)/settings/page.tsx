@@ -1,7 +1,8 @@
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { updateSettings } from '@/app/actions/settings'
 import { SettingsForm } from './_components/settings-form'
-import { Settings } from 'lucide-react'
+import { Settings, MessageSquareText, ChevronRight } from 'lucide-react'
 import { getLineIntegrationPublic } from '@/lib/line-integration'
 
 export default async function SettingsPage() {
@@ -32,6 +33,19 @@ export default async function SettingsPage() {
           ตั้งค่า
         </h1>
       </div>
+
+      {/* ลิงก์ไปหน้าแก้ข้อความ LINE */}
+      <Link href="/settings/templates"
+        className="flex items-center gap-3 bg-white rounded-2xl border border-slate-100 shadow-sm p-4 hover:shadow-md transition-shadow">
+        <div className="size-9 rounded-xl bg-green-100 flex items-center justify-center shrink-0">
+          <MessageSquareText className="size-4 text-green-600" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-slate-800">ข้อความ LINE</p>
+          <p className="text-xs text-slate-400">แก้ไขข้อความแจ้งเตือน รับชำระ ฯลฯ</p>
+        </div>
+        <ChevronRight className="size-4 text-slate-300" />
+      </Link>
 
       <SettingsForm
         action={updateSettings}
