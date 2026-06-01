@@ -74,14 +74,14 @@ export function NavItems() {
   const pathname = usePathname()
 
   return (
-    <nav className="flex flex-col items-center gap-1 flex-1 py-2">
+    <nav className="flex flex-col items-center gap-0.5 flex-1 py-1">
       {navItems.map(({ href, label, icon: Icon, dot, match }) => {
         const isActive = match(pathname)
         return (
           <Link
             key={href}
             href={href}
-            className={`sidebar-item group relative flex items-center justify-center size-11 rounded-xl transition-all duration-150 ${
+            className={`sidebar-item group relative flex items-center justify-center size-10 rounded-xl transition-all duration-150 ${
               isActive
                 ? 'bg-slate-950 text-white shadow-md shadow-slate-900/20'
                 : 'text-slate-400 hover:bg-slate-100 hover:text-slate-700'

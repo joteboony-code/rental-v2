@@ -19,19 +19,19 @@ export default async function DashboardLayout({ children }: { children: React.Re
     <div className="flex min-h-screen bg-slate-50">
       {/* Sidebar (desktop) */}
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-16 flex-col border-r border-slate-100 bg-white md:flex">
-        <div className="px-5 py-5 border-b border-slate-100">
-          <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest">ระบบจัดการ</p>
-          <h1 className="text-base font-bold text-slate-900 mt-0.5">ห้องเช่า</h1>
+        <div className="px-3 py-3 border-b border-slate-100 text-center">
+          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest leading-tight">ระบบจัดการ</p>
+          <h1 className="text-sm font-bold text-slate-900 mt-0.5">ห้องเช่า</h1>
         </div>
-        <nav className="flex-1 overflow-y-auto py-3">
+        <nav className="flex-1 overflow-y-auto py-1">
           <NavItems />
         </nav>
 
         {/* User + logout */}
-        <div className="border-t border-slate-100 py-3 flex flex-col items-center gap-1">
+        <div className="border-t border-slate-100 py-2 flex flex-col items-center gap-0.5">
           <ThemeToggle />
           {/* Avatar */}
-          <div className="sidebar-item group relative flex items-center justify-center size-11 rounded-xl bg-slate-100 text-xs font-bold text-slate-700">
+          <div className="sidebar-item group relative flex items-center justify-center size-10 rounded-xl bg-slate-100 text-xs font-bold text-slate-700">
             {initials}
             <span className="sidebar-tooltip absolute left-[calc(100%+10px)] z-50 px-2.5 py-1.5 bg-slate-950 text-white text-xs font-medium rounded-lg shadow-xl">
               {displayName}
@@ -41,7 +41,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           <form action={logout}>
             <button
               type="submit"
-              className="sidebar-item group relative flex items-center justify-center size-11 rounded-xl text-slate-400 hover:bg-rose-50 hover:text-rose-500 transition-all duration-150"
+              className="sidebar-item group relative flex items-center justify-center size-10 rounded-xl text-slate-400 hover:bg-rose-50 hover:text-rose-500 transition-all duration-150"
             >
               <LogOut className="size-[18px]" strokeWidth={1.75} />
               <span className="sidebar-tooltip absolute left-[calc(100%+10px)] z-50 px-2.5 py-1.5 bg-slate-950 text-white text-xs font-medium rounded-lg shadow-xl">
