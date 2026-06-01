@@ -54,6 +54,11 @@ export const RoomSchema = z.object({
   deposit:      z.coerce.number().min(0).default(0),
   wifi_fee:     z.coerce.number().min(0).nullable().optional(),
   status:       z.enum(['available', 'occupied', 'maintenance', 'reserved']),
+  reserved_name:       z.string().optional(),
+  reserved_phone:      z.string().optional(),
+  reserved_deposit:    z.coerce.number().min(0).nullable().optional(),
+  reservation_expires: z.string().optional(),
+  reservation_note:    z.string().optional(),
   description:  z.string().optional(),
 })
 
@@ -85,6 +90,11 @@ export type Room = {
   deposit:      number
   wifi_fee:     number | null
   status:       'available' | 'occupied' | 'maintenance' | 'reserved'
+  reserved_name:       string | null
+  reserved_phone:      string | null
+  reserved_deposit:    number | null
+  reservation_expires: string | null
+  reservation_note:    string | null
   description:  string | null
   created_at:   string
   updated_at:   string

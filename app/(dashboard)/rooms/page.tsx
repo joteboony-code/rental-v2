@@ -34,6 +34,7 @@ export default async function RoomsPage() {
     available:   rooms?.filter((r) => r.status === 'available').length   ?? 0,
     occupied:    rooms?.filter((r) => r.status === 'occupied').length    ?? 0,
     maintenance: rooms?.filter((r) => r.status === 'maintenance').length ?? 0,
+    reserved:    rooms?.filter((r) => r.status === 'reserved').length    ?? 0,
   }
   const occupancyRate = stats.total > 0 ? Math.round((stats.occupied / stats.total) * 100) : 0
 
@@ -53,7 +54,8 @@ export default async function RoomsPage() {
       </div>
 
       {/* ── Stats ── */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-4">
+        <StatCard value={stats.reserved} label="จองแล้ว" sub="ห้อง" color="amber" />
         <StatCard value={stats.total}       label="ห้องทั้งหมด"  sub="ห้อง"  color="slate"   />
         <StatCard value={stats.occupied}    label="มีผู้เช่า"     sub="ห้อง"  color="indigo"  />
         <StatCard value={stats.available}   label="ห้องว่าง"     sub="ห้อง"  color="emerald" />

@@ -5,6 +5,7 @@ import { logout } from '@/app/actions/auth'
 import { NavItems } from './_components/nav-items'
 import { MobileNav } from './_components/mobile-nav'
 import { GlobalSearch } from './_components/global-search'
+import { ThemeToggle } from './_components/theme-toggle'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
@@ -28,6 +29,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
         {/* User + logout */}
         <div className="border-t border-slate-100 py-3 flex flex-col items-center gap-1">
+          <ThemeToggle />
           {/* Avatar */}
           <div className="sidebar-item group relative flex items-center justify-center size-11 rounded-xl bg-slate-100 text-xs font-bold text-slate-700">
             {initials}

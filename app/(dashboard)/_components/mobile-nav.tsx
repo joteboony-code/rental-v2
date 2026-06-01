@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { logout } from '@/app/actions/auth'
 import { Building2, LayoutDashboard, Home, Users, FileText, ClipboardList, Wrench, Settings, Menu, X, LogOut, History, Megaphone } from 'lucide-react'
+import { ThemeToggle } from './theme-toggle'
 
 const navItems = [
   {
@@ -139,6 +140,7 @@ export function MobileNav({ displayName, initials }: Props) {
             {activeItem.label}
           </span>
         )}
+        <ThemeToggle />
       </header>
 
       {/* ── Backdrop (only when open) ── */}

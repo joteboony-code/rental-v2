@@ -5,6 +5,7 @@ import { RoomStatusBadge } from '../_components/room-status-badge'
 import { BillStatusBadge } from '../../bills/_components/bill-status-badge'
 import { ChevronLeft, Pencil, User, FileText, Wrench } from 'lucide-react'
 import { roomRow } from '@/lib/room-utils'
+import { ReservationActions } from '../_components/reservation-actions'
 
 export default async function RoomDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -102,6 +103,40 @@ export default async function RoomDetailPage({ params }: { params: Promise<{ id:
               )}
             </div>
           </div>
+
+          {room.status === 'reserved' && (
+            <div className="bg-violet-50 rounded-2xl border border-violet-100 shadow-sm p-5 space-y-3">
+              <p className="text-xs font-semibold text-violet-500 uppercase tracking-widest">การจอง</p>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between gap-3">
+                  <span className="text-violet-500">ผู้จอง</span>
+                  <span className="font-semibold text-violet-900 text-right">{room.reserved_name ?? '-'}</span>
+                </div>
+                {room.reserved_phone && (
+                  <div className="flex justify-between gap-3">
+                    <span className="text-violet-500">เบอร์โทร</span>
+                    <span className="font-semibold text-violet-900">{room.reserved_phone}</span>
+                  </div>
+                )}
+                {room.reserved_deposit !== null && room.reserved_deposit !== undefined && (
+                  <div className="flex justify-between gap-3">
+                    <span className="text-violet-500">เงินจอง</span>
+                    <span className="font-semibold text-violet-900">฿{Number(room.reserved_deposit).toLocaleString()}</span>
+                  </div>
+                )}
+                {room.reservation_expires && (
+                  <div className="flex justify-between gap-3">
+                    <span className="text-violet-500">หมดอายุ</span>
+                    <span className="font-semibold text-violet-900">{new Date(room.reservation_expires).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                  </div>
+                )}
+                {room.reservation_note && (
+                  <p className="rounded-xl bg-white/70 p-3 text-sm text-violet-700">{room.reservation_note}</p>
+                )}
+              </div>
+              <ReservationActions roomId={id} />
+            </div>
+          )}
 
           {/* Current tenant */}
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">

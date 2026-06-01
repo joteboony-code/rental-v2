@@ -34,7 +34,7 @@ export default async function PaymentHistoryPage({
   const { month, tenant: tenantFilter } = await searchParams
   const supabase = await createClient()
 
-  let query = supabase
+  const query = supabase
     .from('payments')
     .select(`
       id, amount, payment_method, slip_url, slip_ref, note, paid_at,

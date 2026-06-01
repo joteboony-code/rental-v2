@@ -12,6 +12,10 @@ function thaiMonth(dateStr: string) {
   return new Date(dateStr).toLocaleDateString('th-TH', { year: 'numeric', month: 'long' })
 }
 
+function thaiDate(dateStr: string) {
+  return new Date(dateStr).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })
+}
+
 function fmt(n: number) {
   return n.toLocaleString('th-TH', { maximumFractionDigits: 0 })
 }
@@ -47,6 +51,7 @@ function buildFlexBubble(data: {
   totalAmt:     number
   portalUrl:    string
   tenantPortalUrl: string
+  meterRecordedAt?: string | null
 }) {
   const rows: object[] = [
     {
@@ -55,6 +60,13 @@ function buildFlexBubble(data: {
         { type: 'text', text: '👤 ' + data.tenantName, color: '#64748B', size: 'sm', flex: 1 },
       ],
     },
+    ...(data.meterRecordedAt ? [{
+      type: 'box', layout: 'horizontal', spacing: 'sm',
+      contents: [
+        { type: 'text', text: 'วันที่จดมิเตอร์', color: '#94A3B8', size: 'xs', flex: 1 },
+        { type: 'text', text: thaiDate(data.meterRecordedAt), color: '#64748B', size: 'xs', align: 'end' },
+      ],
+    }] : []),
     { type: 'separator', margin: 'md', color: '#E2E8F0' },
     billRow('ค่าเช่า', data.rentAmt),
   ]
@@ -159,7 +171,8 @@ export async function sendLineBillNotification(
     .select(`
       *,
       rooms   ( room_number, floor ),
-      tenants ( full_name, line_user_id )
+      tenants ( full_name, line_user_id ),
+      meter_readings ( created_at )
     `)
     .eq('id', billId)
     .single()
@@ -168,9 +181,11 @@ export async function sendLineBillNotification(
 
   type RoomJoin   = { room_number: string; floor: number | null }
   type TenantJoin = { full_name: string; line_user_id: string | null }
+  type MeterJoin  = { created_at: string } | null
 
   const room   = bill.rooms   as unknown as RoomJoin   | null
   const tenant = bill.tenants as unknown as TenantJoin | null
+  const meter  = bill.meter_readings as unknown as MeterJoin
 
   if (!tenant?.line_user_id) {
     return { success: false, message: 'ผู้เช่าไม่มี LINE User ID — กรุณาเพิ่มในข้อมูลผู้เช่า' }
@@ -224,6 +239,7 @@ export async function sendLineBillNotification(
         totalAmt:    Number(bill.total_amount),
         portalUrl,
         tenantPortalUrl,
+        meterRecordedAt: meter?.created_at ?? null,
       })
       await pushMessage(tenant.line_user_id, lineConfig.channelAccessToken, [flexMsg])
     }
@@ -554,7 +570,8 @@ export async function sendBulkLineBillNotification(
       rent_amount, water_amount, electricity_amount, wifi_amount, trash_amount, other_amount,
       total_amount, due_date, billing_month,
       rooms   ( room_number, floor ),
-      tenants ( full_name, line_user_id )
+      tenants ( full_name, line_user_id ),
+      meter_readings ( created_at )
     `)
     .eq('billing_month', billingMonth)
     .in('status', ['pending', 'overdue'])
@@ -574,8 +591,10 @@ export async function sendBulkLineBillNotification(
   for (const bill of bills) {
     type TenantJ = { full_name: string; line_user_id: string | null }
     type RoomJ   = { room_number: string; floor: number | null }
+    type MeterJ  = { created_at: string } | null
     const tenant    = bill.tenants as unknown as TenantJ | null
     const room      = bill.rooms   as unknown as RoomJ   | null
+    const meter     = bill.meter_readings as unknown as MeterJ
     const lineUserId = tenant?.line_user_id
 
     if (!lineUserId) { failed++; continue }
@@ -619,6 +638,7 @@ export async function sendBulkLineBillNotification(
           totalAmt:    Number(bill.total_amount),
           portalUrl,
           tenantPortalUrl,
+          meterRecordedAt: meter?.created_at ?? null,
         })
         await pushMessage(lineUserId, lineConfig.channelAccessToken, [flexMsg])
       }

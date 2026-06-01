@@ -92,7 +92,9 @@ export function TenantPortal({ liffId }: TenantPortalProps) {
   // Load repairs when switching to repair tab
   useEffect(() => {
     if (tab === 'repairs' && repairs === null && lineUserId) {
-      loadRepairs(lineUserId)
+      setTimeout(() => {
+        void loadRepairs(lineUserId)
+      }, 0)
     }
   }, [tab, repairs, lineUserId, loadRepairs])
 

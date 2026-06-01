@@ -58,8 +58,10 @@ export function EditBillForm(props: Props) {
 
   useEffect(() => {
     if (state?.success) {
-      setOpen(false)
-      router.refresh()
+      setTimeout(() => {
+        setOpen(false)
+        router.refresh()
+      }, 0)
     }
   }, [state, router])
 

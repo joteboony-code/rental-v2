@@ -146,7 +146,7 @@ export async function getPortalRepairs(
   const supabase = createServiceClient()
 
   const { data: tenant } = await supabase
-    .from('tenants').select('id').eq('line_user_id', lineUserId).maybeSingle()
+    .from('tenants').select('id, full_name, phone').eq('line_user_id', lineUserId).maybeSingle()
   if (!tenant) return { success: false, message: 'ไม่พบข้อมูลผู้เช่า' }
 
   const { data, error } = await supabase
@@ -168,7 +168,7 @@ export async function submitPortalRepair(
   const supabase = createServiceClient()
 
   const { data: tenant } = await supabase
-    .from('tenants').select('id').eq('line_user_id', lineUserId).maybeSingle()
+    .from('tenants').select('id, full_name, phone').eq('line_user_id', lineUserId).maybeSingle()
   if (!tenant) return { success: false, message: 'ไม่พบข้อมูลผู้เช่า' }
 
   let contractQuery = supabase
@@ -197,26 +197,111 @@ export async function submitPortalRepair(
     }
   }
 
-  const { error } = await supabase.from('repair_requests').insert({
-    room_id: contract.room_id,
-    tenant_id: tenant.id,
-    title,
-    description,
-    priority,
-    photo_url,
-    status: 'pending',
-  })
+  const { data: repair, error } = await supabase.from('repair_requests')
+    .insert({
+      room_id: contract.room_id,
+      tenant_id: tenant.id,
+      title,
+      description,
+      priority,
+      photo_url,
+      status: 'pending',
+    })
+    .select('id')
+    .single()
 
   if (error) return { success: false, message: error.message }
 
   revalidatePath('/repairs')
 
-  // notify owner via LINE — fire and forget
-  notifyOwnerNewRepair(contract.room_id, title, priority, photo_url).catch(() => {})
+  try {
+    await notifyOwnerNewRepairFromPortal({
+      repairId: repair.id,
+      roomId: contract.room_id,
+      tenantName: tenant.full_name,
+      tenantPhone: tenant.phone,
+      title,
+      description,
+      priority,
+      photoUrl: photo_url,
+    })
+  } catch (error) {
+    console.error('notify owner new repair failed', error)
+  }
 
   return { success: true, message: 'แจ้งซ่อมเรียบร้อยแล้ว ทีมงานจะติดต่อกลับครับ' }
 }
 
+async function notifyOwnerNewRepairFromPortal({
+  repairId,
+  roomId,
+  tenantName,
+  tenantPhone,
+  title,
+  description,
+  priority,
+  photoUrl,
+}: {
+  repairId: string
+  roomId: string
+  tenantName: string
+  tenantPhone: string | null
+  title: string
+  description: string | null
+  priority: string
+  photoUrl: string | null
+}) {
+  const supabase = createServiceClient()
+
+  const { data: cfg } = await supabase
+    .from('line_integrations')
+    .select('encrypted_channel_access_token, owner_line_user_id, app_url')
+    .eq('dorm_id', DEFAULT_DORM_ID)
+    .maybeSingle()
+
+  if (!cfg?.encrypted_channel_access_token || !cfg.owner_line_user_id) return
+
+  const token = await decryptSecret(cfg.encrypted_channel_access_token)
+
+  const { data: room } = await supabase
+    .from('rooms').select('room_number').eq('id', roomId).maybeSingle()
+  const roomNumber = (room as { room_number: string } | null)?.room_number ?? '-'
+
+  const priorityLabel: Record<string, string> = {
+    low: 'ต่ำ',
+    normal: 'ปกติ',
+    high: 'สูง',
+    urgent: 'ด่วนมาก',
+  }
+  const appUrl = (cfg.app_url ?? process.env.NEXT_PUBLIC_APP_URL ?? '').replace(/\/$/, '')
+  const repairUrl = appUrl ? `${appUrl}/repairs/${repairId}` : null
+  const lines = [
+    'มีแจ้งซ่อมใหม่จาก Portal',
+    `ห้อง: ${roomNumber}`,
+    `ผู้เช่า: ${tenantName}${tenantPhone ? ` (${tenantPhone})` : ''}`,
+    `เรื่อง: ${title}`,
+    `ความเร่งด่วน: ${priorityLabel[priority] ?? priority}`,
+  ]
+  if (description) lines.push(`รายละเอียด: ${description}`)
+  if (repairUrl) lines.push('', `เปิดดูรายการ: ${repairUrl}`)
+
+  const messages: object[] = [{ type: 'text', text: lines.join('\n') }]
+  if (photoUrl) {
+    messages.push({ type: 'image', originalContentUrl: photoUrl, previewImageUrl: photoUrl })
+  }
+
+  const res = await fetch('https://api.line.me/v2/bot/message/push', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ to: cfg.owner_line_user_id, messages }),
+  })
+  if (!res.ok) {
+    const body = await res.text()
+    throw new Error(`LINE owner repair notification failed ${res.status}: ${body}`)
+  }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function notifyOwnerNewRepair(
   roomId: string,
   title: string,

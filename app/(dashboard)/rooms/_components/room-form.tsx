@@ -166,6 +166,35 @@ export function RoomForm({ action, room, submitLabel = 'บันทึก' }: P
         />
       </div>
 
+      <div className="rounded-xl border border-violet-100 bg-violet-50/60 p-4 space-y-3">
+        <div>
+          <p className="text-sm font-semibold text-violet-800">ข้อมูลการจอง</p>
+          <p className="text-xs text-violet-500">กรอกเมื่อเลือกสถานะ “จอง” เพื่อเก็บข้อมูลผู้สนใจเช่า</p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="reserved_name">ชื่อผู้จอง</Label>
+            <Input id="reserved_name" name="reserved_name" defaultValue={room?.reserved_name ?? ''} placeholder="ชื่อ-นามสกุล" />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="reserved_phone">เบอร์โทร</Label>
+            <Input id="reserved_phone" name="reserved_phone" defaultValue={room?.reserved_phone ?? ''} placeholder="08x-xxx-xxxx" />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="reserved_deposit">เงินจอง (฿)</Label>
+            <Input id="reserved_deposit" name="reserved_deposit" type="number" min="0" step="1" defaultValue={room?.reserved_deposit ?? ''} />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="reservation_expires">หมดอายุจอง</Label>
+            <Input id="reservation_expires" name="reservation_expires" type="date" defaultValue={room?.reservation_expires ?? ''} />
+          </div>
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="reservation_note">หมายเหตุการจอง</Label>
+          <Textarea id="reservation_note" name="reservation_note" rows={2} defaultValue={room?.reservation_note ?? ''} placeholder="เช่น นัดทำสัญญาวันเสาร์ / โอนเงินจองแล้ว" />
+        </div>
+      </div>
+
       <Button type="submit" className="w-full" disabled={pending}>
         {pending ? 'กำลังบันทึก...' : submitLabel}
       </Button>
