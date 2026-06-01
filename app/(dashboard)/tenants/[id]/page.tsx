@@ -7,8 +7,10 @@ import { roomRow } from '@/lib/room-utils'
 import { ContractForm } from '../_components/contract-form'
 import { TerminateContractButton } from '../_components/terminate-contract-button'
 import { ContractDocuments } from './_components/contract-documents'
+import { TenantDocuments } from './_components/tenant-documents'
 import { LinePairCard } from './_components/line-pair-card'
 import { createContract } from '@/app/actions/tenants'
+import { getTenantDocuments } from '@/app/actions/tenant-documents'
 
 export default async function TenantDetailPage({
   params,
@@ -33,6 +35,8 @@ export default async function TenantDetailPage({
   ])
 
   if (!tenant) notFound()
+
+  const documents = await getTenantDocuments(id)
 
   const activeContracts = contracts?.filter((c) => c.status === 'active') ?? []
   const activeContract  = activeContracts[0] ?? null
@@ -134,6 +138,14 @@ export default async function TenantDetailPage({
               tenantId={id}
               images={(tenant.contract_images as string[] | null) ?? []}
             />
+          </div>
+
+          {/* เอกสารแนบผู้เช่า */}
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+              <FileText className="size-3.5" /> เอกสารแนบ
+            </p>
+            <TenantDocuments tenantId={id} documents={documents} />
           </div>
         </div>
 
