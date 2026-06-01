@@ -14,8 +14,9 @@ export default async function HomePage() {
   const thisMonth    = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
   const todayThai    = now.toLocaleDateString('th-TH', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
 
-  const [{ data: rooms }, { data: bills }, { data: recentPayments }] = await Promise.all([
+  const [{ data: rooms }, { data: unpaidBills }, { data: thisMonthBills }, { data: recentPayments }] = await Promise.all([
     supabase.from('rooms').select('id, status'),
+    supabase.from('bills').select('status, total_amount').in('status', ['pending', 'overdue']),
     supabase.from('bills').select('status, total_amount').eq('billing_month', thisMonth),
     supabase
       .from('payments')
@@ -28,10 +29,10 @@ export default async function HomePage() {
   const available   = (rooms ?? []).filter((r) => r.status === 'available').length
   const totalRooms  = (rooms ?? []).length
 
-  const revenue     = (bills ?? []).filter((b) => b.status === 'paid').reduce((s, b) => s + Number(b.total_amount), 0)
-  const expected    = (bills ?? []).reduce((s, b) => s + Number(b.total_amount), 0)
-  const pending     = (bills ?? []).filter((b) => b.status === 'pending').length
-  const overdue     = (bills ?? []).filter((b) => b.status === 'overdue').length
+  const revenue     = (thisMonthBills ?? []).filter((b) => b.status === 'paid').reduce((s, b) => s + Number(b.total_amount), 0)
+  const expected    = (thisMonthBills ?? []).reduce((s, b) => s + Number(b.total_amount), 0)
+  const pending     = (unpaidBills ?? []).filter((b) => b.status === 'pending').length
+  const overdue     = (unpaidBills ?? []).filter((b) => b.status === 'overdue').length
   const revenuePct  = expected > 0 ? Math.round((revenue / expected) * 100) : 0
 
   const monthLabel = now.toLocaleDateString('th-TH', { month: 'long', year: 'numeric' })
