@@ -434,6 +434,12 @@ async function handleSlipImage(
       ? `${slipResult.message}${slipResult.code ? ` (${slipResult.code})` : ''}`
       : 'SlipOK ตรวจไม่ผ่าน'
 
+    // Not a slip at all (no QR code) — stay completely silent
+    const isNotASlip =
+      slipResult.code === 1015 ||
+      Boolean(slipResult.message && /ไม่มี\s*QR|no\s*QR|QR\s*Code\s*not\s*found|รูปภาพไม่มี\s*QR/i.test(slipResult.message))
+    if (isNotASlip) return
+
     // Duplicate — don't save to pending_slips (not actionable)
     if (slipResult.code === 1012 || slipResult.message?.toLowerCase().includes('duplicate')) {
       await reply(replyToken, token, [{
