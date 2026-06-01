@@ -48,6 +48,15 @@ function thaiMonth(dateStr: string) {
   return new Date(dateStr).toLocaleDateString('th-TH', { year: 'numeric', month: 'long' })
 }
 
+function billSortKey(bill: { due_date?: string | null; billing_month: string }) {
+  return bill.due_date ?? bill.billing_month
+}
+
+function isPastDue(dueDate?: string | null) {
+  if (!dueDate) return false
+  return dueDate < new Date().toISOString().slice(0, 10)
+}
+
 // Module-level cache — Worker instance ถูกเก็บไว้ระหว่าง requests (warm)
 // config เปลี่ยนแค่เมื่อ admin แก้ settings ดังนั้น cache 5 นาทีปลอดภัย
 let _lineConfigCache: { config: LineConfig | null; expiresAt: number } | null = null
@@ -474,16 +483,62 @@ async function handleSlipImage(
     ? supabase.storage.from('payment-slips').getPublicUrl(upload.path).data.publicUrl
     : null
 
-  // Find matching bill (ทุกห้องของผู้เช่า — จับคู่ด้วยยอดเงิน)
+  // LINE slip auto-matching uses oldest outstanding remaining balance first to avoid applying old rent payments to the newest bill.
   const { data: bills } = await supabase
     .from('bills')
-    .select('id, total_amount, billing_month, status, rooms(room_number)')
+    .select('id, total_amount, billing_month, due_date, status, rooms(room_number), payments(amount)')
     .eq('tenant_id', tenant.id)
     .in('status', ['pending', 'overdue'])
-    .order('billing_month', { ascending: false })
-    .limit(10)
+    .order('due_date', { ascending: true })
+    .order('billing_month', { ascending: true })
+    .limit(50)
 
-  const matchingBill = bills?.find((b) => Math.abs(Number(b.total_amount) - amount) < 1)
+  type PaymentJoin = { amount: number | string }
+  type BillCandidate = {
+    id: string
+    total_amount: number | string
+    billing_month: string
+    due_date: string | null
+    status: 'pending' | 'overdue' | string
+    rooms: RJ | null
+    payments: PaymentJoin[] | null
+  }
+
+  const outstandingBills = ((bills ?? []) as unknown as BillCandidate[])
+    .map((bill) => {
+      const paid = (bill.payments ?? []).reduce((sum, payment) => sum + Number(payment.amount), 0)
+      return {
+        ...bill,
+        paid,
+        remainingAmount: Math.max(0, Number(bill.total_amount) - paid),
+      }
+    })
+    .filter((bill) => bill.remainingAmount >= 1)
+    .sort((a, b) => billSortKey(a).localeCompare(billSortKey(b)))
+
+  const matchedBills = outstandingBills.filter((bill) => Math.abs(bill.remainingAmount - amount) < 1)
+  const matchedRoomNumbers = new Set(
+    matchedBills
+      .map((bill) => (bill.rooms as unknown as RJ | null)?.room_number)
+      .filter((n): n is string => Boolean(n))
+  )
+
+  if (matchedBills.length > 1 && matchedRoomNumbers.size > 1) {
+    const candidates = matchedBills
+      .map((bill) => {
+        const billRoom = (bill.rooms as unknown as RJ | null)?.room_number ?? '-'
+        return `- ห้อง ${billRoom} / ${thaiMonth(bill.billing_month)} / ค้าง ${fmt(bill.remainingAmount)} บาท`
+      })
+      .join('\n')
+    await reply(replyToken, token, [{
+      type: 'text',
+      text: '📥 ได้รับสลิปแล้วครับ\n\nรอเจ้าของหอตรวจสอบและยืนยันให้นะครับ',
+    }])
+    await notifyOwner(cfg, `🧾 ตรวจสลิปสำเร็จครับ แต่พบบิลที่อาจตรงกันหลายรายการ\n🏠 ผู้เช่า ${tenant.full_name}\n💰 ${fmt(amount)} บาท\n📅 ${thDate} ${transTime}\n${senderName ? `ผู้โอน: ${senderName}\n` : ''}🔢 Ref: ${slipRef ?? '-'}\n\nรายการที่อาจตรงกัน:\n${candidates}`)
+    return
+  }
+
+  const matchingBill = matchedBills[0]
 
   // เมื่อ match บิลได้ ใช้ห้องของบิลนั้นเป็นห้องที่แสดง (แม่นยำกว่าการรวมทุกห้อง)
   if (matchingBill) {
@@ -527,9 +582,10 @@ async function handleSlipImage(
   const totalBill = Number(matchingBill.total_amount)
   const remaining = Math.max(0, totalBill - totalPaid)
   const fullyPaid = remaining < 1
+  const nextStatus = fullyPaid ? 'paid' : isPastDue(matchingBill.due_date) ? 'overdue' : matchingBill.status
 
-  if (fullyPaid) {
-    await supabase.from('bills').update({ status: 'paid' }).eq('id', matchingBill.id)
+  if (nextStatus !== matchingBill.status) {
+    await supabase.from('bills').update({ status: nextStatus }).eq('id', matchingBill.id)
   }
 
   const portalUrl = buildBillPortalUrl(matchingBill.id, cfg.liffId, cfg.appUrl)
