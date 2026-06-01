@@ -218,6 +218,87 @@ export async function approveSlipOldestFirst(
   return { success: true, message: `ตัดหนี้เก่าสุดก่อน ${appliedCount} บิล เรียบร้อยแล้ว` }
 }
 
+// บันทึกเป็นเงินรับล่วงหน้า (ไม่มีบิลให้ตัด)
+export async function saveSlipAsAdvance(
+  slipId: string,
+  tenantId: string,
+  roomId: string | null,
+  amount: number,
+  note: string | null
+): Promise<{ success: boolean; message: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!amount || amount <= 0) return { success: false, message: 'กรุณาระบุจำนวนเงิน' }
+
+  const { data: slip } = await supabase
+    .from('pending_slips').select('slip_url, slip_ref').eq('id', slipId).single()
+
+  const { error } = await supabase.from('tenant_credits').insert({
+    tenant_id: tenantId,
+    room_id: roomId,
+    amount,
+    slip_url: slip?.slip_url ?? null,
+    slip_ref: slip?.slip_ref ?? null,
+    note,
+    status: 'available',
+    created_by: user?.id ?? null,
+  })
+  if (error) return { success: false, message: `บันทึกไม่สำเร็จ: ${error.message}` }
+
+  await supabase.from('pending_slips').update({
+    status: 'approved',
+    reviewed_at: new Date().toISOString(),
+    reviewed_by: user?.id ?? null,
+    admin_note: note ? `เงินรับล่วงหน้า: ${note}` : 'เงินรับล่วงหน้า',
+  }).eq('id', slipId)
+
+  revalidatePath('/payment-reviews')
+  return { success: true, message: 'บันทึกเป็นเงินรับล่วงหน้าแล้ว' }
+}
+
+// เปลี่ยนผู้เช่า/ห้องของสลิป (กรณีระบบจับผิด)
+export async function reassignSlipTenant(
+  slipId: string,
+  tenantId: string,
+  roomId: string | null
+): Promise<{ success: boolean; message: string }> {
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from('pending_slips')
+    .update({ tenant_id: tenantId, room_id: roomId })
+    .eq('id', slipId)
+  if (error) return { success: false, message: error.message }
+  revalidatePath(`/payment-reviews/${slipId}`)
+  return { success: true, message: 'เปลี่ยนผู้เช่าแล้ว' }
+}
+
+// รายชื่อผู้เช่าทั้งหมด สำหรับ dropdown เปลี่ยนผู้เช่า
+export async function getAllTenantsForSelect(): Promise<{ id: string; full_name: string; room_id: string | null; room_number: string | null }[]> {
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from('contracts')
+    .select('tenant_id, room_id, tenants(full_name), rooms(room_number)')
+    .eq('status', 'active')
+    .order('created_at', { ascending: false })
+
+  type Row = { tenant_id: string; room_id: string | null; tenants: { full_name: string } | null; rooms: { room_number: string } | null }
+  const seen = new Set<string>()
+  const out: { id: string; full_name: string; room_id: string | null; room_number: string | null }[] = []
+  for (const r of ((data ?? []) as unknown as Row[])) {
+    const key = `${r.tenant_id}-${r.room_id}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push({
+      id: r.tenant_id,
+      full_name: r.tenants?.full_name ?? '—',
+      room_id: r.room_id,
+      room_number: r.rooms?.room_number ?? null,
+    })
+  }
+  return out
+}
+
 export async function rejectSlip(
   slipId: string,
   note: string

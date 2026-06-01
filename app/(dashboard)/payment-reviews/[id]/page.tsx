@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { ChevronLeft, ExternalLink } from 'lucide-react'
-import { getPendingSlip, getTenantOutstandingBills } from '@/app/actions/payment-reviews'
+import { getPendingSlip, getTenantOutstandingBills, getAllTenantsForSelect } from '@/app/actions/payment-reviews'
 import { ReviewForm } from './_components/review-form'
 
 const dateFmt = (s: string) =>
@@ -36,11 +36,17 @@ export default async function ReviewDetailPage({
   const tenant = slip.tenants as unknown as TenantJoin
   const room   = slip.rooms   as unknown as RoomJoin
 
-  const outstandingBills = tenant?.id
-    ? await getTenantOutstandingBills(tenant.id)
-    : []
+  const [outstandingBills, allTenants] = await Promise.all([
+    tenant?.id ? getTenantOutstandingBills(tenant.id) : Promise.resolve([]),
+    getAllTenantsForSelect(),
+  ])
 
   const st = statusLabels[slip.slipok_status] ?? { label: slip.slipok_status, color: 'text-slate-600 bg-slate-100', desc: '' }
+
+  // ตรวจว่า SlipOK แจ้งบัญชีผู้รับไม่ตรง (code 1014 หรือข้อความมีคำว่า "บัญชี...ไม่ตรง")
+  const accountMismatch =
+    slip.slipok_code === 1014 ||
+    Boolean(slip.slipok_message && /บัญชี.*ไม่ตรง|ไม่ตรง.*บัญชี/.test(slip.slipok_message))
 
   // Default paidAt for form
   const defaultPaidAt = (() => {
@@ -178,9 +184,14 @@ export default async function ReviewDetailPage({
           <ReviewForm
             slipId={slip.id}
             tenantId={tenant?.id ?? null}
+            tenantName={tenant?.full_name ?? null}
+            roomId={room?.id ?? null}
+            roomNumber={room?.room_number ?? null}
             defaultAmount={slip.amount ?? undefined}
             defaultPaidAt={defaultPaidAt}
             outstandingBills={outstandingBills}
+            allTenants={allTenants}
+            accountMismatch={accountMismatch}
           />
         </div>
       </div>
