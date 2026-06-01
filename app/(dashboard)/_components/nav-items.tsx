@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, Users, FileText, ClipboardList, Wrench, Settings, History, Megaphone, LayoutDashboard } from 'lucide-react'
+import { Home, Users, FileText, ClipboardList, Wrench, Settings, History, Megaphone, LayoutDashboard, Inbox } from 'lucide-react'
 
 const navItems = [
   {
@@ -46,6 +46,13 @@ const navItems = [
     icon:     Wrench,
     dot:      'bg-amber-400',
     match:    (p: string) => p.startsWith('/repairs'),
+  },
+  {
+    href:     '/payment-reviews',
+    label:    'สลิปรอตรวจ',
+    icon:     Inbox,
+    dot:      'bg-orange-400',
+    match:    (p: string) => p.startsWith('/payment-reviews'),
   },
   {
     href:     '/broadcast',

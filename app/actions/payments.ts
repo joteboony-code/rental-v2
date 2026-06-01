@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
-import { sendPaymentConfirmedNotification } from './line'
+import { sendPaymentConfirmedNotification, sendPaymentReceiptNotification } from './line'
 
 export async function recordPayment(
   billId: string,
@@ -83,9 +83,11 @@ export async function recordPayment(
         if (statusError) {
           syncWarning = ` แต่เปลี่ยนสถานะบิลเป็นชำระแล้วไม่สำเร็จ: ${statusError.message}`
         } else {
-          // send LINE confirmation — fire-and-forget, don't block response
-          sendPaymentConfirmedNotification(billId).catch(() => {})
+          sendPaymentReceiptNotification(billId, totalPaid, Number(bill.total_amount)).catch(() => {})
         }
+      } else if (!billPaid && bill.status !== 'paid') {
+        // partial payment — notify tenant of remaining amount
+        sendPaymentReceiptNotification(billId, totalPaid, Number(bill.total_amount)).catch(() => {})
       } else if (!billPaid && bill.status === 'paid') {
         const { error: statusError } = await supabase.from('bills').update({ status: 'pending' }).eq('id', billId)
         if (statusError) syncWarning = ` แต่เปลี่ยนสถานะบิลกลับเป็นรอดำเนินการไม่สำเร็จ: ${statusError.message}`

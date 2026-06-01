@@ -57,6 +57,43 @@ function isPastDue(dueDate?: string | null) {
   return dueDate < new Date().toISOString().slice(0, 10)
 }
 
+// ── savePendingSlip ──────────────────────────────────────────────────────────
+async function savePendingSlip(
+  supabase: SupabaseClient,
+  data: {
+    tenantId: string
+    lineUserId: string
+    slipUrl: string | null
+    amount: number | null
+    paidAt: string | null
+    slipRef: string | null
+    senderName: string | null
+    slipokStatus: string
+    slipokCode?: number | null
+    slipokMessage?: string | null
+    matchCandidates?: unknown
+  }
+): Promise<void> {
+  try {
+    await supabase.from('pending_slips').insert({
+      tenant_id:       data.tenantId,
+      line_user_id:    data.lineUserId,
+      source:          'line',
+      slip_url:        data.slipUrl,
+      amount:          data.amount,
+      paid_at:         data.paidAt,
+      slip_ref:        data.slipRef,
+      sender_name:     data.senderName,
+      slipok_status:   data.slipokStatus,
+      slipok_code:     data.slipokCode ?? null,
+      slipok_message:  data.slipokMessage ?? null,
+      match_candidates: data.matchCandidates ?? null,
+    })
+  } catch { /* don't block webhook on save failure */ }
+}
+
+const RECEIVED_REPLY = '📨 ได้รับสลิปแล้วครับ\n\nเจ้าของหอจะตรวจสอบและยืนยันให้นะครับ 😊'
+
 // Module-level cache — Worker instance ถูกเก็บไว้ระหว่าง requests (warm)
 // config เปลี่ยนแค่เมื่อ admin แก้ settings ดังนั้น cache 5 นาทีปลอดภัย
 let _lineConfigCache: { config: LineConfig | null; expiresAt: number } | null = null
@@ -351,24 +388,31 @@ async function handleSlipImage(
     return
   }
 
-  if (!settings?.slipok_api_key || !settings?.slipok_branch_id) {
-    await reply(replyToken, token, [{
-      type: 'text',
-      text: [
-        '📨 ได้รับสลิปแล้วครับ',
-        '',
-        'เจ้าของหอจะตรวจสอบและยืนยันให้นะครับ 😊',
-      ].join('\n'),
-    }])
-    await notifyOwner(cfg, `🧾 มีสลิปเข้ามาครับ\n🏠 ห้อง ${roomNumber} — ${tenant.full_name}\n⚠️ ยังไม่ได้ตั้งค่า SlipOK`)
+  // Download image first (ก่อนตรวจ SlipOK เพื่อให้เก็บรูปไว้ได้เสมอ)
+  const image = await getImageBlob(messageId, token)
+  if (!image) {
+    await reply(replyToken, token, [{ type: 'text', text: RECEIVED_REPLY }])
+    await notifyOwner(cfg, `🧾 มีสลิปเข้ามาครับ\n🏠 ห้อง ${roomNumber} — ${tenant.full_name}\n⚠️ ดาวน์โหลดรูปไม่สำเร็จ`)
+    await savePendingSlip(supabase, { tenantId: tenant.id, lineUserId, slipUrl: null, amount: null, paidAt: null, slipRef: null, senderName: null, slipokStatus: 'download_error' })
     return
   }
 
-  // Download image
-  const image = await getImageBlob(messageId, token)
-  if (!image) {
-    await reply(replyToken, token, [{ type: 'text', text: '📨 ได้รับรูปสลิปแล้วครับ\n\n⚠️ ระบบตรวจสอบอัตโนมัติไม่สำเร็จ\nกรุณารอเจ้าของหอตรวจสอบ หรือส่งรูปสลิปที่ชัดเจนอีกครั้งครับ' }])
-    await notifyOwner(cfg, `🧾 มีสลิปเข้ามาครับ\n🏠 ห้อง ${roomNumber} — ${tenant.full_name}\n⚠️ ตรวจไม่ได้\nสาเหตุ: ดาวน์โหลดรูปไม่สำเร็จ`)
+  // Upload image to storage immediately so we always have a copy
+  const arrayBuffer = await image.blob.arrayBuffer()
+  const ext = image.contentType.split('/')[1] || 'jpg'
+  const uploadPath = `line/${tenant.id}/${Date.now()}.${ext}`
+  const { data: upload } = await supabase.storage
+    .from('payment-slips')
+    .upload(uploadPath, arrayBuffer, { contentType: image.contentType, upsert: false })
+  const slipUrl = upload
+    ? supabase.storage.from('payment-slips').getPublicUrl(upload.path).data.publicUrl
+    : null
+
+  if (!settings?.slipok_api_key || !settings?.slipok_branch_id) {
+    await reply(replyToken, token, [{ type: 'text', text: RECEIVED_REPLY }])
+    const reviewLink = cfg.appUrl ? `${cfg.appUrl}/payment-reviews` : ''
+    await notifyOwner(cfg, `🧾 มีสลิปเข้ามาครับ\n🏠 ห้อง ${roomNumber} — ${tenant.full_name}\n⚠️ ยังไม่ได้ตั้งค่า SlipOK${reviewLink ? `\n🔗 ${reviewLink}` : ''}`)
+    await savePendingSlip(supabase, { tenantId: tenant.id, lineUserId, slipUrl, amount: null, paidAt: null, slipRef: null, senderName: null, slipokStatus: 'not_configured' })
     return
   }
 
@@ -377,8 +421,10 @@ async function handleSlipImage(
   try {
     slipResult = await verifySlipOk(image.blob, image.contentType, settings.slipok_branch_id, settings.slipok_api_key)
   } catch (error) {
-    await reply(replyToken, token, [{ type: 'text', text: '📨 ได้รับรูปสลิปแล้วครับ\n\n⚠️ ระบบตรวจสอบอัตโนมัติไม่สำเร็จ\nกรุณารอเจ้าของหอตรวจสอบ หรือส่งรูปสลิปที่ชัดเจนอีกครั้งครับ' }])
-    await notifyOwner(cfg, `🧾 มีสลิปเข้ามาครับ\n🏠 ห้อง ${roomNumber} — ${tenant.full_name}\n⚠️ ตรวจไม่ได้\nสาเหตุ: ${String(error)}`)
+    await reply(replyToken, token, [{ type: 'text', text: RECEIVED_REPLY }])
+    const reviewLink = cfg.appUrl ? `${cfg.appUrl}/payment-reviews` : ''
+    await notifyOwner(cfg, `🧾 มีสลิปเข้ามาครับ\n🏠 ห้อง ${roomNumber} — ${tenant.full_name}\n⚠️ ติดต่อ SlipOK ไม่ได้\nสาเหตุ: ${String(error)}${reviewLink ? `\n🔗 ${reviewLink}` : ''}`)
+    await savePendingSlip(supabase, { tenantId: tenant.id, lineUserId, slipUrl, amount: null, paidAt: null, slipRef: null, senderName: null, slipokStatus: 'failed', slipokMessage: String(error) })
     return
   }
 
@@ -388,25 +434,20 @@ async function handleSlipImage(
       ? `${slipResult.message}${slipResult.code ? ` (${slipResult.code})` : ''}`
       : 'SlipOK ตรวจไม่ผ่าน'
 
-    // Check if it's a duplicate
+    // Duplicate — don't save to pending_slips (not actionable)
     if (slipResult.code === 1012 || slipResult.message?.toLowerCase().includes('duplicate')) {
       await reply(replyToken, token, [{
         type: 'text',
-        text: [
-          '⚠️ สลิปนี้เคยถูกตรวจสอบแล้วครับ',
-          '',
-          'หากมีข้อสงสัย กรุณาติดต่อเจ้าของหอนะครับ',
-        ].join('\n'),
+        text: ['⚠️ สลิปนี้เคยถูกตรวจสอบแล้วครับ', '', 'หากมีข้อสงสัย กรุณาติดต่อเจ้าของหอนะครับ'].join('\n'),
       }])
       await notifyOwner(cfg, `⚠️ SlipOK แจ้งว่าสลิปนี้ซ้ำครับ\n🏠 ห้อง ${roomNumber} — ${tenant.full_name}\nสาเหตุ: ${reason}`)
       return
     }
 
-    await reply(replyToken, token, [{
-      type: 'text',
-      text: `📨 ได้รับรูปสลิปแล้วครับ\n\n⚠️ ระบบตรวจสอบอัตโนมัติไม่สำเร็จ\nกรุณารอเจ้าของหอตรวจสอบ หรือส่งรูปสลิปที่ชัดเจนอีกครั้งครับ`,
-    }])
-    await notifyOwner(cfg, `🧾 มีสลิปเข้ามาครับ\n🏠 ห้อง ${roomNumber} — ${tenant.full_name}\n⚠️ ตรวจไม่ได้\nสาเหตุ: ${reason}`)
+    await reply(replyToken, token, [{ type: 'text', text: RECEIVED_REPLY }])
+    const reviewLink = cfg.appUrl ? `${cfg.appUrl}/payment-reviews` : ''
+    await notifyOwner(cfg, `🧾 มีสลิปเข้ามาครับ\n🏠 ห้อง ${roomNumber} — ${tenant.full_name}\n⚠️ SlipOK ตรวจไม่ผ่าน\nสาเหตุ: ${reason}${reviewLink ? `\n🔗 ${reviewLink}` : ''}`)
+    await savePendingSlip(supabase, { tenantId: tenant.id, lineUserId, slipUrl, amount: null, paidAt: null, slipRef: null, senderName: null, slipokStatus: 'failed', slipokCode: slipResult.code, slipokMessage: slipResult.message })
     return
   }
 
@@ -471,18 +512,6 @@ async function handleSlipImage(
   const thDate = paidDate ? thaiDate(paidDate) : transDate
   const paidAt = paidDate?.toISOString() ?? new Date().toISOString()
 
-  // Upload slip image
-  const arrayBuffer = await image.blob.arrayBuffer()
-  const ext = image.contentType.split('/')[1] || 'jpg'
-  const uploadPath = `line/${tenant.id}/${Date.now()}.${ext}`
-  const { data: upload } = await supabase.storage
-    .from('payment-slips')
-    .upload(uploadPath, arrayBuffer, { contentType: image.contentType, upsert: false })
-
-  const slipUrl = upload
-    ? supabase.storage.from('payment-slips').getPublicUrl(upload.path).data.publicUrl
-    : null
-
   // LINE slip auto-matching uses oldest outstanding remaining balance first to avoid applying old rent payments to the newest bill.
   const { data: bills } = await supabase
     .from('bills')
@@ -523,18 +552,17 @@ async function handleSlipImage(
       .filter((n): n is string => Boolean(n))
   )
 
+  const reviewLink = cfg.appUrl ? `\n🔗 ${cfg.appUrl}/payment-reviews` : ''
+
   if (matchedBills.length > 1 && matchedRoomNumbers.size > 1) {
-    const candidates = matchedBills
-      .map((bill) => {
-        const billRoom = (bill.rooms as unknown as RJ | null)?.room_number ?? '-'
-        return `- ห้อง ${billRoom} / ${thaiMonth(bill.billing_month)} / ค้าง ${fmt(bill.remainingAmount)} บาท`
-      })
-      .join('\n')
-    await reply(replyToken, token, [{
-      type: 'text',
-      text: '📥 ได้รับสลิปแล้วครับ\n\nรอเจ้าของหอตรวจสอบและยืนยันให้นะครับ',
-    }])
-    await notifyOwner(cfg, `🧾 ตรวจสลิปสำเร็จครับ แต่พบบิลที่อาจตรงกันหลายรายการ\n🏠 ผู้เช่า ${tenant.full_name}\n💰 ${fmt(amount)} บาท\n📅 ${thDate} ${transTime}\n${senderName ? `ผู้โอน: ${senderName}\n` : ''}🔢 Ref: ${slipRef ?? '-'}\n\nรายการที่อาจตรงกัน:\n${candidates}`)
+    const candidates = matchedBills.map((bill) => {
+      const billRoom = (bill.rooms as unknown as RJ | null)?.room_number ?? '-'
+      return { room: billRoom, month: bill.billing_month, remaining: bill.remainingAmount }
+    })
+    await reply(replyToken, token, [{ type: 'text', text: RECEIVED_REPLY }])
+    const candidateText = candidates.map((c) => `- ห้อง ${c.room} / ${thaiMonth(c.month)} / ค้าง ${fmt(c.remaining)} บาท`).join('\n')
+    await notifyOwner(cfg, `🧾 ตรวจสลิปสำเร็จ แต่พบบิลที่อาจตรงกันหลายรายการ\n🏠 ${tenant.full_name}\n💰 ${fmt(amount)} บาท\n🔢 Ref: ${slipRef ?? '-'}\n\n${candidateText}${reviewLink}`)
+    await savePendingSlip(supabase, { tenantId: tenant.id, lineUserId, slipUrl, amount, paidAt, slipRef, senderName, slipokStatus: 'ambiguous', matchCandidates: candidates })
     return
   }
 
@@ -547,11 +575,9 @@ async function handleSlipImage(
   }
 
   if (!matchingBill) {
-    await reply(replyToken, token, [{
-      type: 'text',
-      text: `📨 ได้รับรูปสลิปแล้วครับ\n\n⚠️ ระบบตรวจสอบอัตโนมัติไม่สำเร็จ\nกรุณารอเจ้าของหอตรวจสอบ หรือส่งรูปสลิปที่ชัดเจนอีกครั้งครับ`,
-    }])
-    await notifyOwner(cfg, `🧾 ตรวจสลิปสำเร็จครับ แต่ไม่พบบิลที่ตรงกัน\n🏠 ห้อง ${roomNumber} — ${tenant.full_name}\n💰 ${fmt(amount)} บาท\n📅 ${thDate} ${transTime}\n${senderName ? `ผู้โอน: ${senderName}` : ''}\n🔢 Ref: ${slipRef ?? '-'}`)
+    await reply(replyToken, token, [{ type: 'text', text: RECEIVED_REPLY }])
+    await notifyOwner(cfg, `🧾 ตรวจสลิปสำเร็จ แต่ไม่พบบิลที่ตรงยอด\n🏠 ห้อง ${roomNumber} — ${tenant.full_name}\n💰 ${fmt(amount)} บาท\n📅 ${thDate} ${transTime}\n${senderName ? `ผู้โอน: ${senderName}\n` : ''}🔢 Ref: ${slipRef ?? '-'}${reviewLink}`)
+    await savePendingSlip(supabase, { tenantId: tenant.id, lineUserId, slipUrl, amount, paidAt, slipRef, senderName, slipokStatus: 'no_match' })
     return
   }
 
