@@ -22,7 +22,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         <div className="px-2 py-3 border-b border-slate-100 text-center">
           <h1 className="text-sm font-bold text-slate-900 leading-tight">ห้องเช่า</h1>
         </div>
-        <nav className="flex-1 overflow-y-auto py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <nav className="flex-1 py-1">
           <NavItems />
         </nav>
 
