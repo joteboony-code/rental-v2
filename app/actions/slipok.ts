@@ -98,11 +98,24 @@ export async function verifySlip(formData: FormData): Promise<SlipVerifyResult> 
     }
 
     if (!json.success || !json.data) {
+      const code = json.code
+      const thaiMsg = code === 1012 ? 'สลิปนี้เคยถูกใช้แล้ว ไม่สามารถใช้ซ้ำได้'
+        : code === 1014 ? 'บัญชีผู้รับไม่ตรงกับบัญชีของร้าน กรุณาโอนมาที่บัญชีที่ถูกต้อง'
+        : code === 1013 ? 'สลิปหมดอายุแล้ว กรุณาส่งสลิปใหม่'
+        : code === 1001 ? 'API Key ไม่ถูกต้อง กรุณาตรวจสอบการตั้งค่า SlipOK'
+        : code === 1002 ? 'Branch ID ไม่ถูกต้อง กรุณาตรวจสอบการตั้งค่า SlipOK'
+        : code === 1003 ? 'ไฟล์รูปใหญ่เกินไป กรุณาส่งรูปขนาดเล็กกว่านี้'
+        : code === 1004 ? 'รูปแบบไฟล์ไม่รองรับ กรุณาใช้ไฟล์ JPG หรือ PNG'
+        : code === 1006 ? 'เกินจำนวนครั้งที่ใช้ได้ต่อวัน กรุณาลองใหม่พรุ่งนี้'
+        : code === 1007 ? 'เครดิต SlipOK หมดแล้ว กรุณาเติมเครดิต'
+        : code === 1008 ? 'ยอดเงินในสลิปไม่ตรงกับที่ระบุ'
+        : code === 1009 ? 'ไม่พบรายการโอนนี้ในระบบ'
+        : code === 1011 ? 'ไม่พบบัญชีผู้รับ'
+        : code === 1015 ? 'QR Code ในสลิปไม่ถูกต้อง'
+        : json.message ?? 'ตรวจสลิปไม่ผ่าน กรุณาลองใหม่หรือติดต่อเจ้าของหอ'
       return {
         success: false,
-        error: json.message
-          ? `SlipOK: ${json.message}${json.code ? ` (${json.code})` : ''}`
-          : `SlipOK ตรวจไม่ผ่าน (HTTP ${res.status})`,
+        error: thaiMsg,
       }
     }
 
