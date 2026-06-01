@@ -10,9 +10,19 @@ export default async function HomePage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const now          = new Date()
-  const thisMonth    = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
-  const todayThai    = now.toLocaleDateString('th-TH', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+  const now       = new Date()
+  const todayThai = now.toLocaleDateString('th-TH', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+
+  const { data: settingsRow } = await supabase
+    .from('settings')
+    .select('current_billing_month')
+    .eq('id', 1)
+    .single()
+
+  const fallbackMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
+  const thisMonth = settingsRow?.current_billing_month
+    ? (settingsRow.current_billing_month as string).slice(0, 10)
+    : fallbackMonth
 
   const [{ data: rooms }, { data: unpaidBills }, { data: thisMonthBills }, { data: recentPayments }] = await Promise.all([
     supabase.from('rooms').select('id, status'),
@@ -35,7 +45,7 @@ export default async function HomePage() {
   const overdue     = (unpaidBills ?? []).filter((b) => b.status === 'overdue').length
   const revenuePct  = expected > 0 ? Math.round((revenue / expected) * 100) : 0
 
-  const monthLabel = now.toLocaleDateString('th-TH', { month: 'long', year: 'numeric' })
+  const monthLabel = new Date(thisMonth).toLocaleDateString('th-TH', { month: 'long', year: 'numeric' })
 
   type BillJoin = { billing_month: string; rooms: { room_number: string } | null; tenants: { full_name: string } | null } | null
 
