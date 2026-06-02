@@ -55,7 +55,7 @@
             android:textSize="15sp"
             android:textColor="@android:color/white"
             android:backgroundTint="@color/primary"
-            style="@style/Widget.Material3.Button" />
+            style="@style/Widget.MaterialComponents.Button" />
 
     </LinearLayout>
 
