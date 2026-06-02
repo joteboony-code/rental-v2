@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { logout } from '@/app/actions/auth'
-import { Building2, LayoutDashboard, Home, Users, FileText, ClipboardList, Wrench, Settings, Menu, X, LogOut, History, Megaphone } from 'lucide-react'
+import { Building2, LayoutDashboard, Home, Users, FileText, ClipboardList, Wrench, Settings, Menu, X, LogOut, History, Megaphone, Inbox } from 'lucide-react'
 import { ThemeToggle } from './theme-toggle'
 
 const navItems = [
@@ -57,6 +57,14 @@ const navItems = [
     match:   (p: string) => p.startsWith('/repairs'),
   },
   {
+    href:    '/payment-reviews',
+    label:   'สลิปรอตรวจ',
+    icon:    Inbox,
+    accent:  'text-orange-500',
+    bg:      'bg-orange-50',
+    match:   (p: string) => p.startsWith('/payment-reviews'),
+  },
+  {
     href:    '/broadcast',
     label:   'ประกาศ',
     icon:    Megaphone,
@@ -65,12 +73,12 @@ const navItems = [
     match:   (p: string) => p.startsWith('/broadcast'),
   },
   {
-    href:    '/history',
-    label:   'ประวัติ',
+    href:    '/audit-logs',
+    label:   'ประวัติการกระทำ',
     icon:    History,
     accent:  'text-rose-500',
     bg:      'bg-rose-50',
-    match:   (p: string) => p.startsWith('/history'),
+    match:   (p: string) => p.startsWith('/audit-logs'),
   },
   {
     href:    '/settings',
