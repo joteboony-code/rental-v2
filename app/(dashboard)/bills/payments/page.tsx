@@ -5,7 +5,7 @@ import { ChevronLeft, Wallet, Receipt, ExternalLink, CreditCard, Smartphone, Ban
 const fmt = (n: number) => n.toLocaleString('th-TH', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
 
 const dateFmt = (s: string) =>
-  new Date(s).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+  new Date(s).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Bangkok' })
 
 const monthFmt = (s: string) =>
   new Date(s).toLocaleDateString('th-TH', { month: 'long', year: 'numeric' })

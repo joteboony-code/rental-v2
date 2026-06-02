@@ -20,8 +20,8 @@ type TenantPortalProps = { liffId?: string | null }
 type Tab = 'bills' | 'repairs'
 
 const money = new Intl.NumberFormat('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-const monthFmt = new Intl.DateTimeFormat('th-TH', { year: 'numeric', month: 'long' })
-const dateFmt = new Intl.DateTimeFormat('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })
+const monthFmt = new Intl.DateTimeFormat('th-TH', { year: 'numeric', month: 'long', timeZone: 'Asia/Bangkok' })
+const dateFmt = new Intl.DateTimeFormat('th-TH', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Bangkok' })
 
 const statusLabel: Record<string, string> = {
   paid: 'ชำระแล้ว', pending: 'รอชำระ', overdue: 'เกินกำหนด', cancelled: 'ยกเลิก',

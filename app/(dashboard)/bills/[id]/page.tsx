@@ -258,6 +258,7 @@ export default async function BillDetailPage({
                         {new Date(p.paid_at).toLocaleString('th-TH', {
                           year: 'numeric', month: 'short', day: 'numeric',
                           hour: '2-digit', minute: '2-digit',
+                          timeZone: 'Asia/Bangkok',
                         })}
                       </p>
                       {p.note && <p className="text-xs text-slate-400 mt-0.5">{p.note}</p>}

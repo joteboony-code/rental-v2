@@ -137,7 +137,7 @@ export default async function HomePage() {
                       <span className="ml-2 text-xs font-normal text-slate-400">ห้อง {room?.room_number ?? '—'}</span>
                     </p>
                     <p className="text-xs text-slate-400">
-                      {new Date(p.paid_at as string).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                      {new Date(p.paid_at as string).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Bangkok' })}
                     </p>
                   </div>
                   <p className="font-bold text-emerald-600 text-sm shrink-0">฿{fmt(Number(p.amount))}</p>
