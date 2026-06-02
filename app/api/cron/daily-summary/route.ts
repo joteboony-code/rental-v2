@@ -47,8 +47,8 @@ export async function GET(req: NextRequest) {
     { data: expiringContracts },
     { data: promisesToday },
   ] = await Promise.all([
-    // บิลค้างชำระทุกเดือน
-    supabase.from('bills').select('total_amount, status, payments(amount)').in('status', ['pending', 'overdue']),
+    // บิลค้างชำระทุกเดือน (ดึง room_number มาด้วย)
+    supabase.from('bills').select('total_amount, status, rooms(room_number), payments(amount)').in('status', ['pending', 'overdue']),
     // บิลครบกำหนดวันนี้
     supabase.from('bills').select('id').in('status', ['pending', 'overdue']).eq('due_date', today),
     // สลิปรอตรวจ
@@ -64,21 +64,35 @@ export async function GET(req: NextRequest) {
 
   // คำนวณยอดค้างจริง
   type PJ = { amount: number }
-  type BJ = { total_amount: number; status: string; payments: PJ[] | null }
+  type BJ = { total_amount: number; status: string; rooms: { room_number: string } | null; payments: PJ[] | null }
   const unpaid = (unpaidBills ?? []) as unknown as BJ[]
+
+  // รวมยอดค้างต่อห้อง (หลายบิลในห้องเดียวรวมเข้าด้วยกัน)
+  const roomMap = new Map<string, number>()
   let totalOwed = 0
   let unpaidCount = 0
   for (const b of unpaid) {
     const paid = (b.payments ?? []).reduce((s, p) => s + Number(p.amount), 0)
     const remaining = Math.max(0, Number(b.total_amount) - paid)
-    if (remaining >= 1) { totalOwed += remaining; unpaidCount++ }
+    if (remaining >= 1) {
+      totalOwed += remaining
+      unpaidCount++
+      const rn = b.rooms?.room_number ?? '?'
+      roomMap.set(rn, (roomMap.get(rn) ?? 0) + remaining)
+    }
   }
+
+  // เรียงห้องตามเลขห้อง แล้วแสดง รายการ
+  const roomLines = [...roomMap.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0], 'th', { numeric: true }))
+    .map(([room, amt]) => `  • ห้อง ${room}  ฿${fmt(amt)}`)
 
   const lines: string[] = [
     '📌 สรุปประจำวัน',
     `🗓️ ${thaiDate(new Date())}`,
     SEP,
     `💰 ค้างชำระ: ${unpaidCount} บิล รวม ${fmt(totalOwed)} บาท`,
+    ...roomLines,
     `📅 ครบกำหนดวันนี้: ${(dueToday ?? []).length} บิล`,
     `📥 สลิปรอตรวจ: ${pendingSlipCount ?? 0} รายการ`,
     `🔧 แจ้งซ่อมค้าง: ${openRepairCount ?? 0} งาน`,
