@@ -225,7 +225,8 @@ async function fetchRoomStatements(supabase: any, tenantId: string): Promise<{
     const main  = roomBills[0]
     const older = roomBills.slice(1)
 
-    const overdueBills = older
+    // Reverse older bills so overdue is listed oldest → newest
+    const overdueBills = [...older].reverse()
       .map((b) => {
         const paid      = (b.payments ?? []).reduce((s, p) => s + Number(p.amount), 0)
         const remaining = Math.max(0, Number(b.total_amount) - paid)
@@ -290,30 +291,8 @@ function buildCombinedFlexBubble(data: {
         weight: 'bold', size: 'sm', color: '#0F172A',
       }],
     })
-    body.push({
-      type: 'box', layout: 'horizontal', margin: 'sm',
-      contents: [
-        { type: 'text', text: 'รอบบิล', size: 'xs', color: '#94A3B8', flex: 1 },
-        { type: 'text', text: thaiMonth(r.billingMonth), size: 'xs', color: '#64748B', align: 'end' },
-      ],
-    })
-    // Line items
-    body.push(billRow('ค่าเช่า', r.rentAmt))
-    body.push(billRow('💧 ค่าน้ำ',  r.waterAmt, '#2563EB'))
-    body.push(billRow('⚡ ค่าไฟ',   r.elecAmt,  '#D97706'))
-    if (r.wifiAmt  > 0) body.push(billRow('📶 ค่า WiFi', r.wifiAmt, '#4F46E5'))
-    body.push(billRow('🗑️ ค่าขยะ', r.trashAmt, '#64748B'))
-    if (r.otherAmt > 0) body.push(billRow(`📦 ${r.otherNote || 'ค่าอื่น ๆ'}`, r.otherAmt))
-    // Room subtotal
-    body.push({ type: 'separator', margin: 'md', color: '#E2E8F0' })
-    body.push({
-      type: 'box', layout: 'horizontal', margin: 'md',
-      contents: [
-        { type: 'text', text: `รวมห้อง ${r.roomNumber}`, weight: 'bold', size: 'sm', color: '#0F172A', flex: 1 },
-        { type: 'text', text: '฿' + fmt(r.currentTotal), weight: 'bold', size: 'md', color: '#0F172A', align: 'end' },
-      ],
-    })
-    // Overdue section
+
+    // ── Overdue first (oldest → newest) ────────────────────────────────────────
     if (r.overdueBills.length > 0) {
       const odRows: object[] = [
         { type: 'text', text: `⚠️ ยอดค้างเก่า ห้อง ${r.roomNumber}`, size: 'xs', color: '#DC2626', weight: 'bold' },
@@ -327,20 +306,38 @@ function buildCombinedFlexBubble(data: {
           ],
         })
       }
-      odRows.push({ type: 'separator', margin: 'sm', color: '#FECACA' })
-      odRows.push({
-        type: 'box', layout: 'horizontal', margin: 'sm',
-        contents: [
-          { type: 'text', text: 'รวมค้างห้องนี้', size: 'xs', color: '#DC2626', weight: 'bold', flex: 1 },
-          { type: 'text', text: '฿' + fmt(r.overdueTotal), size: 'sm', color: '#DC2626', align: 'end', weight: 'bold' },
-        ],
-      })
       body.push({
         type: 'box', layout: 'vertical', margin: 'sm',
         backgroundColor: '#FEF2F2', cornerRadius: '8px', paddingAll: '10px',
         contents: odRows,
       })
     }
+
+    // ── Current billing period — shown last ────────────────────────────────────
+    body.push({
+      type: 'box', layout: 'horizontal', margin: 'sm',
+      contents: [
+        { type: 'text', text: 'รอบบิล', size: 'xs', color: '#94A3B8', flex: 1 },
+        { type: 'text', text: thaiMonth(r.billingMonth), size: 'xs', color: '#64748B', align: 'end' },
+      ],
+    })
+    body.push(billRow('ค่าเช่า', r.rentAmt))
+    body.push(billRow('💧 ค่าน้ำ',  r.waterAmt, '#2563EB'))
+    body.push(billRow('⚡ ค่าไฟ',   r.elecAmt,  '#D97706'))
+    if (r.wifiAmt  > 0) body.push(billRow('📶 ค่า WiFi', r.wifiAmt, '#4F46E5'))
+    body.push(billRow('🗑️ ค่าขยะ', r.trashAmt, '#64748B'))
+    if (r.otherAmt > 0) body.push(billRow(`📦 ${r.otherNote || 'ค่าอื่น ๆ'}`, r.otherAmt))
+
+    // Room total = current bill + overdue
+    const roomTotal = r.currentTotal + r.overdueTotal
+    body.push({ type: 'separator', margin: 'md', color: '#E2E8F0' })
+    body.push({
+      type: 'box', layout: 'horizontal', margin: 'md',
+      contents: [
+        { type: 'text', text: `รวมห้อง ${r.roomNumber}`, weight: 'bold', size: 'sm', color: '#0F172A', flex: 1 },
+        { type: 'text', text: '฿' + fmt(roomTotal), weight: 'bold', size: 'md', color: '#0F172A', align: 'end' },
+      ],
+    })
   }
 
   // Grand total
@@ -968,47 +965,74 @@ export async function sendBulkLineBillNotification(
   type RoomJ   = { room_number: string; floor: number | null }
   type MeterJ  = { created_at: string } | null
 
-  // Group current-month bills by tenant so multi-room tenants get one combined message
-  const byTenant = new Map<string, (typeof bills)[number][]>()
+  // Group by line_user_id (fallback to tenant_id) — prevents duplicate sends for tenants with multiple rooms
+  const byLineUser = new Map<string, {
+    lineUserId: string | null
+    tenantName: string
+    tenantIds: Set<string>
+    bills: (typeof bills)[number][]
+  }>()
+
   for (const bill of bills) {
-    const tid = bill.tenant_id as string
-    if (!byTenant.has(tid)) byTenant.set(tid, [])
-    byTenant.get(tid)!.push(bill)
+    const tenant     = bill.tenants as unknown as TenantJ | null
+    const lineUserId = tenant?.line_user_id ?? null
+    const tid        = bill.tenant_id as string
+    const groupKey   = lineUserId ?? tid
+
+    if (!byLineUser.has(groupKey)) {
+      byLineUser.set(groupKey, { lineUserId, tenantName: tenant?.full_name ?? '—', tenantIds: new Set(), bills: [] })
+    }
+    const grp = byLineUser.get(groupKey)!
+    grp.tenantIds.add(tid)
+    grp.bills.push(bill)
+    if (tenant?.full_name) grp.tenantName = tenant.full_name
   }
 
-  for (const [tenantId, tenantBills] of byTenant) {
-    const firstBill  = tenantBills[0]
-    const tenant     = firstBill.tenants as unknown as TenantJ | null
-    const lineUserId = tenant?.line_user_id
+  for (const [, grp] of byLineUser) {
+    const { lineUserId } = grp
+    if (!lineUserId) { failed += grp.bills.length; continue }
 
-    if (!lineUserId) { failed += tenantBills.length; continue }
+    // Merge outstanding room statements across all tenant IDs linked to this LINE user
+    const allStmtRooms: RoomStatement[] = []
+    let allGrandTotal = 0
+    let allEarliestDue = ''
+    for (const tid of grp.tenantIds) {
+      const { rooms: stmtRooms, grandTotal, earliestDueDate } =
+        await fetchRoomStatements(supabase, tid)
+      allStmtRooms.push(...stmtRooms)
+      allGrandTotal += grandTotal
+      if (!allEarliestDue || (earliestDueDate && earliestDueDate < allEarliestDue)) {
+        allEarliestDue = earliestDueDate
+      }
+    }
+    allStmtRooms.sort((a, b) => {
+      const na = parseInt(a.roomNumber) || 0
+      const nb = parseInt(b.roomNumber) || 0
+      return na - nb || a.roomNumber.localeCompare(b.roomNumber)
+    })
 
-    // Fetch all outstanding bills to determine combined vs single
-    const { rooms: stmtRooms, grandTotal: stmtTotal, earliestDueDate } =
-      await fetchRoomStatements(supabase, tenantId)
-
-    if (mode === 'flex' && stmtRooms.length >= 2) {
+    if (mode === 'flex' && allStmtRooms.length >= 2) {
       // Multi-room → one combined Flex
       const portalUrl = buildTenantPortalUrl(lineConfig.liffId, lineConfig.appUrl)
       try {
         await pushMessage(lineUserId, lineConfig.channelAccessToken, [
           buildCombinedFlexBubble({
-            tenantName: tenant?.full_name ?? '—',
-            rooms: stmtRooms,
-            grandTotal: stmtTotal,
-            earliestDueDate,
+            tenantName: grp.tenantName,
+            rooms: allStmtRooms,
+            grandTotal: allGrandTotal,
+            earliestDueDate: allEarliestDue,
             portalUrl,
           }),
         ])
-        sent += tenantBills.length
+        sent += grp.bills.length
       } catch {
-        failed += tenantBills.length
+        failed += grp.bills.length
       }
       continue
     }
 
-    // Single room → existing per-bill behavior
-    for (const bill of tenantBills) {
+    // Single room (or text mode) → per-bill behavior
+    for (const bill of grp.bills) {
       const room       = bill.rooms         as unknown as RoomJ  | null
       const meter      = bill.meter_readings as unknown as MeterJ
       const month      = thaiMonth(bill.billing_month as string)
@@ -1039,7 +1063,7 @@ export async function sendBulkLineBillNotification(
           const flexMsg = buildFlexBubble({
             roomNumber,
             floor,
-            tenantName:  tenant?.full_name ?? '—',
+            tenantName:  grp.tenantName,
             month,
             dueDate:     bill.due_date as string,
             rentAmt:     Number(bill.rent_amount),
