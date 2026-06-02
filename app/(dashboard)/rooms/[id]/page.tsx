@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { RoomStatusBadge } from '../_components/room-status-badge'
 import { BillStatusBadge } from '../../bills/_components/bill-status-badge'
-import { ChevronLeft, Pencil, User, FileText, Wrench } from 'lucide-react'
+import { ChevronLeft, Pencil, User, FileText, Wrench, Calendar } from 'lucide-react'
 import { roomRow } from '@/lib/room-utils'
 import { ReservationActions } from '../_components/reservation-actions'
 
@@ -14,7 +14,7 @@ export default async function RoomDetailPage({ params }: { params: Promise<{ id:
   const [{ data: room }, { data: bills }, { data: repairs }] = await Promise.all([
     supabase
       .from('rooms')
-      .select(`*, contracts!left ( id, status, start_date, end_date, monthly_rent, tenants ( id, full_name, phone ) )`)
+      .select(`*, contracts!left ( id, status, start_date, end_date, monthly_rent, deposit_paid, tenants ( id, full_name, phone ) )`)
       .eq('id', id)
       .single(),
     supabase
@@ -34,7 +34,8 @@ export default async function RoomDetailPage({ params }: { params: Promise<{ id:
   if (!room) notFound()
 
   type ContractRow = {
-    id: string; status: string; start_date: string; end_date: string | null; monthly_rent: number
+    id: string; status: string; start_date: string; end_date: string | null
+    monthly_rent: number; deposit_paid: number | null
     tenants: { id: string; full_name: string; phone: string | null } | null
   }
 
@@ -175,28 +176,76 @@ export default async function RoomDetailPage({ params }: { params: Promise<{ id:
             )}
           </div>
 
-          {/* Past tenants */}
+          {/* Past tenants — history */}
           {pastContracts.length > 0 && (
             <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-3">ประวัติผู้เช่า</p>
-              <div className="space-y-2">
-                {pastContracts.map((c) => (
-                  c.tenants && (
-                    <Link key={c.id} href={`/tenants/${c.tenants.id}`}
-                      className="flex items-center gap-2 text-sm hover:opacity-70 transition-opacity">
-                      <div className="size-7 rounded-lg bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-500 shrink-0">
-                        {c.tenants.full_name.slice(0, 2).toUpperCase()}
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                <Calendar className="size-3.5" /> ประวัติผู้เช่า ({pastContracts.length} ราย)
+              </p>
+              <div className="space-y-3">
+                {pastContracts.map((c) => {
+                  const statusCfg = c.status === 'terminated'
+                    ? { label: 'ยกเลิก', cls: 'bg-rose-50 text-rose-600 ring-rose-200' }
+                    : { label: 'หมดอายุ', cls: 'bg-slate-100 text-slate-500 ring-slate-200' }
+                  return (
+                    <div key={c.id} className="rounded-xl border border-slate-100 p-3 space-y-2">
+                      {/* ชื่อ + สถานะ */}
+                      <div className="flex items-center justify-between gap-2">
+                        {c.tenants ? (
+                          <Link href={`/tenants/${c.tenants.id}`}
+                            className="flex items-center gap-2 hover:opacity-75 transition-opacity min-w-0">
+                            <div className="size-7 rounded-lg bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-500 shrink-0">
+                              {c.tenants.full_name.slice(0, 2).toUpperCase()}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold text-slate-700 truncate">{c.tenants.full_name}</p>
+                              {c.tenants.phone && <p className="text-[11px] text-slate-400">{c.tenants.phone}</p>}
+                            </div>
+                          </Link>
+                        ) : (
+                          <p className="text-sm text-slate-400">ไม่พบข้อมูลผู้เช่า</p>
+                        )}
+                        <span className={`shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ring-1 ${statusCfg.cls}`}>
+                          {statusCfg.label}
+                        </span>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-slate-600 font-medium truncate">{c.tenants.full_name}</p>
-                        <p className="text-xs text-slate-400">
-                          {new Date(c.start_date).toLocaleDateString('th-TH', { year: 'numeric', month: 'short' })}
-                          {c.end_date && ` – ${new Date(c.end_date).toLocaleDateString('th-TH', { year: 'numeric', month: 'short' })}`}
-                        </p>
+                      {/* รายละเอียดสัญญา */}
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs border-t border-slate-50 pt-2">
+                        <div>
+                          <p className="text-slate-400">วันเริ่มสัญญา</p>
+                          <p className="font-medium text-slate-600">
+                            {new Date(c.start_date).toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' })}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-slate-400">วันสิ้นสุด</p>
+                          <p className="font-medium text-slate-600">
+                            {c.end_date
+                              ? new Date(c.end_date).toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' })
+                              : '—'}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-slate-400">ค่าเช่า/เดือน</p>
+                          <p className="font-medium text-slate-600">฿{Number(c.monthly_rent).toLocaleString()}</p>
+                        </div>
+                        <div>
+                          <p className="text-slate-400">เงินประกัน</p>
+                          <p className="font-medium text-slate-600">
+                            {c.deposit_paid != null ? `฿${Number(c.deposit_paid).toLocaleString()}` : '—'}
+                          </p>
+                        </div>
                       </div>
-                    </Link>
+                      {/* ลิงก์ดูผู้เช่า */}
+                      {c.tenants && (
+                        <Link href={`/tenants/${c.tenants.id}`}
+                          className="inline-flex items-center gap-1 text-[11px] text-violet-600 hover:underline font-medium">
+                          <User className="size-3" /> ดูข้อมูลผู้เช่า →
+                        </Link>
+                      )}
+                    </div>
                   )
-                ))}
+                })}
               </div>
             </div>
           )}
