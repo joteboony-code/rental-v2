@@ -340,6 +340,63 @@ async function handleText(lineUserId: string, text: string, replyToken: string, 
   }])
 }
 
+function buildMultiBillPaymentFlex(opts: {
+  tenantName: string
+  paidBills: { roomNumber: string; billingMonth: string; amount: number }[]
+  totalPaid: number
+  ref?: string | null
+  portalUrl: string
+}): object {
+  const row = (label: string, value: string, valueColor = '#111827') => ({
+    type: 'box', layout: 'horizontal', margin: 'sm',
+    contents: [
+      { type: 'text', text: label, color: '#6b7280', size: 'sm', flex: 4 },
+      { type: 'text', text: value, color: valueColor, size: 'sm', weight: 'bold', flex: 5, align: 'end' as const },
+    ],
+  })
+
+  const billRows: object[] = opts.paidBills.map((b) => ({
+    type: 'box', layout: 'horizontal', margin: 'sm',
+    contents: [
+      { type: 'text', text: `🏠 ห้อง ${b.roomNumber}`, color: '#374151', size: 'sm', flex: 3 },
+      { type: 'text', text: thaiMonth(b.billingMonth), color: '#6b7280', size: 'sm', flex: 5 },
+      { type: 'text', text: `฿${fmt(b.amount)}`, color: '#16a34a', size: 'sm', weight: 'bold', flex: 3, align: 'end' as const },
+    ],
+  }))
+
+  const bodyContents: object[] = [
+    ...billRows,
+    { type: 'separator', margin: 'md' },
+    row('💰  รวมชำระ', `${fmt(opts.totalPaid)} บาท`, '#16a34a'),
+    row('🟢  คงเหลือ', '0 บาท'),
+    ...(opts.ref ? [row('🔢  Ref', opts.ref, '#6b7280')] : []),
+  ]
+
+  return {
+    type: 'flex',
+    altText: `✅ ชำระค่าเช่าครบแล้ว ${opts.paidBills.length} ห้อง`,
+    contents: {
+      type: 'bubble', size: 'kilo',
+      header: {
+        type: 'box', layout: 'vertical', backgroundColor: '#16a34a', paddingAll: '16px',
+        contents: [{ type: 'text', text: '✅  ชำระค่าเช่าครบแล้วครับ!', color: '#ffffff', weight: 'bold', size: 'md' }],
+      },
+      body: {
+        type: 'box', layout: 'vertical', paddingAll: '16px',
+        contents: bodyContents,
+      },
+      footer: {
+        type: 'box', layout: 'vertical', paddingAll: '12px',
+        contents: [{
+          type: 'button',
+          action: { type: 'uri', label: '🔗  ดูบิล / ชำระเงิน', uri: opts.portalUrl },
+          style: 'primary', color: '#0C1B4D', height: 'sm',
+        }],
+      },
+    },
+  }
+}
+
 async function handleSlipImage(
   lineUserId: string,
   messageId: string,
@@ -349,11 +406,14 @@ async function handleSlipImage(
 ) {
   const token = cfg.channelAccessToken
 
-  // ดึง tenant + settings พร้อมกัน
-  const [{ data: tenant }, { data: settings }] = await Promise.all([
-    supabase.from('tenants').select('id, full_name').eq('line_user_id', lineUserId).maybeSingle(),
+  // Fetch ALL tenants linked to this line_user_id (multi-room support) + settings in parallel
+  const [{ data: tenantsData }, { data: settings }] = await Promise.all([
+    supabase.from('tenants').select('id, full_name').eq('line_user_id', lineUserId),
     supabase.from('settings').select('slipok_api_key, slipok_branch_id').eq('id', 1).maybeSingle(),
   ])
+
+  const allTenantIds = (tenantsData ?? []).map((t) => t.id as string)
+  const tenant = tenantsData?.[0] ?? null
 
   if (!tenant) {
     await reply(replyToken, token, [{
@@ -368,11 +428,11 @@ async function handleSlipImage(
     return
   }
 
-  // ดึงทุกห้องที่ผู้เช่ากำลังเช่าอยู่ (รองรับผู้เช่าหลายห้อง)
+  // ดึงทุกห้องที่ผู้เช่ากำลังเช่าอยู่ (รองรับผู้เช่าหลายห้องหลาย tenant_id)
   const { data: activeContracts } = await supabase
     .from('contracts')
     .select('rooms(room_number)')
-    .eq('tenant_id', tenant.id)
+    .in('tenant_id', allTenantIds)
     .eq('status', 'active')
 
   type RJ = { room_number: string }
@@ -518,11 +578,11 @@ async function handleSlipImage(
   const thDate = paidDate ? thaiDate(paidDate) : transDate
   const paidAt = paidDate?.toISOString() ?? new Date().toISOString()
 
-  // LINE slip auto-matching uses oldest outstanding remaining balance first to avoid applying old rent payments to the newest bill.
-  const { data: bills } = await supabase
+  // Fetch outstanding bills across ALL tenant_ids linked to this line_user_id, oldest first
+  const { data: rawBills } = await supabase
     .from('bills')
-    .select('id, total_amount, billing_month, due_date, status, rooms(room_number), payments(amount)')
-    .eq('tenant_id', tenant.id)
+    .select('id, tenant_id, total_amount, billing_month, due_date, status, rooms(room_number), payments(amount)')
+    .in('tenant_id', allTenantIds)
     .in('status', ['pending', 'overdue'])
     .order('due_date', { ascending: true })
     .order('billing_month', { ascending: true })
@@ -531,156 +591,146 @@ async function handleSlipImage(
   type PaymentJoin = { amount: number | string }
   type BillCandidate = {
     id: string
+    tenant_id: string
     total_amount: number | string
     billing_month: string
     due_date: string | null
-    status: 'pending' | 'overdue' | string
+    status: string
     rooms: RJ | null
     payments: PaymentJoin[] | null
   }
 
-  const outstandingBills = ((bills ?? []) as unknown as BillCandidate[])
+  const outstandingBills = ((rawBills ?? []) as unknown as BillCandidate[])
     .map((bill) => {
-      const paid = (bill.payments ?? []).reduce((sum, payment) => sum + Number(payment.amount), 0)
-      return {
-        ...bill,
-        paid,
-        remainingAmount: Math.max(0, Number(bill.total_amount) - paid),
-      }
+      const paid = (bill.payments ?? []).reduce((s, p) => s + Number(p.amount), 0)
+      return { ...bill, paid, remainingAmount: Math.max(0, Number(bill.total_amount) - paid) }
     })
-    .filter((bill) => bill.remainingAmount >= 1)
+    .filter((b) => b.remainingAmount >= 1)
     .sort((a, b) => billSortKey(a).localeCompare(billSortKey(b)))
 
-  const matchedBills = outstandingBills.filter((bill) => Math.abs(bill.remainingAmount - amount) < 1)
-  const matchedRoomNumbers = new Set(
-    matchedBills
-      .map((bill) => (bill.rooms as unknown as RJ | null)?.room_number)
-      .filter((n): n is string => Boolean(n))
-  )
-
   const reviewLink = cfg.appUrl ? `\n🔗 ${cfg.appUrl}/payment-reviews` : ''
+  const totalOutstanding = outstandingBills.reduce((s, b) => s + b.remainingAmount, 0)
 
-  if (matchedBills.length > 1 && matchedRoomNumbers.size > 1) {
-    const candidates = matchedBills.map((bill) => {
-      const billRoom = (bill.rooms as unknown as RJ | null)?.room_number ?? '-'
-      return { room: billRoom, month: bill.billing_month, remaining: bill.remainingAmount }
+  // Helper: insert payments for a list of bills (oldest first), split by remaining
+  // Only the first bill gets slip_ref to preserve dedup integrity
+  type PaidEntry = { roomNumber: string; billingMonth: string; amount: number }
+  const payBills = async (
+    billsToPay: typeof outstandingBills,
+    note: string
+  ): Promise<{ ok: boolean; paidBills: PaidEntry[] }> => {
+    let remainder = amount
+    const paidBills: PaidEntry[] = []
+    let firstSlipRef = true
+    for (const bill of billsToPay) {
+      if (remainder < 1) break
+      const toPay = Math.min(bill.remainingAmount, remainder)
+      const { error } = await supabase.from('payments').insert({
+        bill_id:        bill.id,
+        amount:         toPay,
+        payment_method: 'transfer',
+        slip_url:       slipUrl,
+        slip_ref:       firstSlipRef ? slipRef : null,
+        note:           `สลิปจาก LINE${senderName ? ` (${senderName})` : ''}${note}`,
+        paid_at:        paidAt,
+      })
+      if (error) return { ok: false, paidBills }
+      firstSlipRef = false
+      await supabase.from('bills').update({ status: 'paid' }).eq('id', bill.id)
+      paidBills.push({
+        roomNumber:   (bill.rooms as unknown as RJ | null)?.room_number ?? '?',
+        billingMonth: bill.billing_month,
+        amount:       toPay,
+      })
+      remainder -= toPay
+    }
+    return { ok: true, paidBills }
+  }
+
+  // ── Rule 1: unique single-bill exact match ─────────────────────────────────
+  const singleMatches = outstandingBills.filter((b) => Math.abs(b.remainingAmount - amount) < 1)
+
+  if (singleMatches.length === 1) {
+    const bill    = singleMatches[0]
+    const billRoom = (bill.rooms as unknown as RJ | null)?.room_number ?? '—'
+    const { error: payErr } = await supabase.from('payments').insert({
+      bill_id: bill.id, amount, payment_method: 'transfer',
+      slip_url: slipUrl, slip_ref: slipRef,
+      note: `สลิปจาก LINE${senderName ? ` (${senderName})` : ''}`,
+      paid_at: paidAt,
     })
+    if (payErr) {
+      await reply(replyToken, token, [{ type: 'text', text: '⚠️ ระบบบันทึกการชำระไม่สำเร็จ กรุณาติดต่อเจ้าของหอครับ' }])
+      await notifyOwner(cfg, `⚠️ Worker error: บันทึก payment ไม่สำเร็จ\n🏠 ห้อง ${billRoom}\nError: ${payErr.message}`)
+      return
+    }
+    const { data: allPmts } = await supabase.from('payments').select('amount').eq('bill_id', bill.id)
+    const totalPaid = (allPmts ?? []).reduce((s, p) => s + Number(p.amount), 0)
+    const remaining = Math.max(0, Number(bill.total_amount) - totalPaid)
+    const fullyPaid = remaining < 1
+    const nextStatus = fullyPaid ? 'paid' : isPastDue(bill.due_date) ? 'overdue' : bill.status
+    if (nextStatus !== bill.status) await supabase.from('bills').update({ status: nextStatus }).eq('id', bill.id)
+    const portalUrl = buildBillPortalUrl(bill.id, cfg.liffId, cfg.appUrl)
+    await reply(replyToken, token, [buildPaymentFlex({ fullyPaid, roomNumber: billRoom, billingMonth: bill.billing_month, paidAmount: totalPaid, remaining, ref: slipRef, portalUrl })])
+    if (fullyPaid) {
+      await notifyOwner(cfg, `✅ ชำระครบ! ห้อง ${billRoom} — ${tenant.full_name}\n💰 ${fmt(amount)} บาท\n🔢 Ref: ${slipRef ?? '-'}\n📅 ${thDate} ${transTime}`)
+    } else {
+      await notifyOwner(cfg, `⚠️ รับชำระบางส่วน ห้อง ${billRoom} — ${tenant.full_name}\n💰 ค้างเหลือ: ${fmt(remaining)} บาท\n🔢 Ref: ${slipRef ?? '-'}`)
+    }
+    return
+  }
+
+  // ── Rule 2: total of ALL outstanding bills for this line_user_id ───────────
+  if (outstandingBills.length >= 1 && Math.abs(totalOutstanding - amount) < 1) {
+    const { ok, paidBills } = await payBills(outstandingBills, ' (รวมยอดทุกห้อง)')
+    if (ok) {
+      const portalUrl = buildBillPortalUrl(outstandingBills[0].id, cfg.liffId, cfg.appUrl)
+      await reply(replyToken, token, [buildMultiBillPaymentFlex({ tenantName: tenant.full_name, paidBills, totalPaid: amount, ref: slipRef, portalUrl })])
+      const roomList = paidBills.map((b) => `ห้อง ${b.roomNumber}`).join(', ')
+      await notifyOwner(cfg, `✅ ชำระรวมทุกห้อง! ${tenant.full_name}\n${roomList}\n💰 ${fmt(amount)} บาท\n🔢 Ref: ${slipRef ?? '-'}\n📅 ${thDate} ${transTime}`)
+      return
+    }
+  }
+
+  // ── Rule 3: unique room-total match (all outstanding of exactly one room) ──
+  const byRoom = new Map<string, typeof outstandingBills>()
+  for (const b of outstandingBills) {
+    const rn = (b.rooms as unknown as RJ | null)?.room_number ?? '?'
+    if (!byRoom.has(rn)) byRoom.set(rn, [])
+    byRoom.get(rn)!.push(b)
+  }
+  const roomTotalMatches: { rn: string; bills: typeof outstandingBills }[] = []
+  for (const [rn, roomBills] of byRoom) {
+    const roomTotal = roomBills.reduce((s, b) => s + b.remainingAmount, 0)
+    if (Math.abs(roomTotal - amount) < 1) roomTotalMatches.push({ rn, bills: roomBills })
+  }
+
+  if (roomTotalMatches.length === 1) {
+    const { rn, bills: roomBills } = roomTotalMatches[0]
+    const { ok, paidBills } = await payBills(roomBills, ` (รวมยอดห้อง ${rn})`)
+    if (ok) {
+      const portalUrl = buildBillPortalUrl(roomBills[0].id, cfg.liffId, cfg.appUrl)
+      await reply(replyToken, token, [buildMultiBillPaymentFlex({ tenantName: tenant.full_name, paidBills, totalPaid: amount, ref: slipRef, portalUrl })])
+      await notifyOwner(cfg, `✅ ชำระรวมห้อง ${rn}! ${tenant.full_name}\n💰 ${fmt(amount)} บาท\n🔢 Ref: ${slipRef ?? '-'}\n📅 ${thDate} ${transTime}`)
+      return
+    }
+  }
+
+  // ── Rule 4: ambiguous (amount matches multiple bills or multiple room-totals) ─
+  const isAmbiguous = singleMatches.length > 1 || roomTotalMatches.length > 1
+  if (isAmbiguous) {
+    const candidates = (singleMatches.length > 1 ? singleMatches : roomTotalMatches.flatMap((m) => m.bills))
+      .map((b) => ({ room: (b.rooms as unknown as RJ | null)?.room_number ?? '-', month: b.billing_month, remaining: b.remainingAmount }))
     await reply(replyToken, token, [{ type: 'text', text: RECEIVED_REPLY }])
     const candidateText = candidates.map((c) => `- ห้อง ${c.room} / ${thaiMonth(c.month)} / ค้าง ${fmt(c.remaining)} บาท`).join('\n')
-    await notifyOwner(cfg, `🧾 ตรวจสลิปสำเร็จ แต่พบบิลที่อาจตรงกันหลายรายการ\n🏠 ${tenant.full_name}\n💰 ${fmt(amount)} บาท\n🔢 Ref: ${slipRef ?? '-'}\n\n${candidateText}${reviewLink}`)
+    await notifyOwner(cfg, `🧾 ตรวจสลิปสำเร็จ แต่ยอดตรงกับหลายบิล\n🏠 ${tenant.full_name}\n💰 ${fmt(amount)} บาท\n🔢 Ref: ${slipRef ?? '-'}\n\n${candidateText}${reviewLink}`)
     await savePendingSlip(supabase, { tenantId: tenant.id, lineUserId, slipUrl, amount, paidAt, slipRef, senderName, slipokStatus: 'ambiguous', matchCandidates: candidates })
     return
   }
 
-  const matchingBill = matchedBills[0]
-
-  // เมื่อ match บิลได้ ใช้ห้องของบิลนั้นเป็นห้องที่แสดง (แม่นยำกว่าการรวมทุกห้อง)
-  if (matchingBill) {
-    const matchedRoom = matchingBill.rooms as unknown as RJ | null
-    if (matchedRoom?.room_number) roomNumber = matchedRoom.room_number
-  }
-
-  if (!matchingBill) {
-    // Auto-pay when slip amount = total of all outstanding bills (oldest first)
-    const totalOutstanding = outstandingBills.reduce((s, b) => s + b.remainingAmount, 0)
-    if (outstandingBills.length >= 2 && Math.abs(totalOutstanding - amount) < 1) {
-      let remaining   = amount
-      const paidRooms: string[] = []
-      let autoPayErr  = false
-
-      for (let idx = 0; idx < outstandingBills.length; idx++) {
-        const bill  = outstandingBills[idx]
-        if (remaining < 1) break
-        const toPay = Math.min(bill.remainingAmount, remaining)
-        const { error: payErr } = await supabase.from('payments').insert({
-          bill_id:        bill.id,
-          amount:         toPay,
-          payment_method: 'transfer',
-          slip_url:       slipUrl,
-          slip_ref:       idx === 0 ? slipRef : null,
-          note:           `สลิปจาก LINE${senderName ? ` (${senderName})` : ''} (รวมยอดทุกห้อง)`,
-          paid_at:        paidAt,
-        })
-        if (payErr) { autoPayErr = true; break }
-        await supabase.from('bills').update({ status: 'paid' }).eq('id', bill.id)
-        paidRooms.push(`ห้อง ${(bill.rooms as unknown as RJ | null)?.room_number ?? '?'}`)
-        remaining -= toPay
-      }
-
-      if (!autoPayErr) {
-        const portalUrl = buildBillPortalUrl(outstandingBills[0].id, cfg.liffId, cfg.appUrl)
-        await reply(replyToken, token, [buildPaymentFlex({
-          fullyPaid: true,
-          roomNumber: paidRooms.join(', '),
-          billingMonth: outstandingBills[0].billing_month as string,
-          paidAmount: amount,
-          remaining: 0,
-          ref: slipRef,
-          portalUrl,
-        })])
-        await notifyOwner(cfg, `✅ ชำระรวมหลายบิล! ${tenant.full_name}\n${paidRooms.join(', ')}\n💰 ${fmt(amount)} บาท\n🔢 Ref: ${slipRef ?? '-'}\n📅 ${thDate} ${transTime}`)
-        return
-      }
-    }
-
-    await reply(replyToken, token, [{ type: 'text', text: RECEIVED_REPLY }])
-    await notifyOwner(cfg, `🧾 ตรวจสลิปสำเร็จ แต่ไม่พบบิลที่ตรงยอด\n🏠 ห้อง ${roomNumber} — ${tenant.full_name}\n💰 ${fmt(amount)} บาท\n📅 ${thDate} ${transTime}\n${senderName ? `ผู้โอน: ${senderName}\n` : ''}🔢 Ref: ${slipRef ?? '-'}${reviewLink}`)
-    await savePendingSlip(supabase, { tenantId: tenant.id, lineUserId, slipUrl, amount, paidAt, slipRef, senderName, slipokStatus: 'no_match' })
-    return
-  }
-
-  // Record payment
-  const { error: payErr } = await supabase.from('payments').insert({
-    bill_id: matchingBill.id,
-    amount,
-    payment_method: 'transfer',
-    slip_url: slipUrl,
-    slip_ref: slipRef,
-    note: `สลิปจาก LINE${senderName ? ` (${senderName})` : ''}`,
-    paid_at: paidAt,
-  })
-
-  if (payErr) {
-    await reply(replyToken, token, [{ type: 'text', text: '📨 ได้รับรูปสลิปแล้วครับ\n\n⚠️ ระบบตรวจสอบอัตโนมัติไม่สำเร็จ\nกรุณารอเจ้าของหอตรวจสอบ หรือส่งรูปสลิปที่ชัดเจนอีกครั้งครับ' }])
-    await notifyOwner(cfg, `⚠️ Worker error: บันทึก payment ไม่สำเร็จ\n🏠 ห้อง ${roomNumber}\nError: ${payErr.message}`)
-    return
-  }
-
-  // Check total paid
-  const { data: allPayments } = await supabase
-    .from('payments')
-    .select('amount')
-    .eq('bill_id', matchingBill.id)
-
-  const totalPaid = (allPayments ?? []).reduce((s, p) => s + Number(p.amount), 0)
-  const totalBill = Number(matchingBill.total_amount)
-  const remaining = Math.max(0, totalBill - totalPaid)
-  const fullyPaid = remaining < 1
-  const nextStatus = fullyPaid ? 'paid' : isPastDue(matchingBill.due_date) ? 'overdue' : matchingBill.status
-
-  if (nextStatus !== matchingBill.status) {
-    await supabase.from('bills').update({ status: nextStatus }).eq('id', matchingBill.id)
-  }
-
-  const portalUrl = buildBillPortalUrl(matchingBill.id, cfg.liffId, cfg.appUrl)
-
-  await reply(replyToken, token, [
-    buildPaymentFlex({
-      fullyPaid,
-      roomNumber,
-      billingMonth: matchingBill.billing_month as string,
-      paidAmount: totalPaid,
-      remaining,
-      ref: slipRef,
-      portalUrl,
-    }),
-  ])
-
-  if (fullyPaid) {
-    await notifyOwner(cfg, `✅ สลิปถูกต้อง! อัปเดตสถานะแล้วครับ\n🏠 ห้อง ${roomNumber} — ${tenant.full_name}\n💰 ${fmt(amount)} บาท\n🔢 Ref: ${slipRef ?? '-'}\n📅 ${thDate} ${transTime}`)
-  } else {
-    await notifyOwner(cfg, `⚠️ รับชำระบางส่วนครับ\n🏠 ห้อง ${roomNumber} — ${tenant.full_name}\n💰 ยอดค้างเหลือ: ${fmt(remaining)} บาท\n🔢 Ref: ${slipRef ?? '-'}`)
-  }
+  // ── Rule 5: no match → pending_slips ──────────────────────────────────────
+  await reply(replyToken, token, [{ type: 'text', text: RECEIVED_REPLY }])
+  await notifyOwner(cfg, `🧾 ตรวจสลิปสำเร็จ แต่ไม่พบบิลที่ตรงยอด\n🏠 ห้อง ${roomNumber} — ${tenant.full_name}\n💰 ${fmt(amount)} บาท\n📅 ${thDate} ${transTime}\n${senderName ? `ผู้โอน: ${senderName}\n` : ''}🔢 Ref: ${slipRef ?? '-'}${reviewLink}`)
+  await savePendingSlip(supabase, { tenantId: tenant.id, lineUserId, slipUrl, amount, paidAt, slipRef, senderName, slipokStatus: 'no_match' })
 }
 
 // ── Route handlers ───────────────────────────────────────────
