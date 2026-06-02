@@ -37,7 +37,7 @@ export default async function PaymentHistoryPage({
   const query = supabase
     .from('payments')
     .select(`
-      id, amount, payment_method, slip_url, slip_ref, note, paid_at,
+      id, amount, payment_method, slip_url, slip_ref, note, paid_at, receipt_no,
       bills (
         id, billing_month, total_amount,
         tenants ( id, full_name ),
@@ -196,6 +196,9 @@ export default async function PaymentHistoryPage({
                           <MethodBadge method={p.payment_method ?? 'transfer'} />
                         </div>
                         <p className="text-xs text-slate-400 mt-0.5">{dateFmt(p.paid_at as string)}</p>
+                        {(p as { receipt_no?: string | null }).receipt_no && (
+                          <p className="text-[11px] font-mono text-slate-500 mt-0.5">{(p as { receipt_no?: string | null }).receipt_no}</p>
+                        )}
                         {p.slip_ref && (
                           <p className="text-xs text-slate-400 font-mono mt-0.5">Ref: {p.slip_ref}</p>
                         )}

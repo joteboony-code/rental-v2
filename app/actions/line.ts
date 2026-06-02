@@ -373,6 +373,16 @@ export async function sendPaymentReceiptNotification(
 
   if (!tenant?.line_user_id) return { success: false, message: 'ผู้เช่าไม่มี LINE User ID' }
 
+  // ดึงเลขใบเสร็จล่าสุดของบิลนี้
+  const { data: lastPayment } = await supabase
+    .from('payments')
+    .select('receipt_no')
+    .eq('bill_id', billId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .single()
+  const receiptNo = (lastPayment as { receipt_no?: string | null } | null)?.receipt_no ?? null
+
   const lineConfig = await getLineMessagingConfig()
   if (!lineConfig) return { success: false, message: 'ยังไม่ได้ตั้งค่า LINE' }
 
@@ -384,6 +394,13 @@ export async function sendPaymentReceiptNotification(
 
   const headerText  = fullyPaid ? '✅ ชำระค่าเช่าครบแล้วครับ!' : '💳 รับชำระบางส่วนแล้วครับ'
   const headerColor = fullyPaid ? '#16A34A' : '#1D4ED8'
+
+  const receiptRow = receiptNo ? [
+    { type: 'box', layout: 'horizontal', contents: [
+      { type: 'text', text: '🧾 ใบเสร็จ', size: 'sm', color: '#64748B', flex: 1 },
+      { type: 'text', text: receiptNo, size: 'sm', color: '#0F172A', align: 'end', weight: 'bold' },
+    ]},
+  ] : []
 
   const flexMsg = {
     type: 'flex',
@@ -411,6 +428,7 @@ export async function sendPaymentReceiptNotification(
             { type: 'text', text: month,       size: 'sm', color: '#0F172A', align: 'end', weight: 'bold' },
           ]},
           { type: 'separator', color: '#E2E8F0' },
+          ...receiptRow,
           { type: 'box', layout: 'horizontal', contents: [
             { type: 'text', text: fullyPaid ? '💰 ชำระแล้ว' : '💰 รับมาแล้ว', size: 'sm', color: '#64748B', flex: 1 },
             { type: 'text', text: `${fmt(totalPaid)} บาท`, size: 'sm', color: headerColor, align: 'end', weight: 'bold' },

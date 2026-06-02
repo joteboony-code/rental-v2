@@ -251,6 +251,9 @@ export default async function BillDetailPage({
                           {methodLabel[p.payment_method] ?? p.payment_method}
                         </span>
                       </div>
+                      {p.receipt_no && (
+                        <p className="text-[11px] font-mono text-slate-500 mt-0.5">{p.receipt_no}</p>
+                      )}
                       <p className="text-xs text-slate-400 mt-0.5">
                         {new Date(p.paid_at).toLocaleString('th-TH', {
                           year: 'numeric', month: 'short', day: 'numeric',
