@@ -158,6 +158,244 @@ function billRow(label: string, amount: number, color = '#334155'): object {
   }
 }
 
+// ── Types and helpers for multi-room combined statements ──────────────────────
+
+type RoomStatement = {
+  billId: string
+  roomNumber: string
+  floor: number | null
+  billingMonth: string
+  dueDate: string
+  rentAmt: number
+  waterAmt: number
+  elecAmt: number
+  wifiAmt: number
+  trashAmt: number
+  otherAmt: number
+  otherNote: string | null
+  currentTotal: number
+  meterRecordedAt: string | null
+  overdueBills: { billId: string; billingMonth: string; remaining: number }[]
+  overdueTotal: number
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function fetchRoomStatements(supabase: any, tenantId: string): Promise<{
+  rooms: RoomStatement[]
+  grandTotal: number
+  earliestDueDate: string
+}> {
+  const { data: rawBills } = await supabase
+    .from('bills')
+    .select(`
+      id, billing_month, due_date,
+      rent_amount, water_amount, electricity_amount, wifi_amount, trash_amount, other_amount, other_note,
+      total_amount,
+      rooms ( room_number, floor ),
+      meter_readings ( created_at ),
+      payments ( amount )
+    `)
+    .eq('tenant_id', tenantId)
+    .in('status', ['pending', 'overdue'])
+    .order('billing_month', { ascending: false })
+
+  type PayJ = { amount: number }
+  type BillFull = {
+    id: string; billing_month: string; due_date: string
+    rent_amount: number; water_amount: number; electricity_amount: number
+    wifi_amount: number; trash_amount: number; other_amount: number; other_note: string | null
+    total_amount: number
+    rooms: { room_number: string; floor: number | null } | null
+    meter_readings: { created_at: string } | null
+    payments: PayJ[] | null
+  }
+
+  const allBills = (rawBills ?? []) as unknown as BillFull[]
+
+  // Group by room; bills already sorted newest → oldest
+  const byRoom = new Map<string, BillFull[]>()
+  for (const b of allBills) {
+    const rn = b.rooms?.room_number ?? '?'
+    if (!byRoom.has(rn)) byRoom.set(rn, [])
+    byRoom.get(rn)!.push(b)
+  }
+
+  const rooms: RoomStatement[] = []
+  for (const [, roomBills] of byRoom) {
+    const main  = roomBills[0]
+    const older = roomBills.slice(1)
+
+    const overdueBills = older
+      .map((b) => {
+        const paid      = (b.payments ?? []).reduce((s, p) => s + Number(p.amount), 0)
+        const remaining = Math.max(0, Number(b.total_amount) - paid)
+        return { billId: b.id, billingMonth: b.billing_month, remaining }
+      })
+      .filter((o) => o.remaining >= 1)
+
+    rooms.push({
+      billId:      main.id,
+      roomNumber:  main.rooms?.room_number ?? '?',
+      floor:       main.rooms?.floor ?? null,
+      billingMonth: main.billing_month,
+      dueDate:     main.due_date,
+      rentAmt:     Number(main.rent_amount),
+      waterAmt:    Number(main.water_amount),
+      elecAmt:     Number(main.electricity_amount),
+      wifiAmt:     Number(main.wifi_amount),
+      trashAmt:    Number(main.trash_amount),
+      otherAmt:    Number(main.other_amount),
+      otherNote:   main.other_note,
+      currentTotal: Number(main.total_amount),
+      meterRecordedAt: main.meter_readings?.created_at ?? null,
+      overdueBills,
+      overdueTotal: overdueBills.reduce((s, o) => s + o.remaining, 0),
+    })
+  }
+
+  rooms.sort((a, b) => {
+    const na = parseInt(a.roomNumber) || 0
+    const nb = parseInt(b.roomNumber) || 0
+    return na - nb || a.roomNumber.localeCompare(b.roomNumber)
+  })
+
+  const grandTotal      = rooms.reduce((s, r) => s + r.currentTotal + r.overdueTotal, 0)
+  const dueDates        = rooms.map((r) => r.dueDate).filter(Boolean).sort()
+  const earliestDueDate = dueDates[0] ?? new Date().toISOString().slice(0, 10)
+
+  return { rooms, grandTotal, earliestDueDate }
+}
+
+function buildCombinedFlexBubble(data: {
+  tenantName:      string
+  rooms:           RoomStatement[]
+  grandTotal:      number
+  earliestDueDate: string
+  portalUrl:       string
+}): object {
+  const body: object[] = []
+
+  for (let i = 0; i < data.rooms.length; i++) {
+    const r = data.rooms[i]
+    if (i > 0) body.push({ type: 'separator', margin: 'xl', color: '#CBD5E1' })
+
+    // Room header pill
+    body.push({
+      type: 'box', layout: 'vertical', spacing: 'none',
+      backgroundColor: '#F1F5F9', cornerRadius: '8px',
+      paddingStart: '12px', paddingEnd: '12px', paddingTop: '8px', paddingBottom: '8px',
+      contents: [{
+        type: 'text',
+        text: `🏠 ห้อง ${r.roomNumber}${r.floor ? ` ชั้น ${r.floor}` : ''} · แถว ${roomRow(r.roomNumber)}`,
+        weight: 'bold', size: 'sm', color: '#0F172A',
+      }],
+    })
+    body.push({
+      type: 'box', layout: 'horizontal', margin: 'sm',
+      contents: [
+        { type: 'text', text: 'รอบบิล', size: 'xs', color: '#94A3B8', flex: 1 },
+        { type: 'text', text: thaiMonth(r.billingMonth), size: 'xs', color: '#64748B', align: 'end' },
+      ],
+    })
+    // Line items
+    body.push(billRow('ค่าเช่า', r.rentAmt))
+    body.push(billRow('💧 ค่าน้ำ',  r.waterAmt, '#2563EB'))
+    body.push(billRow('⚡ ค่าไฟ',   r.elecAmt,  '#D97706'))
+    if (r.wifiAmt  > 0) body.push(billRow('📶 ค่า WiFi', r.wifiAmt, '#4F46E5'))
+    body.push(billRow('🗑️ ค่าขยะ', r.trashAmt, '#64748B'))
+    if (r.otherAmt > 0) body.push(billRow(`📦 ${r.otherNote || 'ค่าอื่น ๆ'}`, r.otherAmt))
+    // Room subtotal
+    body.push({ type: 'separator', margin: 'md', color: '#E2E8F0' })
+    body.push({
+      type: 'box', layout: 'horizontal', margin: 'md',
+      contents: [
+        { type: 'text', text: `รวมห้อง ${r.roomNumber}`, weight: 'bold', size: 'sm', color: '#0F172A', flex: 1 },
+        { type: 'text', text: '฿' + fmt(r.currentTotal), weight: 'bold', size: 'md', color: '#0F172A', align: 'end' },
+      ],
+    })
+    // Overdue section
+    if (r.overdueBills.length > 0) {
+      const odRows: object[] = [
+        { type: 'text', text: `⚠️ ยอดค้างเก่า ห้อง ${r.roomNumber}`, size: 'xs', color: '#DC2626', weight: 'bold' },
+      ]
+      for (const od of r.overdueBills) {
+        odRows.push({
+          type: 'box', layout: 'horizontal', margin: 'sm',
+          contents: [
+            { type: 'text', text: `ค้างเดือน ${thaiMonth(od.billingMonth)}`, size: 'xs', color: '#64748B', flex: 1 },
+            { type: 'text', text: '฿' + fmt(od.remaining), size: 'xs', color: '#DC2626', align: 'end', weight: 'bold' },
+          ],
+        })
+      }
+      odRows.push({ type: 'separator', margin: 'sm', color: '#FECACA' })
+      odRows.push({
+        type: 'box', layout: 'horizontal', margin: 'sm',
+        contents: [
+          { type: 'text', text: 'รวมค้างห้องนี้', size: 'xs', color: '#DC2626', weight: 'bold', flex: 1 },
+          { type: 'text', text: '฿' + fmt(r.overdueTotal), size: 'sm', color: '#DC2626', align: 'end', weight: 'bold' },
+        ],
+      })
+      body.push({
+        type: 'box', layout: 'vertical', margin: 'sm',
+        backgroundColor: '#FEF2F2', cornerRadius: '8px', paddingAll: '10px',
+        contents: odRows,
+      })
+    }
+  }
+
+  // Grand total
+  body.push({ type: 'separator', margin: 'xl', color: '#94A3B8' })
+  body.push({
+    type: 'box', layout: 'horizontal', margin: 'md',
+    contents: [
+      { type: 'text', text: 'ยอดรวมทั้งหมด', weight: 'bold', size: 'md', color: '#0F172A', flex: 1 },
+      { type: 'text', text: '฿' + fmt(data.grandTotal), weight: 'bold', size: 'xl', color: '#0F172A', align: 'end' },
+    ],
+  })
+  body.push({
+    type: 'box', layout: 'horizontal', margin: 'sm',
+    contents: [
+      { type: 'text', text: 'ครบกำหนด', size: 'xs', color: '#94A3B8', flex: 1 },
+      {
+        type: 'text',
+        text: new Date(data.earliestDueDate).toLocaleDateString('th-TH', {
+          day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Bangkok',
+        }),
+        size: 'xs', color: '#EF4444', align: 'end',
+      },
+    ],
+  })
+
+  return {
+    type: 'flex',
+    altText: `แจ้งค่าเช่า ${data.tenantName} รวม ${data.rooms.length} ห้อง ฿${fmt(data.grandTotal)}`,
+    contents: {
+      type: 'bubble',
+      size: 'giga',
+      header: {
+        type: 'box', layout: 'vertical', backgroundColor: '#0C1B4D', paddingAll: '20px',
+        contents: [
+          { type: 'text', text: 'แจ้งค่าเช่า', color: '#94A3B8', size: 'xs', weight: 'bold' },
+          { type: 'text', text: data.tenantName, color: '#FFFFFF', size: 'xl', weight: 'bold' },
+          { type: 'text', text: `${data.rooms.length} ห้อง · รวม ฿${fmt(data.grandTotal)}`, color: '#64748B', size: 'sm', margin: 'xs' },
+        ],
+      },
+      body: {
+        type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '20px',
+        contents: body,
+      },
+      footer: {
+        type: 'box', layout: 'vertical', paddingAll: '16px', backgroundColor: '#F8FAFC',
+        contents: [{
+          type: 'button',
+          action: { type: 'uri', label: '🔗 ดูบิล / ชำระเงิน', uri: data.portalUrl },
+          style: 'primary', color: '#0C1B4D', height: 'sm',
+        }],
+      },
+    },
+  }
+}
+
 // ── Main action ──────────────────────────────────────────────────────
 export async function sendLineBillNotification(
   billId: string,
@@ -195,6 +433,39 @@ export async function sendLineBillNotification(
   if (!lineConfig) {
     return { success: false, message: 'ยังไม่ได้ตั้งค่า LINE Channel Access Token ในหน้าตั้งค่า' }
   }
+
+  // ── Multi-room: send combined statement ──────────────────────────────────────
+  const { rooms: allRooms, grandTotal: allTotal, earliestDueDate } =
+    await fetchRoomStatements(supabase, bill.tenant_id as string)
+  if (allRooms.length >= 2) {
+    const combinedUrl = buildTenantPortalUrl(lineConfig.liffId, lineConfig.appUrl)
+    try {
+      if (mode === 'flex') {
+        await pushMessage(tenant.line_user_id, lineConfig.channelAccessToken, [
+          buildCombinedFlexBubble({ tenantName: tenant.full_name, rooms: allRooms, grandTotal: allTotal, earliestDueDate, portalUrl: combinedUrl }),
+        ])
+      } else {
+        const lines = [`📋 แจ้งค่าเช่า — ${tenant.full_name}  (${allRooms.length} ห้อง)`, '']
+        for (const r of allRooms) {
+          lines.push(`🏠 ห้อง ${r.roomNumber}${r.floor ? ` ชั้น ${r.floor}` : ''} — ${thaiMonth(r.billingMonth)}`)
+          lines.push(`   ค่าเช่า ฿${fmt(r.rentAmt)} · น้ำ ฿${fmt(r.waterAmt)} · ไฟ ฿${fmt(r.elecAmt)}`)
+          if (r.wifiAmt  > 0) lines.push(`   WiFi ฿${fmt(r.wifiAmt)}`)
+          lines.push(`   ขยะ ฿${fmt(r.trashAmt)}`)
+          if (r.otherAmt > 0) lines.push(`   ${r.otherNote || 'ค่าอื่น ๆ'} ฿${fmt(r.otherAmt)}`)
+          lines.push(`   รวม ฿${fmt(r.currentTotal)}`)
+          for (const od of r.overdueBills) lines.push(`   ⚠️ ค้าง ${thaiMonth(od.billingMonth)} ฿${fmt(od.remaining)}`)
+          lines.push('')
+        }
+        lines.push(`💰 ยอดรวมทั้งหมด ฿${fmt(allTotal)}`)
+        lines.push(`🔗 ${combinedUrl}`)
+        await pushMessage(tenant.line_user_id, lineConfig.channelAccessToken, [{ type: 'text', text: lines.join('\n') }])
+      }
+      return { success: true, message: `ส่ง LINE ${mode === 'flex' ? 'Flex' : 'ข้อความ'} รวม ${allRooms.length} ห้อง สำเร็จ` }
+    } catch (err) {
+      return { success: false, message: String(err) }
+    }
+  }
+  // ── end multi-room ───────────────────────────────────────────────────────────
 
   const month      = thaiMonth(bill.billing_month)
   const portalUrl  = buildBillPortalUrl(billId, lineConfig.liffId, lineConfig.appUrl)
@@ -671,7 +942,7 @@ export async function sendBulkLineBillNotification(
   const { data: bills } = await supabase
     .from('bills')
     .select(`
-      id,
+      id, tenant_id,
       rent_amount, water_amount, electricity_amount, wifi_amount, trash_amount, other_amount,
       total_amount, due_date, billing_month,
       rooms   ( room_number, floor ),
@@ -693,63 +964,100 @@ export async function sendBulkLineBillNotification(
   let sent = 0
   let failed = 0
 
+  type TenantJ = { full_name: string; line_user_id: string | null }
+  type RoomJ   = { room_number: string; floor: number | null }
+  type MeterJ  = { created_at: string } | null
+
+  // Group current-month bills by tenant so multi-room tenants get one combined message
+  const byTenant = new Map<string, (typeof bills)[number][]>()
   for (const bill of bills) {
-    type TenantJ = { full_name: string; line_user_id: string | null }
-    type RoomJ   = { room_number: string; floor: number | null }
-    type MeterJ  = { created_at: string } | null
-    const tenant    = bill.tenants as unknown as TenantJ | null
-    const room      = bill.rooms   as unknown as RoomJ   | null
-    const meter     = bill.meter_readings as unknown as MeterJ
+    const tid = bill.tenant_id as string
+    if (!byTenant.has(tid)) byTenant.set(tid, [])
+    byTenant.get(tid)!.push(bill)
+  }
+
+  for (const [tenantId, tenantBills] of byTenant) {
+    const firstBill  = tenantBills[0]
+    const tenant     = firstBill.tenants as unknown as TenantJ | null
     const lineUserId = tenant?.line_user_id
 
-    if (!lineUserId) { failed++; continue }
+    if (!lineUserId) { failed += tenantBills.length; continue }
 
-    const month      = thaiMonth(bill.billing_month as string)
-    const portalUrl  = buildBillPortalUrl(bill.id, lineConfig.liffId, lineConfig.appUrl)
-    const tenantPortalUrl = buildTenantPortalUrl(lineConfig.liffId, lineConfig.appUrl)
-    const roomNumber = room?.room_number ?? '—'
-    const floor      = room?.floor ?? null
+    // Fetch all outstanding bills to determine combined vs single
+    const { rooms: stmtRooms, grandTotal: stmtTotal, earliestDueDate } =
+      await fetchRoomStatements(supabase, tenantId)
 
-    try {
-      if (mode === 'text') {
-        const lines = [
-          `📋 แจ้งค่าเช่า — ห้อง ${roomNumber}${floor ? ` ชั้น ${floor}` : ''}`,
-          `เดือน: ${month}`,
-          ``,
-          `ค่าเช่า:  ฿${fmt(Number(bill.rent_amount))}`,
-        ]
-        lines.push(`ค่าน้ำ:   ฿${fmt(Number(bill.water_amount))}`)
-        lines.push(`ค่าไฟ:   ฿${fmt(Number(bill.electricity_amount))}`)
-        if (Number(bill.wifi_amount) > 0)         lines.push(`ค่า WiFi: ฿${fmt(Number(bill.wifi_amount))}`)
-        lines.push(`ค่าขยะ:  ฿${fmt(Number(bill.trash_amount))}`)
-        if (Number(bill.other_amount) > 0)        lines.push(`อื่นๆ:   ฿${fmt(Number(bill.other_amount))}`)
-        lines.push(``, `รวม: ฿${fmt(Number(bill.total_amount))}`)
-        lines.push(`ครบกำหนด: ${new Date(bill.due_date as string).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })}`)
-        lines.push(``, `🔗 ดูบิล: ${portalUrl}`)
-        lines.push(`🏠 ดูข้อมูลห้อง: ${tenantPortalUrl}`)
-        await pushMessage(lineUserId, lineConfig.channelAccessToken, [{ type: 'text', text: lines.join('\n') }])
-      } else {
-        const flexMsg = buildFlexBubble({
-          roomNumber,
-          floor,
-          tenantName:  tenant?.full_name ?? '—',
-          month,
-          dueDate:     bill.due_date as string,
-          rentAmt:     Number(bill.rent_amount),
-          waterAmt:    Number(bill.water_amount),
-          elecAmt:     Number(bill.electricity_amount),
-          wifiAmt:     Number(bill.wifi_amount),
-          trashAmt:    Number(bill.trash_amount),
-          totalAmt:    Number(bill.total_amount),
-          portalUrl,
-          tenantPortalUrl,
-          meterRecordedAt: meter?.created_at ?? null,
-        })
-        await pushMessage(lineUserId, lineConfig.channelAccessToken, [flexMsg])
+    if (mode === 'flex' && stmtRooms.length >= 2) {
+      // Multi-room → one combined Flex
+      const portalUrl = buildTenantPortalUrl(lineConfig.liffId, lineConfig.appUrl)
+      try {
+        await pushMessage(lineUserId, lineConfig.channelAccessToken, [
+          buildCombinedFlexBubble({
+            tenantName: tenant?.full_name ?? '—',
+            rooms: stmtRooms,
+            grandTotal: stmtTotal,
+            earliestDueDate,
+            portalUrl,
+          }),
+        ])
+        sent += tenantBills.length
+      } catch {
+        failed += tenantBills.length
       }
-      sent++
-    } catch {
-      failed++
+      continue
+    }
+
+    // Single room → existing per-bill behavior
+    for (const bill of tenantBills) {
+      const room       = bill.rooms         as unknown as RoomJ  | null
+      const meter      = bill.meter_readings as unknown as MeterJ
+      const month      = thaiMonth(bill.billing_month as string)
+      const portalUrl  = buildBillPortalUrl(bill.id, lineConfig.liffId, lineConfig.appUrl)
+      const tenantPortalUrl = buildTenantPortalUrl(lineConfig.liffId, lineConfig.appUrl)
+      const roomNumber = room?.room_number ?? '—'
+      const floor      = room?.floor ?? null
+
+      try {
+        if (mode === 'text') {
+          const lines = [
+            `📋 แจ้งค่าเช่า — ห้อง ${roomNumber}${floor ? ` ชั้น ${floor}` : ''}`,
+            `เดือน: ${month}`,
+            ``,
+            `ค่าเช่า:  ฿${fmt(Number(bill.rent_amount))}`,
+          ]
+          lines.push(`ค่าน้ำ:   ฿${fmt(Number(bill.water_amount))}`)
+          lines.push(`ค่าไฟ:   ฿${fmt(Number(bill.electricity_amount))}`)
+          if (Number(bill.wifi_amount)  > 0) lines.push(`ค่า WiFi: ฿${fmt(Number(bill.wifi_amount))}`)
+          lines.push(`ค่าขยะ:  ฿${fmt(Number(bill.trash_amount))}`)
+          if (Number(bill.other_amount) > 0) lines.push(`อื่นๆ:   ฿${fmt(Number(bill.other_amount))}`)
+          lines.push(``, `รวม: ฿${fmt(Number(bill.total_amount))}`)
+          lines.push(`ครบกำหนด: ${new Date(bill.due_date as string).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })}`)
+          lines.push(``, `🔗 ดูบิล: ${portalUrl}`)
+          lines.push(`🏠 ดูข้อมูลห้อง: ${tenantPortalUrl}`)
+          await pushMessage(lineUserId, lineConfig.channelAccessToken, [{ type: 'text', text: lines.join('\n') }])
+        } else {
+          const flexMsg = buildFlexBubble({
+            roomNumber,
+            floor,
+            tenantName:  tenant?.full_name ?? '—',
+            month,
+            dueDate:     bill.due_date as string,
+            rentAmt:     Number(bill.rent_amount),
+            waterAmt:    Number(bill.water_amount),
+            elecAmt:     Number(bill.electricity_amount),
+            wifiAmt:     Number(bill.wifi_amount),
+            trashAmt:    Number(bill.trash_amount),
+            totalAmt:    Number(bill.total_amount),
+            portalUrl,
+            tenantPortalUrl,
+            meterRecordedAt: meter?.created_at ?? null,
+          })
+          await pushMessage(lineUserId, lineConfig.channelAccessToken, [flexMsg])
+        }
+        sent++
+      } catch {
+        failed++
+      }
     }
   }
 

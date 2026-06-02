@@ -581,6 +581,48 @@ async function handleSlipImage(
   }
 
   if (!matchingBill) {
+    // Auto-pay when slip amount = total of all outstanding bills (oldest first)
+    const totalOutstanding = outstandingBills.reduce((s, b) => s + b.remainingAmount, 0)
+    if (outstandingBills.length >= 2 && Math.abs(totalOutstanding - amount) < 1) {
+      let remaining   = amount
+      const paidRooms: string[] = []
+      let autoPayErr  = false
+
+      for (let idx = 0; idx < outstandingBills.length; idx++) {
+        const bill  = outstandingBills[idx]
+        if (remaining < 1) break
+        const toPay = Math.min(bill.remainingAmount, remaining)
+        const { error: payErr } = await supabase.from('payments').insert({
+          bill_id:        bill.id,
+          amount:         toPay,
+          payment_method: 'transfer',
+          slip_url:       slipUrl,
+          slip_ref:       idx === 0 ? slipRef : null,
+          note:           `สลิปจาก LINE${senderName ? ` (${senderName})` : ''} (รวมยอดทุกห้อง)`,
+          paid_at:        paidAt,
+        })
+        if (payErr) { autoPayErr = true; break }
+        await supabase.from('bills').update({ status: 'paid' }).eq('id', bill.id)
+        paidRooms.push(`ห้อง ${(bill.rooms as unknown as RJ | null)?.room_number ?? '?'}`)
+        remaining -= toPay
+      }
+
+      if (!autoPayErr) {
+        const portalUrl = buildBillPortalUrl(outstandingBills[0].id, cfg.liffId, cfg.appUrl)
+        await reply(replyToken, token, [buildPaymentFlex({
+          fullyPaid: true,
+          roomNumber: paidRooms.join(', '),
+          billingMonth: outstandingBills[0].billing_month as string,
+          paidAmount: amount,
+          remaining: 0,
+          ref: slipRef,
+          portalUrl,
+        })])
+        await notifyOwner(cfg, `✅ ชำระรวมหลายบิล! ${tenant.full_name}\n${paidRooms.join(', ')}\n💰 ${fmt(amount)} บาท\n🔢 Ref: ${slipRef ?? '-'}\n📅 ${thDate} ${transTime}`)
+        return
+      }
+    }
+
     await reply(replyToken, token, [{ type: 'text', text: RECEIVED_REPLY }])
     await notifyOwner(cfg, `🧾 ตรวจสลิปสำเร็จ แต่ไม่พบบิลที่ตรงยอด\n🏠 ห้อง ${roomNumber} — ${tenant.full_name}\n💰 ${fmt(amount)} บาท\n📅 ${thDate} ${transTime}\n${senderName ? `ผู้โอน: ${senderName}\n` : ''}🔢 Ref: ${slipRef ?? '-'}${reviewLink}`)
     await savePendingSlip(supabase, { tenantId: tenant.id, lineUserId, slipUrl, amount, paidAt, slipRef, senderName, slipokStatus: 'no_match' })
