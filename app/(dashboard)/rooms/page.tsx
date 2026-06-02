@@ -219,9 +219,9 @@ function StatCard({ value, label, sub, color }: {
   }[color]
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3">
+    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-3 md:p-5 space-y-2 md:space-y-3">
       <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest">{label}</p>
-      <p className="text-4xl font-bold text-slate-950 tracking-tight leading-none">
+      <p className="text-2xl md:text-4xl font-bold text-slate-950 tracking-tight leading-none">
         {value}
         <span className="text-sm font-normal text-slate-400 ml-1">{sub}</span>
       </p>

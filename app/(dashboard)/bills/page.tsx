@@ -92,38 +92,40 @@ export default async function BillsPage({ searchParams }: Props) {
           <h1 className="text-2xl md:text-3xl font-bold text-slate-950 tracking-tight">บิล / ชำระเงิน</h1>
         </div>
         <div className="flex flex-col items-end gap-2">
-          <Suspense fallback={null}>
-            <LineQuotaBadge />
-          </Suspense>
-          <div className="flex gap-2 flex-wrap">
-          <Link href="/bills/payments"
-            className={buttonVariants({ variant: 'outline', size: 'sm' }) + ' rounded-xl gap-1.5 border-slate-200 text-slate-600 hover:bg-slate-50'}>
-            <Wallet className="size-3.5" /> ประวัติชำระ
-          </Link>
-          <Link href="/bills/history"
-            className={buttonVariants({ variant: 'outline', size: 'sm' }) + ' rounded-xl gap-1.5 border-slate-200 text-slate-600 hover:bg-slate-50'}>
-            <History className="size-3.5" /> ประวัติบิล
-          </Link>
-          <a href={`/bills/export?month=${currentMonth}`}
-            className={buttonVariants({ variant: 'outline', size: 'sm' }) + ' rounded-xl gap-1.5 border-slate-200 text-slate-600 hover:bg-slate-50'}>
-            <Download className="size-3.5" /> Export เดือน
-          </a>
-          <a href={`/bills/export?year=${yearStr}`}
-            className={buttonVariants({ variant: 'outline', size: 'sm' }) + ' rounded-xl gap-1.5 border-slate-200 text-slate-600 hover:bg-slate-50'}>
-            <Download className="size-3.5" /> Export ทั้งปี
-          </a>
-          <Link href={`/bills/meter?month=${currentMonth}`}
-            className={buttonVariants({ variant: 'default', size: 'sm' }) + ' rounded-xl gap-1.5 bg-slate-950 hover:bg-slate-800 text-white shadow-md shadow-slate-900/20'}>
-            <ClipboardList className="size-3.5" /> บันทึกมิเตอร์
-          </Link>
+          <div className="hidden md:block">
+            <Suspense fallback={null}>
+              <LineQuotaBadge />
+            </Suspense>
+          </div>
+          <div className="flex gap-2 flex-wrap justify-end">
+            <Link href="/bills/payments"
+              className={buttonVariants({ variant: 'outline', size: 'sm' }) + ' hidden md:inline-flex rounded-xl gap-1.5 border-slate-200 text-slate-600 hover:bg-slate-50'}>
+              <Wallet className="size-3.5" /> ประวัติชำระ
+            </Link>
+            <Link href="/bills/history"
+              className={buttonVariants({ variant: 'outline', size: 'sm' }) + ' hidden md:inline-flex rounded-xl gap-1.5 border-slate-200 text-slate-600 hover:bg-slate-50'}>
+              <History className="size-3.5" /> ประวัติบิล
+            </Link>
+            <a href={`/bills/export?month=${currentMonth}`}
+              className={buttonVariants({ variant: 'outline', size: 'sm' }) + ' hidden md:inline-flex rounded-xl gap-1.5 border-slate-200 text-slate-600 hover:bg-slate-50'}>
+              <Download className="size-3.5" /> Export เดือน
+            </a>
+            <a href={`/bills/export?year=${yearStr}`}
+              className={buttonVariants({ variant: 'outline', size: 'sm' }) + ' hidden md:inline-flex rounded-xl gap-1.5 border-slate-200 text-slate-600 hover:bg-slate-50'}>
+              <Download className="size-3.5" /> Export ทั้งปี
+            </a>
+            <Link href={`/bills/meter?month=${currentMonth}`}
+              className={buttonVariants({ variant: 'default', size: 'sm' }) + ' rounded-xl gap-1.5 bg-slate-950 hover:bg-slate-800 text-white shadow-md shadow-slate-900/20'}>
+              <ClipboardList className="size-3.5" /> บันทึกมิเตอร์
+            </Link>
           </div>
         </div>
       </div>
 
       {/* ── Billing month nav + action buttons ── */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         <BillingMonthNav currentMonth={currentMonth} />
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2">
           <SendRemindersButton
             billingMonth={billingMonth}
             isReminderDay={todayIsRemDay}

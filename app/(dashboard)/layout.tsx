@@ -57,7 +57,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           <GlobalSearch />
         </div>
         <MobileNav displayName={displayName} initials={initials} />
-        <main className="flex-1 overflow-auto">
+        <main className="flex-1 overflow-auto pb-6 md:pb-0">
           {children}
         </main>
       </div>
