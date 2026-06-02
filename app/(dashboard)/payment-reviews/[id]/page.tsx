@@ -21,6 +21,19 @@ const statusLabels: Record<string, { label: string; color: string; desc: string 
   download_error: { label: 'ดาวน์โหลดรูปไม่ได้', color: 'text-rose-700 bg-rose-50',      desc: 'ไม่สามารถดาวน์โหลดรูปสลิปจาก LINE ได้' },
 }
 
+const matchRuleLabels: Record<string, { label: string; color: string }> = {
+  unique_single_bill:    { label: 'unique_single_bill',    color: 'text-emerald-700 bg-emerald-50' },
+  unique_single_overpay: { label: 'unique_single_overpay', color: 'text-teal-700 bg-teal-50' },
+  total_all_outstanding: { label: 'total_all_outstanding', color: 'text-emerald-700 bg-emerald-50' },
+  total_all_overpay:     { label: 'total_all_overpay',     color: 'text-teal-700 bg-teal-50' },
+  single_room_total:     { label: 'single_room_total',     color: 'text-emerald-700 bg-emerald-50' },
+  single_room_overpay:   { label: 'single_room_overpay',   color: 'text-teal-700 bg-teal-50' },
+  ambiguous:             { label: 'ambiguous',             color: 'text-amber-700 bg-amber-50' },
+  overpaid:              { label: 'overpaid',              color: 'text-orange-700 bg-orange-50' },
+  no_match:              { label: 'no_match',              color: 'text-red-700 bg-red-50' },
+  manual_review:         { label: 'manual_review',         color: 'text-slate-600 bg-slate-100' },
+}
+
 export default async function ReviewDetailPage({
   params,
 }: {
@@ -91,8 +104,12 @@ export default async function ReviewDetailPage({
 
           {/* Slip info */}
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 space-y-3">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${st.color}`}>{st.label}</span>
+              {slip.match_rule && (() => {
+                const mr = matchRuleLabels[slip.match_rule] ?? { label: slip.match_rule, color: 'text-slate-600 bg-slate-100' }
+                return <span className={`px-2.5 py-1 rounded-full text-xs font-mono font-semibold ${mr.color}`}>{mr.label}</span>
+              })()}
             </div>
             {st.desc && <p className="text-xs text-slate-500">{st.desc}</p>}
             {slip.slipok_message && (

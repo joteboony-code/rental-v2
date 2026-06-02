@@ -37,7 +37,7 @@ export default async function PaymentHistoryPage({
   const query = supabase
     .from('payments')
     .select(`
-      id, amount, payment_method, slip_url, slip_ref, note, paid_at, receipt_no,
+      id, amount, payment_method, slip_url, slip_ref, note, paid_at, receipt_no, payment_group_id,
       bills (
         id, billing_month, total_amount,
         tenants ( id, full_name ),
@@ -88,6 +88,13 @@ export default async function PaymentHistoryPage({
     groups[m].push(p)
   }
   const groupEntries = Object.entries(groups).sort((a, b) => b[0].localeCompare(a[0]))
+
+  // Count how many filtered payments share each payment_group_id
+  const pgCounts = new Map<string, number>()
+  for (const p of filtered) {
+    const gid = (p as { payment_group_id?: string | null }).payment_group_id
+    if (gid) pgCounts.set(gid, (pgCounts.get(gid) ?? 0) + 1)
+  }
 
   return (
     <div className="p-5 md:p-8 space-y-6 max-w-4xl">
@@ -202,6 +209,12 @@ export default async function PaymentHistoryPage({
                         {p.slip_ref && (
                           <p className="text-xs text-slate-400 font-mono mt-0.5">Ref: {p.slip_ref}</p>
                         )}
+                        {(() => {
+                          const gid = (p as { payment_group_id?: string | null }).payment_group_id
+                          return gid && (pgCounts.get(gid) ?? 0) > 1
+                            ? <span className="inline-block text-[10px] font-semibold text-violet-600 bg-violet-50 px-1.5 py-0.5 rounded-md mt-0.5">สลิปเดียวกัน</span>
+                            : null
+                        })()}
                       </div>
 
                       {/* Amount + slip */}

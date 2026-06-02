@@ -21,6 +21,7 @@ export type PendingSlip = {
   slipok_code: number | null
   slipok_message: string | null
   match_candidates: unknown
+  match_rule: string | null
   status: 'pending' | 'approved' | 'rejected'
   admin_note: string | null
   created_at: string
