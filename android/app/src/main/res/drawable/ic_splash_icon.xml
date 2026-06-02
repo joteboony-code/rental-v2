@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- ไอคอน splash: บ้านสีขาวบนพื้นเขียว -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- หลังคา -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,22 L82,46 L26,46 Z" />
+
+    <!-- ตัวบ้าน -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M32,46 L76,46 L76,82 L32,82 Z" />
+
+    <!-- ประตู -->
+    <path
+        android:fillColor="#059669"
+        android:pathData="M46,82 L46,62 Q54,56 62,62 L62,82 Z" />
+
+    <!-- หน้าต่างซ้าย -->
+    <rect
+        android:fillColor="#059669"
+        android:left="36"
+        android:top="50"
+        android:right="46"
+        android:bottom="60" />
+
+    <!-- หน้าต่างขวา -->
+    <rect
+        android:fillColor="#059669"
+        android:left="62"
+        android:top="50"
+        android:right="72"
+        android:bottom="60" />
+
+    <!-- ปล่องไฟ -->
+    <rect
+        android:fillColor="#FFFFFF"
+        android:left="64"
+        android:top="28"
+        android:right="72"
+        android:bottom="46" />
+
+</vector>
