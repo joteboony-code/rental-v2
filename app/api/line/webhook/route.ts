@@ -682,7 +682,7 @@ export async function POST(req: NextRequest) {
       }
 
       if (event.message.type === 'text') {
-        await handleText(lineUserId, event.message.text ?? '', event.replyToken, cfg, supabase)
+        continue
       }
     } catch (error) {
       console.error('[webhook]', error)
