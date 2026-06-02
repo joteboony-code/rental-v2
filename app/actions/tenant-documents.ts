@@ -2,28 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
-
-export type DocumentType = 'id_card' | 'contract' | 'room_before' | 'deposit_proof' | 'other'
-
-export type TenantDocument = {
-  id: string
-  tenant_id: string | null
-  room_id: string | null
-  contract_id: string | null
-  document_type: DocumentType
-  file_url: string
-  file_name: string | null
-  uploaded_by: string | null
-  created_at: string
-}
-
-export const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
-  id_card:       'บัตรประชาชน',
-  contract:      'สัญญาเช่า',
-  room_before:   'รูปห้องก่อนเข้า',
-  deposit_proof: 'หลักฐานเงินประกัน',
-  other:         'เอกสารอื่น ๆ',
-}
+import { type DocumentType, type TenantDocument } from '@/lib/tenant-documents'
 
 export async function getTenantDocuments(tenantId: string): Promise<TenantDocument[]> {
   const supabase = await createClient()
