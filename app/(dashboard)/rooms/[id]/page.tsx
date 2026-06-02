@@ -176,12 +176,14 @@ export default async function RoomDetailPage({ params }: { params: Promise<{ id:
             )}
           </div>
 
-          {/* Past tenants — history */}
-          {pastContracts.length > 0 && (
-            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-                <Calendar className="size-3.5" /> ประวัติผู้เช่า ({pastContracts.length} ราย)
-              </p>
+          {/* Past tenants — history (แสดงเสมอ แม้ยังไม่มีประวัติ) */}
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+              <Calendar className="size-3.5" /> ประวัติผู้เช่า {pastContracts.length > 0 && `(${pastContracts.length} ราย)`}
+            </p>
+            {pastContracts.length === 0 ? (
+              <p className="text-sm text-slate-300 text-center py-4">ยังไม่มีประวัติผู้เช่าเก่า</p>
+            ) : (
               <div className="space-y-3">
                 {pastContracts.map((c) => {
                   const statusCfg = c.status === 'terminated'
@@ -247,8 +249,8 @@ export default async function RoomDetailPage({ params }: { params: Promise<{ id:
                   )
                 })}
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
         {/* ── Right: Bills + Repairs ── */}
