@@ -21,6 +21,11 @@ export async function recordPayment(
   }
 
   const { data: { user } } = await supabase.auth.getUser()
+  const { data: billMeta } = await supabase
+    .from('bills')
+    .select('tenant_id, room_id')
+    .eq('id', billId)
+    .single()
 
   let slip_url: string | null = null
   const slipFile = formData.get('slip') as File | null
@@ -45,7 +50,7 @@ export async function recordPayment(
     slip_url = urlData.publicUrl
   }
 
-  const { error } = await supabase.from('payments').insert({
+  const paymentPayload = {
     bill_id: billId,
     amount,
     payment_method,
@@ -53,11 +58,25 @@ export async function recordPayment(
     note,
     paid_at,
     recorded_by: user?.id ?? null,
-  })
+  }
 
-  if (error) return { success: false, message: `เกิดข้อผิดพลาด: ${error.message}` }
+  const { data: payment, error } = await supabase
+    .from('payments')
+    .insert(paymentPayload)
+    .select('id')
+    .single()
 
-  logAudit({ action: 'payment_create', entityType: 'payment', entityId: billId, description: `บันทึกชำระเงิน ฿${amount.toLocaleString('th-TH')} (${payment_method})` }).catch(() => {})
+  if (error || !payment) return { success: false, message: `เกิดข้อผิดพลาด: ${error?.message ?? 'ไม่พบข้อมูลการชำระเงินที่บันทึก'}` }
+
+  logAudit({
+    action: 'payment_create',
+    entityType: 'payment',
+    entityId: payment.id,
+    tenantId: billMeta?.tenant_id ?? null,
+    roomId: billMeta?.room_id ?? null,
+    newValue: { ...paymentPayload, id: payment.id, tenant_id: billMeta?.tenant_id ?? null, room_id: billMeta?.room_id ?? null },
+    description: `บันทึกชำระเงิน ฿${amount.toLocaleString('th-TH')} (${payment_method})`,
+  }).catch(() => {})
 
   const { data: bill, error: billError } = await supabase
     .from('bills')
@@ -117,12 +136,33 @@ export async function deletePayment(paymentId: string, billId: string): Promise<
 
   const { data: payment } = await supabase
     .from('payments')
-    .select('slip_url')
+    .select('id, bill_id, amount, payment_method, slip_url, slip_ref, note, paid_at, bills(tenant_id, room_id)')
     .eq('id', paymentId)
     .single()
 
   await supabase.from('payments').delete().eq('id', paymentId)
-  logAudit({ action: 'payment_delete', entityType: 'payment', entityId: paymentId, description: `ลบการชำระเงิน (bill: ${billId})` }).catch(() => {})
+  type PaymentBillJoin = { tenant_id: string | null; room_id: string | null }
+  const billJoin = payment?.bills as unknown as PaymentBillJoin | null
+  logAudit({
+    action: 'payment_delete',
+    entityType: 'payment',
+    entityId: paymentId,
+    tenantId: billJoin?.tenant_id ?? null,
+    roomId: billJoin?.room_id ?? null,
+    oldValue: payment ? {
+      id: payment.id,
+      bill_id: payment.bill_id,
+      tenant_id: billJoin?.tenant_id ?? null,
+      room_id: billJoin?.room_id ?? null,
+      amount: payment.amount,
+      payment_method: payment.payment_method,
+      slip_url: payment.slip_url,
+      slip_ref: payment.slip_ref,
+      note: payment.note,
+      paid_at: payment.paid_at,
+    } : { id: paymentId, bill_id: billId },
+    description: `ลบการชำระเงิน ฿${Number(payment?.amount ?? 0).toLocaleString('th-TH')} (bill: ${billId})`,
+  }).catch(() => {})
 
   if (payment?.slip_url) {
     try {

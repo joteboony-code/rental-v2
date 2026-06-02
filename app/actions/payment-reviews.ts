@@ -119,7 +119,13 @@ export async function approveSlip(
     .single()
   if (!slip) return { success: false, message: 'ไม่พบสลิปนี้' }
 
-  const { error: payErr } = await supabase.from('payments').insert({
+  const { data: billMeta } = await supabase
+    .from('bills')
+    .select('tenant_id, room_id')
+    .eq('id', billId)
+    .single()
+
+  const paymentPayload = {
     bill_id: billId,
     amount,
     payment_method: paymentMethod,
@@ -128,7 +134,13 @@ export async function approveSlip(
     note,
     paid_at: paidAt,
     recorded_by: user?.id ?? null,
-  })
+  }
+
+  const { data: payment, error: payErr } = await supabase
+    .from('payments')
+    .insert(paymentPayload)
+    .select('id')
+    .single()
   if (payErr) return { success: false, message: `บันทึกไม่สำเร็จ: ${payErr.message}` }
 
   await updateBillStatusAndNotify(supabase, billId)
@@ -140,7 +152,22 @@ export async function approveSlip(
     admin_note: note,
   }).eq('id', slipId)
 
-  logAudit({ action: 'slip_approve', entityType: 'pending_slip', entityId: slipId, description: `อนุมัติสลิป → บิล ${billId}` }).catch(() => {})
+  logAudit({
+    action: 'slip_approve',
+    entityType: 'pending_slip',
+    entityId: slipId,
+    tenantId: billMeta?.tenant_id ?? null,
+    roomId: billMeta?.room_id ?? null,
+    newValue: {
+      payment_id: payment?.id ?? null,
+      amount,
+      bill_id: billId,
+      tenant_id: billMeta?.tenant_id ?? null,
+      room_id: billMeta?.room_id ?? null,
+      slip_ref: slip.slip_ref,
+    },
+    description: `อนุมัติสลิป ฿${amount.toLocaleString('th-TH')} → บิล ${billId}`,
+  }).catch(() => {})
 
   revalidatePath('/payment-reviews')
   revalidatePath(`/bills/${billId}`)
@@ -168,14 +195,14 @@ export async function approveSlipOldestFirst(
 
   const { data: bills } = await supabase
     .from('bills')
-    .select('id, total_amount, billing_month, due_date, status, payments(amount)')
+    .select('id, tenant_id, room_id, total_amount, billing_month, due_date, status, payments(amount)')
     .eq('tenant_id', tenantId)
     .in('status', ['pending', 'overdue'])
     .order('due_date', { ascending: true })
     .order('billing_month', { ascending: true })
 
   type BillRow = {
-    id: string; total_amount: number; billing_month: string; due_date: string | null; status: string
+    id: string; tenant_id: string; room_id: string | null; total_amount: number; billing_month: string; due_date: string | null; status: string
     payments: { amount: number }[] | null
   }
 
@@ -189,11 +216,12 @@ export async function approveSlipOldestFirst(
 
   let remaining = amount
   let appliedCount = 0
+  const applied: { payment_id: string | null; bill_id: string; room_id: string | null; amount: number }[] = []
 
   for (const bill of outstanding) {
     if (remaining <= 0) break
     const toPay = Math.min(remaining, bill.remaining)
-    await supabase.from('payments').insert({
+    const { data: payment } = await supabase.from('payments').insert({
       bill_id: bill.id,
       amount: toPay,
       payment_method: paymentMethod,
@@ -202,8 +230,9 @@ export async function approveSlipOldestFirst(
       note,
       paid_at: paidAt,
       recorded_by: user?.id ?? null,
-    })
+    }).select('id').single()
     await updateBillStatusAndNotify(supabase, bill.id)
+    applied.push({ payment_id: payment?.id ?? null, bill_id: bill.id, room_id: bill.room_id, amount: toPay })
     remaining -= toPay
     appliedCount++
   }
@@ -214,6 +243,24 @@ export async function approveSlipOldestFirst(
     reviewed_by: user?.id ?? null,
     admin_note: note,
   }).eq('id', slipId)
+
+  const appliedAmount = applied.reduce((sum, item) => sum + item.amount, 0)
+  const roomIds = Array.from(new Set(applied.map((item) => item.room_id).filter((id): id is string => Boolean(id))))
+  logAudit({
+    action: 'slip_apply_oldest_first',
+    entityType: 'pending_slip',
+    entityId: slipId,
+    tenantId,
+    roomId: roomIds.length === 1 ? roomIds[0] : null,
+    newValue: {
+      amount,
+      applied_amount: appliedAmount,
+      unapplied_amount: Math.max(0, remaining),
+      applied_count: appliedCount,
+      applied,
+    },
+    description: `ตัดหนี้เก่าสุด ${appliedCount} บิล ยอด ฿${appliedAmount.toLocaleString('th-TH')}`,
+  }).catch(() => {})
 
   revalidatePath('/payment-reviews')
   revalidatePath('/bills')
@@ -237,7 +284,7 @@ export async function saveSlipAsAdvance(
   const { data: slip } = await supabase
     .from('pending_slips').select('slip_url, slip_ref').eq('id', slipId).single()
 
-  const { error } = await supabase.from('tenant_credits').insert({
+  const creditPayload = {
     tenant_id: tenantId,
     room_id: roomId,
     amount,
@@ -246,7 +293,13 @@ export async function saveSlipAsAdvance(
     note,
     status: 'available',
     created_by: user?.id ?? null,
-  })
+  }
+
+  const { data: credit, error } = await supabase
+    .from('tenant_credits')
+    .insert(creditPayload)
+    .select('id')
+    .single()
   if (error) return { success: false, message: `บันทึกไม่สำเร็จ: ${error.message}` }
 
   await supabase.from('pending_slips').update({
@@ -255,6 +308,16 @@ export async function saveSlipAsAdvance(
     reviewed_by: user?.id ?? null,
     admin_note: note ? `เงินรับล่วงหน้า: ${note}` : 'เงินรับล่วงหน้า',
   }).eq('id', slipId)
+
+  logAudit({
+    action: 'tenant_credit_create',
+    entityType: 'tenant_credit',
+    entityId: credit?.id ?? slipId,
+    tenantId,
+    roomId,
+    newValue: { ...creditPayload, id: credit?.id ?? null, slip_id: slipId },
+    description: `บันทึกสลิปเป็นเงินรับล่วงหน้า ฿${amount.toLocaleString('th-TH')}`,
+  }).catch(() => {})
 
   revalidatePath('/payment-reviews')
   return { success: true, message: 'บันทึกเป็นเงินรับล่วงหน้าแล้ว' }
@@ -267,11 +330,39 @@ export async function reassignSlipTenant(
   roomId: string | null
 ): Promise<{ success: boolean; message: string }> {
   const supabase = await createClient()
+  const { data: oldSlip } = await supabase
+    .from('pending_slips')
+    .select('tenant_id, room_id, amount, slip_ref')
+    .eq('id', slipId)
+    .single()
+
   const { error } = await supabase
     .from('pending_slips')
     .update({ tenant_id: tenantId, room_id: roomId })
     .eq('id', slipId)
   if (error) return { success: false, message: error.message }
+
+  logAudit({
+    action: 'slip_reassign',
+    entityType: 'pending_slip',
+    entityId: slipId,
+    tenantId,
+    roomId,
+    oldValue: {
+      tenant_id: oldSlip?.tenant_id ?? null,
+      room_id: oldSlip?.room_id ?? null,
+      amount: oldSlip?.amount ?? null,
+      slip_ref: oldSlip?.slip_ref ?? null,
+    },
+    newValue: {
+      tenant_id: tenantId,
+      room_id: roomId,
+      amount: oldSlip?.amount ?? null,
+      slip_ref: oldSlip?.slip_ref ?? null,
+    },
+    description: `ย้ายสลิป ${slipId} จากผู้เช่า ${oldSlip?.tenant_id ?? '-'} / ห้อง ${oldSlip?.room_id ?? '-'} ไปผู้เช่า ${tenantId} / ห้อง ${roomId ?? '-'}`,
+  }).catch(() => {})
+
   revalidatePath(`/payment-reviews/${slipId}`)
   return { success: true, message: 'เปลี่ยนผู้เช่าแล้ว' }
 }

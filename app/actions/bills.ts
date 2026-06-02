@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { logAudit } from './audit'
 
 async function uploadMeterPhoto(
   supabase: SupabaseClient,
@@ -204,7 +205,11 @@ export async function updateBill(
   // ดึงเรตค่าน้ำ/ไฟ + ข้อมูลบิลเดิม
   const [{ data: settings }, { data: bill }] = await Promise.all([
     supabase.from('settings').select('water_unit_price, electricity_unit_price').eq('id', 1).single(),
-    supabase.from('bills').select('meter_reading_id, due_date, status').eq('id', billId).single(),
+    supabase
+      .from('bills')
+      .select('id, tenant_id, room_id, meter_reading_id, due_date, status, rent_amount, water_amount, electricity_amount, wifi_amount, trash_amount, other_amount, other_note, total_amount')
+      .eq('id', billId)
+      .single(),
   ])
   if (!bill) return { success: false, message: 'ไม่พบบิล' }
 
@@ -235,22 +240,35 @@ export async function updateBill(
     else status = 'pending'
   }
 
+  const newBillValue = {
+    rent_amount,
+    water_amount,
+    electricity_amount,
+    wifi_amount,
+    trash_amount,
+    other_amount,
+    other_note,
+    total_amount,
+    status,
+  }
+
   const { error } = await supabase
     .from('bills')
-    .update({
-      rent_amount,
-      water_amount,
-      electricity_amount,
-      wifi_amount,
-      trash_amount,
-      other_amount,
-      other_note,
-      total_amount,
-      status,
-    })
+    .update(newBillValue)
     .eq('id', billId)
 
   if (error) return { success: false, message: error.message }
+
+  logAudit({
+    action: 'bill_update',
+    entityType: 'bill',
+    entityId: billId,
+    tenantId: bill.tenant_id,
+    roomId: bill.room_id,
+    oldValue: bill,
+    newValue: { ...newBillValue, bill_id: billId, tenant_id: bill.tenant_id, room_id: bill.room_id },
+    description: `แก้ไขบิล ${billId}`,
+  }).catch(() => {})
 
   revalidatePath('/bills')
   revalidatePath(`/bills/${billId}`)
@@ -261,12 +279,28 @@ export async function updateBill(
 export async function deleteBill(billId: string): Promise<{ success: boolean; message?: string }> {
   const supabase = await createClient()
 
+  const { data: bill } = await supabase
+    .from('bills')
+    .select('*')
+    .eq('id', billId)
+    .single()
+
   // ลบประวัติชำระก่อน (FK payments → bills)
   const { error: payErr } = await supabase.from('payments').delete().eq('bill_id', billId)
   if (payErr) return { success: false, message: `ลบประวัติชำระไม่สำเร็จ: ${payErr.message}` }
 
   const { error } = await supabase.from('bills').delete().eq('id', billId)
   if (error) return { success: false, message: error.message }
+
+  logAudit({
+    action: 'bill_delete',
+    entityType: 'bill',
+    entityId: billId,
+    tenantId: bill?.tenant_id ?? null,
+    roomId: bill?.room_id ?? null,
+    oldValue: bill,
+    description: `ลบบิล ${billId}`,
+  }).catch(() => {})
 
   revalidatePath('/bills')
   return { success: true }
@@ -275,12 +309,29 @@ export async function deleteBill(billId: string): Promise<{ success: boolean; me
 // ─── Mark Bill Paid ──────────────────────────────────────────
 export async function markBillPaid(billId: string): Promise<{ success: boolean; message: string }> {
   const supabase = await createClient()
+  const { data: bill } = await supabase
+    .from('bills')
+    .select('id, tenant_id, room_id, status')
+    .eq('id', billId)
+    .single()
+
   const { error } = await supabase
     .from('bills')
     .update({ status: 'paid' })
     .eq('id', billId)
 
   if (error) return { success: false, message: error.message }
+  logAudit({
+    action: 'bill_update',
+    entityType: 'bill',
+    entityId: billId,
+    tenantId: bill?.tenant_id ?? null,
+    roomId: bill?.room_id ?? null,
+    oldValue: bill,
+    newValue: { ...bill, status: 'paid' },
+    description: `ทำเครื่องหมายบิล ${billId} เป็นชำระแล้ว`,
+  }).catch(() => {})
+
   revalidatePath('/bills')
   return { success: true, message: 'บันทึกการชำระเงินแล้ว' }
 }
