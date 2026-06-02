@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { sendPaymentConfirmedNotification, sendPaymentReceiptNotification } from './line'
+import { logAudit } from './audit'
 
 export async function recordPayment(
   billId: string,
@@ -55,6 +56,8 @@ export async function recordPayment(
   })
 
   if (error) return { success: false, message: `เกิดข้อผิดพลาด: ${error.message}` }
+
+  logAudit({ action: 'payment_create', entityType: 'payment', entityId: billId, description: `บันทึกชำระเงิน ฿${amount.toLocaleString('th-TH')} (${payment_method})` }).catch(() => {})
 
   const { data: bill, error: billError } = await supabase
     .from('bills')
@@ -119,6 +122,7 @@ export async function deletePayment(paymentId: string, billId: string): Promise<
     .single()
 
   await supabase.from('payments').delete().eq('id', paymentId)
+  logAudit({ action: 'payment_delete', entityType: 'payment', entityId: paymentId, description: `ลบการชำระเงิน (bill: ${billId})` }).catch(() => {})
 
   if (payment?.slip_url) {
     try {

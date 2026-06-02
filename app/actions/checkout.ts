@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { logAudit } from './audit'
 
 export async function saveCheckout(data: {
   contractId: string
@@ -56,6 +57,8 @@ export async function saveCheckout(data: {
     const { error: be } = await supabase.from('bills').update({ status: 'paid' }).eq('id', bill.id)
     if (be) return { success: false, message: `อัพเดทบิลไม่สำเร็จ: ${be.message}` }
   }
+
+  logAudit({ action: 'tenant_checkout', entityType: 'contract', entityId: data.contractId, tenantId: data.tenantId, roomId: data.roomId, description: `ย้ายออก วันที่ ${data.moveOutDate}${data.note ? ` — ${data.note}` : ''}` }).catch(() => {})
 
   revalidatePath(`/tenants/${data.tenantId}`)
   revalidatePath('/tenants')

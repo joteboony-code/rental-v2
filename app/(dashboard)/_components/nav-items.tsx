@@ -62,11 +62,11 @@ const navItems = [
     match:    (p: string) => p.startsWith('/broadcast'),
   },
   {
-    href:     '/history',
-    label:    'ประวัติ',
+    href:     '/audit-logs',
+    label:    'ประวัติการกระทำ',
     icon:     History,
     dot:      'bg-rose-400',
-    match:    (p: string) => p.startsWith('/history'),
+    match:    (p: string) => p.startsWith('/audit-logs'),
   },
   {
     href:     '/settings',

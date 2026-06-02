@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { TenantSchema, ContractSchema, type TenantFormState, type ContractFormState } from '@/lib/definitions'
+import { logAudit } from './audit'
 
 // ─── Create Tenant ───────────────────────────────────────────
 export async function createTenant(
@@ -70,6 +71,8 @@ export async function updateTenant(
   if (error) {
     return { message: `เกิดข้อผิดพลาด: ${error.message}` }
   }
+
+  logAudit({ action: 'tenant_update', entityType: 'tenant', entityId: id, description: `แก้ข้อมูลผู้เช่า ${parsed.data.full_name}`, newValue: parsed.data }).catch(() => {})
 
   revalidatePath('/tenants')
   revalidatePath(`/tenants/${id}`)

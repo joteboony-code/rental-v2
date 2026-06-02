@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import { revalidatePath } from 'next/cache'
 import { sendPaymentReceiptNotification } from './line'
+import { logAudit } from './audit'
 
 export type PendingSlip = {
   id: string
@@ -138,6 +139,8 @@ export async function approveSlip(
     reviewed_by: user?.id ?? null,
     admin_note: note,
   }).eq('id', slipId)
+
+  logAudit({ action: 'slip_approve', entityType: 'pending_slip', entityId: slipId, description: `อนุมัติสลิป → บิล ${billId}` }).catch(() => {})
 
   revalidatePath('/payment-reviews')
   revalidatePath(`/bills/${billId}`)
@@ -312,6 +315,8 @@ export async function rejectSlip(
     reviewed_by: user?.id ?? null,
     admin_note: note || 'ปฏิเสธโดยเจ้าของหอ',
   }).eq('id', slipId)
+
+  logAudit({ action: 'slip_reject', entityType: 'pending_slip', entityId: slipId, description: `ปฏิเสธสลิป — ${note || 'ปฏิเสธโดยเจ้าของหอ'}` }).catch(() => {})
 
   revalidatePath('/payment-reviews')
   return { success: true, message: 'ปฏิเสธสลิปแล้ว' }
