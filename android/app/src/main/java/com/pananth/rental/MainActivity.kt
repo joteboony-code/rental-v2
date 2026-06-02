@@ -26,7 +26,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
-import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import java.io.File
 
 class MainActivity : AppCompatActivity() {
@@ -63,7 +62,6 @@ class MainActivity : AppCompatActivity() {
     ) { /* permission result; chooser already launched */ }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        installSplashScreen()
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
@@ -112,7 +110,6 @@ class MainActivity : AppCompatActivity() {
                 request: WebResourceRequest
             ): Boolean {
                 val url = request.url.toString()
-                // ลิงก์ภายนอกเปิดใน browser
                 if (!url.startsWith("https://rental-v2.joteboony.workers.dev")) {
                     try {
                         startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
@@ -129,11 +126,9 @@ class MainActivity : AppCompatActivity() {
                 callback: ValueCallback<Array<Uri>>,
                 params: FileChooserParams
             ): Boolean {
-                // ยกเลิก callback เก่าถ้ามี
                 filePathCallback?.onReceiveValue(null)
                 filePathCallback = callback
 
-                // สร้าง intent ถ่ายรูปด้วยกล้อง
                 val imageFile = createTempImageFile()
                 cameraImageUri = FileProvider.getUriForFile(
                     this@MainActivity,
@@ -144,7 +139,6 @@ class MainActivity : AppCompatActivity() {
                     putExtra(MediaStore.EXTRA_OUTPUT, cameraImageUri)
                 }
 
-                // Intent เลือกรูปจาก gallery
                 val galleryIntent = Intent(Intent.ACTION_GET_CONTENT).apply {
                     type = "image/*"
                 }
@@ -153,7 +147,6 @@ class MainActivity : AppCompatActivity() {
                     putExtra(Intent.EXTRA_INITIAL_INTENTS, arrayOf(cameraIntent))
                 }
 
-                // ขอ permission กล้องถ้ายังไม่ได้รับ
                 if (ContextCompat.checkSelfPermission(
                         this@MainActivity, Manifest.permission.CAMERA
                     ) != PackageManager.PERMISSION_GRANTED

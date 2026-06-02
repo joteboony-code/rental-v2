@@ -2,19 +2,12 @@
 <resources>
 
     <!-- Theme หลักของแอป -->
-    <style name="Theme.Rental" parent="Theme.Material3.Light.NoActionBar">
+    <style name="Theme.Rental" parent="Theme.MaterialComponents.Light.NoActionBar">
         <item name="colorPrimary">@color/primary</item>
         <item name="colorPrimaryVariant">@color/primary_dark</item>
         <item name="android:statusBarColor">@color/primary</item>
         <item name="android:navigationBarColor">@android:color/white</item>
         <item name="android:windowBackground">@color/background</item>
-    </style>
-
-    <!-- Splash screen theme (Android 12+ ใช้ SplashScreen API) -->
-    <style name="Theme.Rental.Splash" parent="Theme.SplashScreen">
-        <item name="windowSplashScreenBackground">@color/splash_background</item>
-        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash_icon</item>
-        <item name="postSplashScreenTheme">@style/Theme.Rental</item>
     </style>
 
 </resources>
