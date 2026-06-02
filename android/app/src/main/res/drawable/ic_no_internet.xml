@@ -5,42 +5,41 @@
     android:viewportWidth="24"
     android:viewportHeight="24">
 
-    <!-- WiFi arc ล่าง (สัญญาณอ่อน) -->
+    <!-- WiFi arc ล่าง -->
     <path
         android:strokeColor="#CBD5E1"
         android:strokeWidth="1.5"
-        android:fillColor="@android:color/transparent"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000"
         android:pathData="M5,12.55 a11,11 0,0,1,14.08,0" />
 
     <!-- WiFi arc กลาง -->
     <path
         android:strokeColor="#CBD5E1"
         android:strokeWidth="1.5"
-        android:fillColor="@android:color/transparent"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000"
         android:pathData="M1.42,9 a16,16 0,0,1,21.16,0" />
 
     <!-- WiFi arc บน -->
     <path
         android:strokeColor="#CBD5E1"
         android:strokeWidth="1.5"
-        android:fillColor="@android:color/transparent"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000"
         android:pathData="M8.53,16.11 a6,6 0,0,1,6.95,0" />
 
-    <!-- จุดกลาง -->
-    <circle
+    <!-- จุดกลาง (วงกลมแปลงเป็น path) -->
+    <path
         android:fillColor="#94A3B8"
-        android:centerX="12"
-        android:centerY="20"
-        android:radius="1.5" />
+        android:pathData="M13.5,20 A1.5,1.5,0,0,1,10.5,20 A1.5,1.5,0,0,1,13.5,20 Z" />
 
-    <!-- เส้นขีดทับ (X) -->
-    <line
+    <!-- เส้นขีดทับ -->
+    <path
         android:strokeColor="#EF4444"
         android:strokeWidth="2"
         android:strokeLineCap="round"
-        android:x1="3"
-        android:y1="3"
-        android:x2="21"
-        android:y2="21" />
+        android:fillColor="#00000000"
+        android:pathData="M3,3 L21,21" />
 
 </vector>

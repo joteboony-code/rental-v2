@@ -1,5 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- App icon foreground: บ้านสีขาว -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
@@ -22,19 +21,13 @@
         android:pathData="M47,82 L47,64 Q54,58 61,64 L61,82 Z" />
 
     <!-- หน้าต่างซ้าย -->
-    <rect
+    <path
         android:fillColor="#059669"
-        android:left="38"
-        android:top="53"
-        android:right="47"
-        android:bottom="62" />
+        android:pathData="M38,53 L47,53 L47,62 L38,62 Z" />
 
     <!-- หน้าต่างขวา -->
-    <rect
+    <path
         android:fillColor="#059669"
-        android:left="61"
-        android:top="53"
-        android:right="70"
-        android:bottom="62" />
+        android:pathData="M61,53 L70,53 L70,62 L61,62 Z" />
 
 </vector>
