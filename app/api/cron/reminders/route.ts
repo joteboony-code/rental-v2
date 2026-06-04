@@ -87,7 +87,8 @@ export async function GET(req: NextRequest) {
       snooze_until, tenant_id, status,
       rooms   ( room_number ),
       tenants ( full_name, line_user_id ),
-      meter_readings ( water_units, electricity_units, water_unit_price, electricity_unit_price )
+      meter_readings ( water_units, electricity_units, water_unit_price, electricity_unit_price ),
+      payments ( amount )
     `)
     .in('status', ['pending', 'overdue'])
     .order('billing_month', { ascending: true })
@@ -115,6 +116,7 @@ export async function GET(req: NextRequest) {
   type TJ = { full_name: string; line_user_id: string | null }
   type RJ = { room_number: string }
   type MJ = { water_units: number | null; electricity_units: number | null; water_unit_price: number | null; electricity_unit_price: number | null }
+  type PJ = { amount: number }
 
   const byTenant = new Map<string, typeof bills>()
   for (const bill of remindableBills) {
@@ -134,10 +136,12 @@ export async function GET(req: NextRequest) {
 
     if (!lineUserId) { noLine++; continue }
 
-    // Snooze: skip if ALL bills are snoozed
+    // Snooze + fully-paid guard: skip bills that are snoozed or have no remaining balance
     const activeBills = tenantBills.filter((b) => {
       const s = b.snooze_until as string | null
-      return !s || s < today
+      if (s && s >= today) return false
+      const paid = ((b.payments as unknown as PJ[] | null) ?? []).reduce((ps, p) => ps + Number(p.amount), 0)
+      return Math.max(0, Number(b.total_amount) - paid) >= 1
     })
     if (activeBills.length === 0) { snoozed++; continue }
 
@@ -146,7 +150,10 @@ export async function GET(req: NextRequest) {
     )]
     const roomNumber = allRoomNumbers.join(', ') || '—'
     const tenantName = tenant?.full_name ?? '—'
-    const totalOwed = activeBills.reduce((s, b) => s + Number(b.total_amount), 0)
+    const totalOwed = activeBills.reduce((s, b) => {
+      const paid = ((b.payments as unknown as PJ[] | null) ?? []).reduce((ps, p) => ps + Number(p.amount), 0)
+      return s + Math.max(0, Number(b.total_amount) - paid)
+    }, 0)
     const hasOverdue = activeBills.some((b) => b.status === 'overdue')
 
     // Use the latest bill's portal URL
@@ -164,7 +171,8 @@ export async function GET(req: NextRequest) {
       const meter = bill.meter_readings as unknown as MJ | null
       const isOverdue = bill.status === 'overdue'
       const monthLabel = thaiMonth(bill.billing_month as string)
-      const billTotal = Number(bill.total_amount)
+      const paidAmt = ((bill.payments as unknown as PJ[] | null) ?? []).reduce((s, p) => s + Number(p.amount), 0)
+      const remaining = Math.max(0, Number(bill.total_amount) - paidAmt)
 
       lines.push(`${isOverdue ? '🔴' : '🟡'} ${monthLabel}${isOverdue ? ' (เกินกำหนด)' : ''}`)
 
@@ -194,7 +202,8 @@ export async function GET(req: NextRequest) {
       if (otherAmt > 0) {
         lines.push(`   📦 ${(bill.other_note as string | null) || 'อื่นๆ'}: ${fmt(otherAmt)} บาท`)
       }
-      lines.push(`   📌 รวม: ${fmt(billTotal)} บาท`)
+      if (paidAmt > 0) lines.push(`   ✅ ชำระแล้ว: ${fmt(paidAmt)} บาท`)
+      lines.push(`   📌 ${paidAmt > 0 ? 'คงเหลือ' : 'รวม'}: ${fmt(remaining)} บาท`)
       lines.push(`   🗓️ ครบกำหนด: ${thaiDate(bill.due_date as string)}`)
     }
 
