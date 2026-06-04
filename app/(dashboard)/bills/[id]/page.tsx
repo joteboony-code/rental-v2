@@ -56,6 +56,8 @@ export default async function BillDetailPage({
 
   const totalPaid = (payments ?? []).reduce((s, p) => s + Number(p.amount), 0)
   const remaining = Math.max(0, Number(bill.total_amount) - totalPaid)
+  const currentBillingMonth = (settings?.current_billing_month as string | null) ?? null
+  const isOldBill = Boolean(currentBillingMonth && bill.billing_month.slice(0, 7) !== currentBillingMonth.slice(0, 7))
 
   const monthLabel = new Date(bill.billing_month).toLocaleDateString('th-TH', {
     year: 'numeric', month: 'long',
@@ -105,6 +107,11 @@ export default async function BillDetailPage({
             )}
             <PrintButton />
             <DeleteBillButton billId={id} roomNumber={room?.room_number ?? '—'} month={monthLabel} />
+            {isOldBill && (
+              <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-700 ring-1 ring-amber-200">
+                บิลเก่า
+              </span>
+            )}
             <BillStatusBadge status={bill.status} />
           </div>
         </div>
@@ -304,6 +311,10 @@ export default async function BillDetailPage({
             <LineNotifyButton
               billId={id}
               hasLineUserId={!!tenant?.line_user_id}
+              billingMonth={bill.billing_month}
+              currentBillingMonth={currentBillingMonth}
+              remaining={remaining}
+              status={bill.status}
             />
           </div>
 
@@ -363,4 +374,3 @@ function BillRow({
     </div>
   )
 }
-

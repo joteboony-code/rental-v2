@@ -6,6 +6,7 @@ import { createServiceClient } from '@/lib/supabase/service'
 import { roomRow } from '@/lib/room-utils'
 import { getLineMessagingConfig } from '@/lib/line-integration'
 import { buildBillPortalUrl, buildTenantPortalUrl } from '@/lib/portal-url'
+import { logAudit } from './audit'
 
 // ── helpers ──────────────────────────────────────────────────────────
 function thaiMonth(dateStr: string) {
@@ -18,6 +19,13 @@ function thaiDate(dateStr: string) {
 
 function fmt(n: number) {
   return n.toLocaleString('th-TH', { maximumFractionDigits: 0 })
+}
+
+const PAID_BILL_NOTIFY_BLOCK_MESSAGE = 'บิลนี้ชำระแล้ว ไม่สามารถส่งใบแจ้งค่าเช่าได้'
+
+function billRemaining(totalAmount: unknown, payments: { amount: unknown }[] | null | undefined) {
+  const paid = (payments ?? []).reduce((sum, payment) => sum + Number(payment.amount), 0)
+  return Math.max(0, Number(totalAmount) - paid)
 }
 
 // ── send via LINE Messaging API ───────────────────────────────────────
@@ -399,15 +407,17 @@ export async function sendLineBillNotification(
   mode: 'text' | 'flex'
 ): Promise<{ success: boolean; message: string }> {
   const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
 
-  // Fetch bill + joins
+  // Re-fetch the latest bill state before every send; stale bill pages can stay open for days.
   const { data: bill } = await supabase
     .from('bills')
     .select(`
       *,
       rooms   ( room_number, floor ),
       tenants ( full_name, line_user_id ),
-      meter_readings ( created_at )
+      meter_readings ( created_at ),
+      payments ( amount )
     `)
     .eq('id', billId)
     .single()
@@ -421,6 +431,11 @@ export async function sendLineBillNotification(
   const room   = bill.rooms   as unknown as RoomJoin   | null
   const tenant = bill.tenants as unknown as TenantJoin | null
   const meter  = bill.meter_readings as unknown as MeterJoin
+  const remaining = billRemaining(bill.total_amount, bill.payments as { amount: unknown }[] | null)
+
+  if (bill.status === 'paid' || remaining <= 0) {
+    return { success: false, message: PAID_BILL_NOTIFY_BLOCK_MESSAGE }
+  }
 
   if (!tenant?.line_user_id) {
     return { success: false, message: 'ผู้เช่าไม่มี LINE User ID — กรุณาเพิ่มในข้อมูลผู้เช่า' }
@@ -432,6 +447,27 @@ export async function sendLineBillNotification(
   }
 
   // ── Multi-room: send combined statement ──────────────────────────────────────
+  const auditLineBillSent = (extra: Record<string, unknown> = {}) => {
+    logAudit({
+      action: 'line_bill_sent',
+      entityType: 'bill',
+      entityId: billId,
+      tenantId: (bill.tenant_id as string | null) ?? null,
+      roomId: (bill.room_id as string | null) ?? null,
+      newValue: {
+        bill_id: billId,
+        room_id: (bill.room_id as string | null) ?? null,
+        tenant_id: (bill.tenant_id as string | null) ?? null,
+        billing_month: bill.billing_month,
+        remaining,
+        sent_by: user?.id ?? null,
+        mode,
+        ...extra,
+      },
+      description: `ส่ง LINE แจ้งค่าเช่า ${thaiMonth(bill.billing_month)} ยอดค้าง ฿${fmt(remaining)}`,
+    }).catch(() => {})
+  }
+
   const { rooms: allRooms, grandTotal: allTotal, earliestDueDate } =
     await fetchRoomStatements(supabase, bill.tenant_id as string)
   if (allRooms.length >= 2) {
@@ -457,6 +493,7 @@ export async function sendLineBillNotification(
         lines.push(`🔗 ${combinedUrl}`)
         await pushMessage(tenant.line_user_id, lineConfig.channelAccessToken, [{ type: 'text', text: lines.join('\n') }])
       }
+      auditLineBillSent({ combined_room_count: allRooms.length })
       return { success: true, message: `ส่ง LINE ${mode === 'flex' ? 'Flex' : 'ข้อความ'} รวม ${allRooms.length} ห้อง สำเร็จ` }
     } catch (err) {
       return { success: false, message: String(err) }
@@ -512,6 +549,7 @@ export async function sendLineBillNotification(
       await pushMessage(tenant.line_user_id, lineConfig.channelAccessToken, [flexMsg])
     }
 
+    auditLineBillSent()
     return { success: true, message: `ส่ง LINE ${mode === 'flex' ? 'Flex Message' : 'ข้อความ'} สำเร็จ` }
   } catch (err) {
     return { success: false, message: String(err) }
@@ -934,23 +972,34 @@ export async function sendBulkLineBillNotification(
   mode: 'text' | 'flex'
 ): Promise<{ success: boolean; sent: number; failed: number; message: string }> {
   const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
 
   // Get all pending/overdue bills for this month with tenant LINE IDs
   const { data: bills } = await supabase
     .from('bills')
     .select(`
-      id, tenant_id,
+      id, tenant_id, room_id, status,
       rent_amount, water_amount, electricity_amount, wifi_amount, trash_amount, other_amount,
       total_amount, due_date, billing_month,
       rooms   ( room_number, floor ),
       tenants ( full_name, line_user_id ),
-      meter_readings ( created_at )
+      meter_readings ( created_at ),
+      payments ( amount )
     `)
     .eq('billing_month', billingMonth)
     .in('status', ['pending', 'overdue'])
 
   if (!bills || bills.length === 0) {
     return { success: false, sent: 0, failed: 0, message: 'ไม่มีบิลที่รอชำระในเดือนนี้' }
+  }
+
+  const payableBills = bills.filter((bill) => {
+    const remaining = billRemaining(bill.total_amount, bill.payments as { amount: unknown }[] | null)
+    return bill.status !== 'paid' && remaining > 0
+  })
+
+  if (payableBills.length === 0) {
+    return { success: false, sent: 0, failed: 0, message: PAID_BILL_NOTIFY_BLOCK_MESSAGE }
   }
 
   const lineConfig = await getLineMessagingConfig()
@@ -965,15 +1014,38 @@ export async function sendBulkLineBillNotification(
   type RoomJ   = { room_number: string; floor: number | null }
   type MeterJ  = { created_at: string } | null
 
+  const auditBulkLineBillSent = (bill: (typeof payableBills)[number], extra: Record<string, unknown> = {}) => {
+    const remaining = billRemaining(bill.total_amount, bill.payments as { amount: unknown }[] | null)
+    logAudit({
+      action: 'line_bill_sent',
+      entityType: 'bill',
+      entityId: bill.id as string,
+      tenantId: (bill.tenant_id as string | null) ?? null,
+      roomId: (bill.room_id as string | null) ?? null,
+      newValue: {
+        bill_id: bill.id,
+        room_id: (bill.room_id as string | null) ?? null,
+        tenant_id: (bill.tenant_id as string | null) ?? null,
+        billing_month: bill.billing_month,
+        remaining,
+        sent_by: user?.id ?? null,
+        mode,
+        bulk: true,
+        ...extra,
+      },
+      description: `LINE bill notification ${thaiMonth(bill.billing_month as string)} remaining ${fmt(remaining)}`,
+    }).catch(() => {})
+  }
+
   // Group by line_user_id (fallback to tenant_id) — prevents duplicate sends for tenants with multiple rooms
   const byLineUser = new Map<string, {
     lineUserId: string | null
     tenantName: string
     tenantIds: Set<string>
-    bills: (typeof bills)[number][]
+    bills: (typeof payableBills)[number][]
   }>()
 
-  for (const bill of bills) {
+  for (const bill of payableBills) {
     const tenant     = bill.tenants as unknown as TenantJ | null
     const lineUserId = tenant?.line_user_id ?? null
     const tid        = bill.tenant_id as string
@@ -1025,6 +1097,7 @@ export async function sendBulkLineBillNotification(
           }),
         ])
         sent += grp.bills.length
+        grp.bills.forEach((bill) => auditBulkLineBillSent(bill, { combined_room_count: allStmtRooms.length }))
       } catch {
         failed += grp.bills.length
       }
@@ -1079,6 +1152,7 @@ export async function sendBulkLineBillNotification(
           await pushMessage(lineUserId, lineConfig.channelAccessToken, [flexMsg])
         }
         sent++
+        auditBulkLineBillSent(bill)
       } catch {
         failed++
       }

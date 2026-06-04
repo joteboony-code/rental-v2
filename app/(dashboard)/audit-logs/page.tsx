@@ -18,6 +18,7 @@ export const ACTION_LABELS: Record<string, { label: string; color: string }> = {
   deposit_refund:      { label: 'คืนเงินประกัน',    color: 'bg-sky-50 text-sky-700 ring-sky-200' },
   tenant_update:       { label: 'แก้ข้อมูลผู้เช่า', color: 'bg-violet-50 text-violet-700 ring-violet-200' },
   line_mapping_change: { label: 'เปลี่ยน LINE',     color: 'bg-teal-50 text-teal-700 ring-teal-200' },
+  line_bill_sent:      { label: 'ส่งบิล LINE',        color: 'bg-green-50 text-green-700 ring-green-200' },
   document_upload:     { label: 'อัพโหลดเอกสาร',    color: 'bg-slate-100 text-slate-600 ring-slate-200' },
   document_delete:     { label: 'ลบเอกสาร',         color: 'bg-rose-50 text-rose-700 ring-rose-200' },
 }

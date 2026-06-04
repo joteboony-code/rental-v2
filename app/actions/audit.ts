@@ -16,6 +16,7 @@ export type AuditAction =
   | 'deposit_refund'
   | 'tenant_update'
   | 'line_mapping_change'
+  | 'line_bill_sent'
   | 'document_upload'
   | 'document_delete'
 

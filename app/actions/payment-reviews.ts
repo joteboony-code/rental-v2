@@ -173,6 +173,8 @@ export async function approveSlip(
   revalidatePath('/payment-reviews')
   revalidatePath(`/bills/${billId}`)
   revalidatePath('/bills')
+  revalidatePath('/bills/payments')
+  revalidatePath('/bills/history')
 
   return { success: true, message: 'อนุมัติสลิปและบันทึกการชำระเงินแล้ว' }
 }
@@ -265,6 +267,9 @@ export async function approveSlipOldestFirst(
 
   revalidatePath('/payment-reviews')
   revalidatePath('/bills')
+  for (const item of applied) revalidatePath(`/bills/${item.bill_id}`)
+  revalidatePath('/bills/payments')
+  revalidatePath('/bills/history')
 
   return { success: true, message: `ตัดหนี้เก่าสุดก่อน ${appliedCount} บิล เรียบร้อยแล้ว` }
 }

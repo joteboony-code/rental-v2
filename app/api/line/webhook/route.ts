@@ -456,7 +456,7 @@ async function handleSlipImage(
   const activeRooms = (activeContracts ?? [])
     .map((c) => (c.rooms as unknown as RJ | null)?.room_number)
     .filter((n): n is string => Boolean(n))
-  let roomNumber = activeRooms.length > 0 ? activeRooms.join(', ') : '—'
+  const roomNumber = activeRooms.length > 0 ? activeRooms.join(', ') : '—'
 
   // Handle room 99 test
   if (activeRooms.includes('99')) {
