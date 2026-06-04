@@ -149,15 +149,19 @@ export async function sendOverdueReminders(
     const roomNumber = room?.room_number ?? '—'
     const tenantName = tenant?.full_name ?? '—'
 
-    // Calculate old balance (sum of older unpaid bills for same tenant)
+    // Calculate old balance (remaining on older unpaid bills for same tenant)
     const { data: olderBills } = await supabase
       .from('bills')
-      .select('id, total_amount')
+      .select('id, total_amount, payments ( amount )')
       .eq('tenant_id', (bill as { tenant_id?: string }).tenant_id ?? '')
       .in('status', ['pending', 'overdue'])
       .lt('billing_month', billingMonth)
 
-    const oldBalance = (olderBills ?? []).reduce((sum, b) => sum + Number(b.total_amount), 0)
+    const oldBalance = (olderBills ?? []).reduce((sum, b) => {
+      const paid = ((b.payments as unknown as { amount: number }[] | null) ?? [])
+        .reduce((s, p) => s + Number(p.amount), 0)
+      return sum + Math.max(0, Number(b.total_amount) - paid)
+    }, 0)
     const remaining = Number(bill.total_amount)
     const portalUrl = buildBillPortalUrl(bill.id, lineConfig.liffId, lineConfig.appUrl)
 
