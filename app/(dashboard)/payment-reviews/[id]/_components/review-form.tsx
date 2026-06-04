@@ -22,7 +22,7 @@ interface Props {
   roomId: string | null
   roomNumber: string | null
   defaultAmount?: number
-  defaultPaidAt: string
+  slipPaidAt: string | null
   outstandingBills: OutstandingBill[]
   allTenants: TenantOption[]
   accountMismatch: boolean
@@ -42,7 +42,7 @@ const methodLabels: Record<string, string> = {
 
 export function ReviewForm({
   slipId, tenantId, tenantName, roomId, roomNumber,
-  defaultAmount, defaultPaidAt, outstandingBills, allTenants, accountMismatch,
+  defaultAmount, slipPaidAt, outstandingBills, allTenants, accountMismatch,
 }: Props) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -54,7 +54,11 @@ export function ReviewForm({
   const [selectedBillId, setSelectedBillId] = useState(outstandingBills[0]?.id ?? '')
   const [amount, setAmount] = useState(defaultAmount != null ? defaultAmount.toFixed(2) : '')
   const [paymentMethod, setPaymentMethod] = useState('transfer')
-  const [paidAt, setPaidAt] = useState(defaultPaidAt)
+  const [paidAt, setPaidAt] = useState(() => {
+    const d = slipPaidAt ? new Date(slipPaidAt) : new Date()
+    d.setMinutes(d.getMinutes() - d.getTimezoneOffset())
+    return d.toISOString().slice(0, 16)
+  })
   const [note, setNote] = useState('')
   const [rejectNote, setRejectNote] = useState('')
   const [showReject, setShowReject] = useState(false)
