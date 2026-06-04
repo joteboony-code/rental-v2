@@ -61,17 +61,8 @@ export default async function ReviewDetailPage({
     slip.slipok_code === 1014 ||
     Boolean(slip.slipok_message && /บัญชี.*ไม่ตรง|ไม่ตรง.*บัญชี/.test(slip.slipok_message))
 
-  // Default paidAt for form
-  const defaultPaidAt = (() => {
-    if (slip.paid_at) {
-      const d = new Date(slip.paid_at)
-      d.setMinutes(d.getMinutes() - d.getTimezoneOffset())
-      return d.toISOString().slice(0, 16)
-    }
-    const now = new Date()
-    now.setMinutes(now.getMinutes() - now.getTimezoneOffset())
-    return now.toISOString().slice(0, 16)
-  })()
+  // slipPaidAt is passed raw (UTC) to ReviewForm — client converts to local timezone
+  const slipPaidAt = slip.paid_at ?? null
 
   return (
     <div className="p-5 md:p-8 space-y-6 max-w-3xl">
@@ -205,7 +196,7 @@ export default async function ReviewDetailPage({
             roomId={room?.id ?? null}
             roomNumber={room?.room_number ?? null}
             defaultAmount={slip.amount ?? undefined}
-            defaultPaidAt={defaultPaidAt}
+            slipPaidAt={slipPaidAt}
             outstandingBills={outstandingBills}
             allTenants={allTenants}
             accountMismatch={accountMismatch}
