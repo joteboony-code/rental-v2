@@ -218,8 +218,8 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // Summary to owner
-  if (lineConfig.ownerLineUserId) {
+  // Summary to owner — ส่งเฉพาะเมื่อมีการแจ้งเตือนจริง (sent > 0)
+  if (lineConfig.ownerLineUserId && sent > 0) {
     const totalAmt = totalReminded
     const overdueCount = [...byTenant.values()].filter((bs) => bs.some((b) => b.status === 'overdue')).length
     const ownerLines = [
