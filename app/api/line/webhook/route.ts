@@ -149,25 +149,37 @@ async function getDisplayName(lineUserId: string, token: string): Promise<string
 }
 
 async function reply(replyToken: string, token: string, messages: object[]) {
-  await fetch('https://api.line.me/v2/bot/message/reply', {
+  const res = await fetch('https://api.line.me/v2/bot/message/reply', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify({ replyToken, messages }),
   })
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '')
+    throw new Error(`LINE reply failed: ${res.status} ${detail}`)
+  }
 }
 
 async function push(to: string | null, token: string, messages: object[]) {
   if (!to) return
-  await fetch('https://api.line.me/v2/bot/message/push', {
+  const res = await fetch('https://api.line.me/v2/bot/message/push', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify({ to, messages }),
   })
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '')
+    throw new Error(`LINE push failed: ${res.status} ${detail}`)
+  }
 }
 
 async function notifyOwner(cfg: LineConfig, text: string) {
   if (!cfg.ownerLineUserId) return
-  try { await push(cfg.ownerLineUserId, cfg.channelAccessToken, [{ type: 'text', text }]) } catch { /* silent */ }
+  try {
+    await push(cfg.ownerLineUserId, cfg.channelAccessToken, [{ type: 'text', text }])
+  } catch (error) {
+    console.error('[line notify owner]', error)
+  }
 }
 
 function buildPortalFlex(portalUrl: string) {
