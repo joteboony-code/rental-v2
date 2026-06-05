@@ -47,8 +47,8 @@ export async function GET(req: NextRequest) {
     { data: expiringContracts },
     { data: promisesToday },
   ] = await Promise.all([
-    // บิลค้างชำระทุกเดือน (ดึง room_number มาด้วย)
-    supabase.from('bills').select('total_amount, status, rooms(room_number), payments(amount)').in('status', ['pending', 'overdue']),
+    // บิลค้างชำระทุกเดือน (ดึง room_number + billing_month มาด้วย)
+    supabase.from('bills').select('total_amount, status, billing_month, rooms(room_number), payments(amount)').in('status', ['pending', 'overdue']).order('billing_month', { ascending: true }),
     // บิลครบกำหนดวันนี้
     supabase.from('bills').select('id').in('status', ['pending', 'overdue']).eq('due_date', today),
     // สลิปรอตรวจ
@@ -62,13 +62,13 @@ export async function GET(req: NextRequest) {
     supabase.from('payment_promises').select('id, rooms(room_number)').eq('status', 'active').eq('promise_date', today),
   ])
 
-  // คำนวณยอดค้างจริง
+  // คำนวณยอดค้างจริงแยกรายบิล
   type PJ = { amount: number }
-  type BJ = { total_amount: number; status: string; rooms: { room_number: string } | null; payments: PJ[] | null }
+  type BJ = { total_amount: number; status: string; billing_month: string | null; rooms: { room_number: string } | null; payments: PJ[] | null }
   const unpaid = (unpaidBills ?? []) as unknown as BJ[]
 
-  // รวมยอดค้างต่อห้อง (หลายบิลในห้องเดียวรวมเข้าด้วยกัน)
-  const roomMap = new Map<string, number>()
+  type BillEntry = { room: string; month: string; remaining: number }
+  const billEntries: BillEntry[] = []
   let totalOwed = 0
   let unpaidCount = 0
   for (const b of unpaid) {
@@ -77,15 +77,24 @@ export async function GET(req: NextRequest) {
     if (remaining >= 1) {
       totalOwed += remaining
       unpaidCount++
-      const rn = b.rooms?.room_number ?? '?'
-      roomMap.set(rn, (roomMap.get(rn) ?? 0) + remaining)
+      billEntries.push({
+        room: b.rooms?.room_number ?? '?',
+        month: b.billing_month ?? '',
+        remaining,
+      })
     }
   }
 
-  // เรียงห้องตามเลขห้อง แล้วแสดง รายการ
-  const roomLines = [...roomMap.entries()]
-    .sort((a, b) => a[0].localeCompare(b[0], 'th', { numeric: true }))
-    .map(([room, amt]) => `  • ห้อง ${room}  ฿${fmt(amt)}`)
+  // เรียงตามเลขห้อง จากนั้นเดือน แล้วแสดงแยกรายบิล
+  const thaiMonth = (s: string) => s
+    ? new Date(s + '-01').toLocaleDateString('th-TH', { month: 'short', year: '2-digit' })
+    : ''
+  billEntries.sort((a, b) =>
+    a.room.localeCompare(b.room, 'th', { numeric: true }) || a.month.localeCompare(b.month)
+  )
+  const roomLines = billEntries.map(({ room, month, remaining }) =>
+    `  • ห้อง ${room}${month ? ` (${thaiMonth(month)})` : ''}  ฿${fmt(remaining)}`
+  )
 
   const lines: string[] = [
     '📌 สรุปประจำวัน',
