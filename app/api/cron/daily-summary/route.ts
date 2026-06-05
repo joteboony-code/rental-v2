@@ -87,7 +87,7 @@ export async function GET(req: NextRequest) {
 
   // เรียงตามเลขห้อง จากนั้นเดือน แล้วแสดงแยกรายบิล
   const thaiMonth = (s: string) => s
-    ? new Date(s + '-01').toLocaleDateString('th-TH', { month: 'short', year: '2-digit' })
+    ? new Date(s).toLocaleDateString('th-TH', { month: 'short', year: '2-digit' })
     : ''
   billEntries.sort((a, b) =>
     a.room.localeCompare(b.room, 'th', { numeric: true }) || a.month.localeCompare(b.month)
