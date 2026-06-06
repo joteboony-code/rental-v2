@@ -447,5 +447,7 @@ async function updateBillStatusAndNotify(supabase: any, billId: string) {
     await supabase.from('bills').update({ status: newStatus }).eq('id', billId)
   }
 
-  await sendPaymentReceiptNotification(billId, totalPaid, totalAmount).catch(() => {})
+  await sendPaymentReceiptNotification(billId, totalPaid, totalAmount).catch((err) => {
+    console.error('[payment-reviews] LINE receipt notification failed:', err)
+  })
 }

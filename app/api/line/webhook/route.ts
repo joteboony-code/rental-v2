@@ -672,7 +672,9 @@ async function handleSlipImage(
       })
       if (error) return { ok: false, paidBills }
       firstSlipRef = false
-      await supabase.from('bills').update({ status: 'paid' }).eq('id', bill.id)
+      const billFullyPaid = toPay >= bill.remainingAmount
+      const billNewStatus = billFullyPaid ? 'paid' : isPastDue(bill.due_date) ? 'overdue' : 'pending'
+      await supabase.from('bills').update({ status: billNewStatus }).eq('id', bill.id)
       paidBills.push({
         roomNumber:   (bill.rooms as unknown as RJ | null)?.room_number ?? '?',
         billingMonth: bill.billing_month,
@@ -714,7 +716,7 @@ async function handleSlipImage(
         },
         description: `LINE auto [${matchRule}] ฿${fmt(amount)}${paidBills.length > 1 ? ` (${paidBills.length} บิล)` : ''}${creditAmt > 0 ? ` +เครดิต ฿${fmt(creditAmt)}` : ''}`,
       })
-    } catch { /* non-blocking */ }
+    } catch (err) { console.error('[webhook] audit log failed:', err) }
   }
 
   // ── Rule 1: unique single-bill exact match ─────────────────────────────────
@@ -739,7 +741,9 @@ async function handleSlipImage(
     const remaining  = Math.max(0, Number(bill.total_amount) - totalPaid)
     const fullyPaid  = remaining < 1
     const nextStatus = fullyPaid ? 'paid' : isPastDue(bill.due_date) ? 'overdue' : bill.status
-    if (nextStatus !== bill.status) await supabase.from('bills').update({ status: nextStatus }).eq('id', bill.id)
+    if (nextStatus !== bill.status) {
+      await supabase.from('bills').update({ status: nextStatus }).eq('id', bill.id).eq('status', bill.status)
+    }
     const portalUrl = buildBillPortalUrl(bill.id, cfg.liffId, cfg.appUrl)
     await reply(replyToken, token, [buildPaymentFlex({ fullyPaid, roomNumber: billRoom, billingMonth: bill.billing_month, paidAmount: totalPaid, remaining, ref: slipRef, portalUrl })])
     await logAutoPayment('unique_single_bill', [{ roomNumber: billRoom, billingMonth: bill.billing_month, amount }])
