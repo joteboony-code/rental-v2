@@ -32,7 +32,7 @@ export function AuditFilterBar({ rooms, tenants, actionLabels, current }: Props)
       <select
         value={current.action}
         onChange={(e) => push('action', e.target.value)}
-        className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 focus:border-violet-300 focus:outline-none"
+        className="min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 focus:border-violet-300 focus:outline-none"
       >
         <option value="">ทุกประเภท</option>
         {Object.entries(actionLabels).map(([k, v]) => (
@@ -44,7 +44,7 @@ export function AuditFilterBar({ rooms, tenants, actionLabels, current }: Props)
       <select
         value={current.tenant}
         onChange={(e) => push('tenant', e.target.value)}
-        className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 focus:border-violet-300 focus:outline-none"
+        className="min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 focus:border-violet-300 focus:outline-none"
       >
         <option value="">ทุกผู้เช่า</option>
         {tenants.map((t) => (
@@ -56,7 +56,7 @@ export function AuditFilterBar({ rooms, tenants, actionLabels, current }: Props)
       <select
         value={current.room}
         onChange={(e) => push('room', e.target.value)}
-        className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 focus:border-violet-300 focus:outline-none"
+        className="min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 focus:border-violet-300 focus:outline-none"
       >
         <option value="">ทุกห้อง</option>
         {rooms.map((r) => (
@@ -65,12 +65,12 @@ export function AuditFilterBar({ rooms, tenants, actionLabels, current }: Props)
       </select>
 
       {/* วันที่ */}
-      <div className="flex items-center gap-1.5">
+      <div className="flex flex-wrap items-center gap-1.5">
         <input
           type="date"
           value={current.from}
           onChange={(e) => push('from', e.target.value)}
-          className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 focus:border-violet-300 focus:outline-none"
+          className="min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 focus:border-violet-300 focus:outline-none"
           placeholder="จากวันที่"
         />
         <span className="text-xs text-slate-300">—</span>
@@ -78,7 +78,7 @@ export function AuditFilterBar({ rooms, tenants, actionLabels, current }: Props)
           type="date"
           value={current.to}
           onChange={(e) => push('to', e.target.value)}
-          className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 focus:border-violet-300 focus:outline-none"
+          className="min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 focus:border-violet-300 focus:outline-none"
           placeholder="ถึงวันที่"
         />
       </div>

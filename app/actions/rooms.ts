@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { RoomSchema, RoomFormState } from '@/lib/definitions'
+import { logAudit } from './audit'
 
 async function getOwnerOrThrow() {
   const supabase = await createClient()
@@ -41,11 +42,13 @@ export async function createRoom(
 
   const roomData = normalizeReservationFields(validated.data)
 
-  const { error } = await supabase.from('rooms').insert(roomData)
+  const { data: newRoom, error } = await supabase.from('rooms').insert(roomData).select('id').single()
   if (error) {
     if (error.code === '23505') return { message: 'เลขห้องนี้มีในระบบแล้ว' }
     return { message: error.message }
   }
+
+  logAudit({ action: 'room_create', entityType: 'room', entityId: newRoom?.id ?? null, roomId: newRoom?.id ?? null, description: `เพิ่มห้อง ${validated.data.room_number}` }).catch(() => {})
 
   revalidatePath('/rooms')
   return { success: true, message: 'เพิ่มห้องเรียบร้อยแล้ว' }
@@ -88,6 +91,8 @@ export async function updateRoom(
 
   if (error) return { message: error.message }
 
+  logAudit({ action: 'room_update', entityType: 'room', entityId: id, roomId: id, description: `แก้ไขห้อง ${validated.data.room_number}` }).catch(() => {})
+
   revalidatePath('/rooms')
   return { success: true, message: 'แก้ไขห้องเรียบร้อยแล้ว' }
 }
@@ -129,6 +134,9 @@ export async function clearRoomReservation(roomId: string): Promise<{ success: b
     .eq('id', roomId)
 
   if (error) return { success: false, message: error.message }
+
+  logAudit({ action: 'reservation_clear', entityType: 'room', entityId: roomId, roomId, description: `ยกเลิกจองห้อง` }).catch(() => {})
+
   revalidatePath('/rooms')
   revalidatePath(`/rooms/${roomId}`)
   return { success: true }
@@ -183,6 +191,8 @@ export async function convertReservationToTenant(roomId: string): Promise<{ succ
     .eq('id', roomId)
   if (roomError) return { success: false, message: roomError.message }
 
+  logAudit({ action: 'reservation_convert', entityType: 'room', entityId: roomId, roomId, tenantId: tenant.id, description: `แปลงผู้จองห้อง ${room.room_number} เป็นผู้เช่า: ${reservedName}` }).catch(() => {})
+
   revalidatePath('/rooms')
   revalidatePath(`/rooms/${roomId}`)
   revalidatePath('/tenants')
@@ -224,6 +234,8 @@ export async function deleteRoom(id: string): Promise<{ success: boolean; messag
 
   const { error } = await supabase.from('rooms').delete().eq('id', id)
   if (error) return { success: false, message: error.message }
+
+  logAudit({ action: 'room_delete', entityType: 'room', description: `ลบห้อง ${room.room_number}` }).catch(() => {})
 
   revalidatePath('/rooms')
   return { success: true }

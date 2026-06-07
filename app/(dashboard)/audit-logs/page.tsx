@@ -21,6 +21,24 @@ export const ACTION_LABELS: Record<string, { label: string; color: string }> = {
   line_bill_sent:      { label: 'ส่งบิล LINE',        color: 'bg-green-50 text-green-700 ring-green-200' },
   document_upload:     { label: 'อัพโหลดเอกสาร',    color: 'bg-slate-100 text-slate-600 ring-slate-200' },
   document_delete:     { label: 'ลบเอกสาร',         color: 'bg-rose-50 text-rose-700 ring-rose-200' },
+  tenant_create:       { label: 'เพิ่มผู้เช่า',      color: 'bg-emerald-50 text-emerald-700 ring-emerald-200' },
+  tenant_delete:       { label: 'ลบผู้เช่า',         color: 'bg-rose-50 text-rose-700 ring-rose-200' },
+  contract_create:     { label: 'สร้างสัญญา',        color: 'bg-emerald-50 text-emerald-700 ring-emerald-200' },
+  contract_terminate:  { label: 'ยกเลิกสัญญา',      color: 'bg-orange-50 text-orange-700 ring-orange-200' },
+  room_create:         { label: 'เพิ่มห้อง',         color: 'bg-emerald-50 text-emerald-700 ring-emerald-200' },
+  room_update:         { label: 'แก้ไขห้อง',         color: 'bg-amber-50 text-amber-700 ring-amber-200' },
+  room_delete:         { label: 'ลบห้อง',            color: 'bg-rose-50 text-rose-700 ring-rose-200' },
+  reservation_clear:   { label: 'ยกเลิกจอง',        color: 'bg-orange-50 text-orange-700 ring-orange-200' },
+  reservation_convert: { label: 'แปลงผู้จองเป็นผู้เช่า', color: 'bg-violet-50 text-violet-700 ring-violet-200' },
+  bill_create:         { label: 'สร้างบิล',          color: 'bg-sky-50 text-sky-700 ring-sky-200' },
+  bill_mark_paid:      { label: 'ทำเครื่องหมายชำระแล้ว', color: 'bg-emerald-50 text-emerald-700 ring-emerald-200' },
+  line_pair:           { label: 'จับคู่ LINE',        color: 'bg-teal-50 text-teal-700 ring-teal-200' },
+  line_unpair:         { label: 'ยกเลิกจับคู่ LINE', color: 'bg-orange-50 text-orange-700 ring-orange-200' },
+  broadcast_sent:      { label: 'ส่งประกาศ',         color: 'bg-violet-50 text-violet-700 ring-violet-200' },
+  registration_auto_approved: { label: 'ลงทะเบียน (auto)', color: 'bg-emerald-50 text-emerald-700 ring-emerald-200' },
+  registration_approved:      { label: 'อนุมัติลงทะเบียน', color: 'bg-emerald-50 text-emerald-700 ring-emerald-200' },
+  registration_rejected:      { label: 'ปฏิเสธลงทะเบียน',  color: 'bg-rose-50 text-rose-700 ring-rose-200' },
+  room_pairing_token_regenerated: { label: 'สร้าง QR ใหม่', color: 'bg-slate-100 text-slate-600 ring-slate-200' },
 }
 
 const dateTimeFmt = (s: string) =>
@@ -77,12 +95,12 @@ export default async function AuditLogsPage({
             {logs.map((log) => {
               const meta = ACTION_LABELS[log.action] ?? { label: log.action, color: 'bg-slate-100 text-slate-600 ring-slate-200' }
               return (
-                <div key={log.id} className="flex items-start gap-3 px-4 py-3">
-                  <span className={`mt-0.5 shrink-0 inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ring-1 ${meta.color}`}>
+                <div key={log.id} className="flex items-start gap-3 px-4 py-3 min-w-0">
+                  <span className={`mt-0.5 shrink-0 inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ring-1 whitespace-nowrap ${meta.color}`}>
                     {meta.label}
                   </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm text-slate-700">{log.description || '—'}</p>
+                  <div className="min-w-0 flex-1 overflow-hidden">
+                    <p className="text-sm text-slate-700 break-words">{log.description || '—'}</p>
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-0.5 text-[11px] text-slate-400">
                       <span>{dateTimeFmt(log.created_at)}</span>
                       {log.rooms?.room_number && <span>ห้อง {log.rooms.room_number}</span>}

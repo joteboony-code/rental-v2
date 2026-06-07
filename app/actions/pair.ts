@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import { revalidatePath } from 'next/cache'
 import { getLineMessagingConfig } from '@/lib/line-integration'
+import { logAudit } from './audit'
 
 export async function unlinkTenantLine(tenantId: string): Promise<{ success: boolean; message?: string }> {
   const supabase = await createClient()
@@ -13,6 +14,9 @@ export async function unlinkTenantLine(tenantId: string): Promise<{ success: boo
     .eq('id', tenantId)
 
   if (error) return { success: false, message: error.message }
+
+  logAudit({ action: 'line_unpair', entityType: 'tenant', entityId: tenantId, tenantId, description: `ยกเลิกจับคู่ LINE` }).catch(() => {})
+
   revalidatePath(`/tenants/${tenantId}`)
   return { success: true }
 }
@@ -55,6 +59,9 @@ export async function pairTenantLine(
   }
 
   const result = Array.isArray(data) ? data[0] : data
+  if (result?.success) {
+    logAudit({ action: 'line_pair', description: `จับคู่ LINE ห้อง ${roomNumber}` }).catch(() => {})
+  }
   return {
     success: Boolean(result?.success),
     message: result?.message ?? 'ไม่สามารถเชื่อม LINE ได้',

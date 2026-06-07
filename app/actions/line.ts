@@ -957,6 +957,8 @@ export async function sendBroadcast(
     failed_count: failed,
   })
 
+  logAudit({ action: 'broadcast_sent', description: `ส่งประกาศถึง ${sent} ห้อง: ${message.slice(0, 50)}${message.length > 50 ? '...' : ''}` }).catch(() => {})
+
   revalidatePath('/broadcast')
 
   return {
