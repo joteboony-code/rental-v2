@@ -25,11 +25,15 @@ function thaiDate(dateStr: string) {
 }
 
 async function pushMessage(to: string, token: string, messages: object[]) {
-  await fetch('https://api.line.me/v2/bot/message/push', {
+  const res = await fetch('https://api.line.me/v2/bot/message/push', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify({ to, messages }),
   })
+  if (!res.ok) {
+    const body = await res.text().catch(() => '')
+    throw new Error(`LINE API ${res.status}: ${body}`)
+  }
 }
 
 function buildPortalFlex(portalUrl: string) {
@@ -227,8 +231,8 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // Summary to owner
-  if (lineConfig.ownerLineUserId) {
+  // Summary to owner — ส่งเฉพาะเมื่อมีการแจ้งเตือนจริง (sent > 0)
+  if (lineConfig.ownerLineUserId && sent > 0) {
     const totalAmt = totalReminded
     const overdueCount = [...byTenant.values()].filter((bs) => bs.some((b) => b.status === 'overdue')).length
     const ownerLines = [

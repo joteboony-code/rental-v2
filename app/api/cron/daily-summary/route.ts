@@ -19,11 +19,15 @@ function thaiDate(d: Date) {
 }
 
 async function pushMessage(to: string, token: string, messages: object[]) {
-  await fetch('https://api.line.me/v2/bot/message/push', {
+  const res = await fetch('https://api.line.me/v2/bot/message/push', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify({ to, messages }),
   })
+  if (!res.ok) {
+    const body = await res.text().catch(() => '')
+    throw new Error(`LINE API ${res.status}: ${body}`)
+  }
 }
 
 export async function GET(req: NextRequest) {
@@ -85,16 +89,30 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // เรียงตามเลขห้อง จากนั้นเดือน แล้วแสดงแยกรายบิล
-  const thaiMonth = (s: string) => s
-    ? new Date(s + '-01').toLocaleDateString('th-TH', { month: 'short', year: '2-digit' })
+  // จัดกลุ่มตามเดือน เรียงตามเดือน → ห้อง
+  const thaiMonthLong = (s: string) => s
+    ? new Date(s).toLocaleDateString('th-TH', { month: 'long', year: 'numeric' })
     : ''
+
   billEntries.sort((a, b) =>
-    a.room.localeCompare(b.room, 'th', { numeric: true }) || a.month.localeCompare(b.month)
+    a.month.localeCompare(b.month) || a.room.localeCompare(b.room, 'th', { numeric: true })
   )
-  const roomLines = billEntries.map(({ room, month, remaining }) =>
-    `  • ห้อง ${room}${month ? ` (${thaiMonth(month)})` : ''}  ฿${fmt(remaining)}`
-  )
+
+  // จัด map เดือน → รายการห้อง
+  const byMonth = new Map<string, BillEntry[]>()
+  for (const e of billEntries) {
+    if (!byMonth.has(e.month)) byMonth.set(e.month, [])
+    byMonth.get(e.month)!.push(e)
+  }
+
+  const roomLines: string[] = []
+  for (const [month, entries] of byMonth) {
+    const monthTotal = entries.reduce((s, e) => s + e.remaining, 0)
+    roomLines.push(`📅 ${thaiMonthLong(month)} ค้าง ฿${fmt(monthTotal)}`)
+    for (const { room, remaining } of entries) {
+      roomLines.push(`  • ห้อง ${room}  ฿${fmt(remaining)}`)
+    }
+  }
 
   const lines: string[] = [
     '📌 สรุปประจำวัน',

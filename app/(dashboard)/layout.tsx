@@ -14,6 +14,20 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   const displayName = user.email ?? 'เจ้าของ'
   const initials = displayName.slice(0, 2).toUpperCase()
+  const [
+    { count: pendingBillCount },
+    { count: pendingRepairCount },
+    { count: pendingSlipCount },
+  ] = await Promise.all([
+    supabase.from('bills').select('id', { count: 'exact', head: true }).in('status', ['pending', 'overdue']),
+    supabase.from('repair_requests').select('id', { count: 'exact', head: true }).in('status', ['pending', 'in_progress']),
+    supabase.from('pending_slips').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
+  ])
+  const notifications = {
+    '/bills': pendingBillCount ?? 0,
+    '/repairs': pendingRepairCount ?? 0,
+    '/payment-reviews': pendingSlipCount ?? 0,
+  }
 
   return (
     <div className="flex min-h-screen bg-slate-50">
@@ -23,7 +37,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           <h1 className="text-sm font-bold text-slate-900 leading-tight">ห้องเช่า</h1>
         </div>
         <nav className="flex-1 py-1">
-          <NavItems />
+          <NavItems notifications={notifications} />
         </nav>
 
         {/* User + logout */}
@@ -56,8 +70,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
         <div className="hidden md:flex items-center gap-3 border-b border-slate-100 bg-white px-5 py-2">
           <GlobalSearch />
         </div>
-        <MobileNav displayName={displayName} initials={initials} />
-        <main className="flex-1 overflow-auto">
+        <MobileNav displayName={displayName} initials={initials} notifications={notifications} />
+        <main className="flex-1 overflow-auto pb-6 md:pb-0">
           {children}
         </main>
       </div>

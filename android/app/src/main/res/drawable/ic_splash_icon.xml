@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- หลังคา -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,22 L82,46 L26,46 Z" />
+
+    <!-- ตัวบ้าน -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M32,46 L76,46 L76,82 L32,82 Z" />
+
+    <!-- ประตู -->
+    <path
+        android:fillColor="#059669"
+        android:pathData="M46,82 L46,62 Q54,56 62,62 L62,82 Z" />
+
+    <!-- หน้าต่างซ้าย -->
+    <path
+        android:fillColor="#059669"
+        android:pathData="M36,50 L46,50 L46,60 L36,60 Z" />
+
+    <!-- หน้าต่างขวา -->
+    <path
+        android:fillColor="#059669"
+        android:pathData="M62,50 L72,50 L72,60 L62,60 Z" />
+
+    <!-- ปล่องไฟ -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M64,28 L72,28 L72,46 L64,46 Z" />
+
+</vector>

@@ -119,6 +119,8 @@ export async function recordPayment(
 
   revalidatePath('/bills')
   revalidatePath(`/bills/${billId}`)
+  revalidatePath('/bills/payments')
+  revalidatePath('/bills/history')
   revalidatePath('/portal')
 
   return {
@@ -193,6 +195,8 @@ export async function deletePayment(paymentId: string, billId: string): Promise<
 
   revalidatePath('/bills')
   revalidatePath(`/bills/${billId}`)
+  revalidatePath('/bills/payments')
+  revalidatePath('/bills/history')
   revalidatePath('/portal')
 }
 

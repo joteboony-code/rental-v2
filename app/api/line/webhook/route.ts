@@ -149,25 +149,37 @@ async function getDisplayName(lineUserId: string, token: string): Promise<string
 }
 
 async function reply(replyToken: string, token: string, messages: object[]) {
-  await fetch('https://api.line.me/v2/bot/message/reply', {
+  const res = await fetch('https://api.line.me/v2/bot/message/reply', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify({ replyToken, messages }),
   })
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '')
+    throw new Error(`LINE reply failed: ${res.status} ${detail}`)
+  }
 }
 
 async function push(to: string | null, token: string, messages: object[]) {
   if (!to) return
-  await fetch('https://api.line.me/v2/bot/message/push', {
+  const res = await fetch('https://api.line.me/v2/bot/message/push', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify({ to, messages }),
   })
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '')
+    throw new Error(`LINE push failed: ${res.status} ${detail}`)
+  }
 }
 
 async function notifyOwner(cfg: LineConfig, text: string) {
   if (!cfg.ownerLineUserId) return
-  try { await push(cfg.ownerLineUserId, cfg.channelAccessToken, [{ type: 'text', text }]) } catch { /* silent */ }
+  try {
+    await push(cfg.ownerLineUserId, cfg.channelAccessToken, [{ type: 'text', text }])
+  } catch (error) {
+    console.error('[line notify owner]', error)
+  }
 }
 
 function buildPortalFlex(portalUrl: string) {
@@ -456,7 +468,7 @@ async function handleSlipImage(
   const activeRooms = (activeContracts ?? [])
     .map((c) => (c.rooms as unknown as RJ | null)?.room_number)
     .filter((n): n is string => Boolean(n))
-  let roomNumber = activeRooms.length > 0 ? activeRooms.join(', ') : '—'
+  const roomNumber = activeRooms.length > 0 ? activeRooms.join(', ') : '—'
 
   // Handle room 99 test
   if (activeRooms.includes('99')) {
@@ -660,7 +672,9 @@ async function handleSlipImage(
       })
       if (error) return { ok: false, paidBills }
       firstSlipRef = false
-      await supabase.from('bills').update({ status: 'paid' }).eq('id', bill.id)
+      const billFullyPaid = toPay >= bill.remainingAmount
+      const billNewStatus = billFullyPaid ? 'paid' : isPastDue(bill.due_date) ? 'overdue' : 'pending'
+      await supabase.from('bills').update({ status: billNewStatus }).eq('id', bill.id)
       paidBills.push({
         roomNumber:   (bill.rooms as unknown as RJ | null)?.room_number ?? '?',
         billingMonth: bill.billing_month,
@@ -702,7 +716,7 @@ async function handleSlipImage(
         },
         description: `LINE auto [${matchRule}] ฿${fmt(amount)}${paidBills.length > 1 ? ` (${paidBills.length} บิล)` : ''}${creditAmt > 0 ? ` +เครดิต ฿${fmt(creditAmt)}` : ''}`,
       })
-    } catch { /* non-blocking */ }
+    } catch (err) { console.error('[webhook] audit log failed:', err) }
   }
 
   // ── Rule 1: unique single-bill exact match ─────────────────────────────────
@@ -727,7 +741,9 @@ async function handleSlipImage(
     const remaining  = Math.max(0, Number(bill.total_amount) - totalPaid)
     const fullyPaid  = remaining < 1
     const nextStatus = fullyPaid ? 'paid' : isPastDue(bill.due_date) ? 'overdue' : bill.status
-    if (nextStatus !== bill.status) await supabase.from('bills').update({ status: nextStatus }).eq('id', bill.id)
+    if (nextStatus !== bill.status) {
+      await supabase.from('bills').update({ status: nextStatus }).eq('id', bill.id).eq('status', bill.status)
+    }
     const portalUrl = buildBillPortalUrl(bill.id, cfg.liffId, cfg.appUrl)
     await reply(replyToken, token, [buildPaymentFlex({ fullyPaid, roomNumber: billRoom, billingMonth: bill.billing_month, paidAmount: totalPaid, remaining, ref: slipRef, portalUrl })])
     await logAutoPayment('unique_single_bill', [{ roomNumber: billRoom, billingMonth: bill.billing_month, amount }])

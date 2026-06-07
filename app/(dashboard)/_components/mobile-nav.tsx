@@ -93,9 +93,14 @@ const navItems = [
 interface Props {
   displayName: string
   initials:    string
+  notifications?: Record<string, number>
 }
 
-export function MobileNav({ displayName, initials }: Props) {
+function badgeText(count: number) {
+  return count > 9 ? '9+' : String(count)
+}
+
+export function MobileNav({ displayName, initials, notifications = {} }: Props) {
   const pathname  = usePathname()
   const [open, setOpen] = useState(false)
 
@@ -110,6 +115,7 @@ export function MobileNav({ displayName, initials }: Props) {
   }, [open])
 
   const activeItem = navItems.find(n => n.match(pathname))
+  const activeNotificationCount = activeItem ? notifications[activeItem.href] ?? 0 : 0
 
   return (
     <>
@@ -144,8 +150,13 @@ export function MobileNav({ displayName, initials }: Props) {
 
         {/* Current page chip */}
         {activeItem && (
-          <span className={`text-xs font-medium px-2.5 py-1 rounded-full shrink-0 ${activeItem.bg} ${activeItem.accent}`}>
+          <span className={`relative text-xs font-medium px-2.5 py-1 rounded-full shrink-0 ${activeItem.bg} ${activeItem.accent}`}>
             {activeItem.label}
+            {activeNotificationCount > 0 && (
+              <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-orange-500 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-white">
+                {badgeText(activeNotificationCount)}
+              </span>
+            )}
           </span>
         )}
         <ThemeToggle />
@@ -194,6 +205,7 @@ export function MobileNav({ displayName, initials }: Props) {
         <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
           {navItems.map(({ href, label, icon: Icon, accent, bg, match }) => {
             const isActive = match(pathname)
+            const notificationCount = notifications[href] ?? 0
             return (
               <Link
                 key={href}
@@ -208,7 +220,14 @@ export function MobileNav({ displayName, initials }: Props) {
                 <span className={`flex items-center justify-center w-8 h-8 rounded-lg ${isActive ? 'bg-white/10' : bg}`}>
                   <Icon className={`w-4 h-4 ${isActive ? 'text-white' : accent}`} strokeWidth={1.75} />
                 </span>
-                {label}
+                <span className="flex-1 truncate">{label}</span>
+                {notificationCount > 0 && (
+                  <span className={`flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-bold leading-none ${
+                    isActive ? 'bg-orange-400 text-white' : 'bg-orange-500 text-white'
+                  }`}>
+                    {badgeText(notificationCount)}
+                  </span>
+                )}
               </Link>
             )
           })}
