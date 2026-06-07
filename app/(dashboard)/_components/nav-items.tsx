@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, Users, FileText, ClipboardList, Wrench, Settings, History, Megaphone, LayoutDashboard, Inbox } from 'lucide-react'
+import { Home, Users, FileText, ClipboardList, Wrench, Settings, History, Megaphone, LayoutDashboard, Inbox, UserPlus } from 'lucide-react'
 
 const navItems = [
   {
@@ -25,6 +25,13 @@ const navItems = [
     icon:     Users,
     dot:      'bg-violet-400',
     match:    (p: string) => p.startsWith('/tenants'),
+  },
+  {
+    href:     '/tenant-registrations',
+    label:    'ลงทะเบียนผู้เช่า',
+    icon:     UserPlus,
+    dot:      'bg-amber-400',
+    match:    (p: string) => p.startsWith('/tenant-registrations'),
   },
   {
     href:     '/bills',

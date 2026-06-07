@@ -6,15 +6,17 @@ import { BillStatusBadge } from '../../bills/_components/bill-status-badge'
 import { ChevronLeft, Pencil, User, FileText, Wrench, Calendar } from 'lucide-react'
 import { roomRow } from '@/lib/room-utils'
 import { ReservationActions } from '../_components/reservation-actions'
+import { RegistrationQrCard } from './_components/registration-qr-card'
+import { getLineIntegrationPublic } from '@/lib/line-integration'
 
 export default async function RoomDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createClient()
 
-  const [{ data: room }, { data: bills }, { data: repairs }] = await Promise.all([
+  const [{ data: room }, { data: bills }, { data: repairs }, lineConfig] = await Promise.all([
     supabase
       .from('rooms')
-      .select(`*, contracts!left ( id, status, start_date, end_date, monthly_rent, deposit_paid, tenants ( id, full_name, phone ) )`)
+      .select(`*, registration_token, contracts!left ( id, status, start_date, end_date, monthly_rent, deposit_paid, tenants ( id, full_name, phone ) )`)
       .eq('id', id)
       .single(),
     supabase
@@ -29,6 +31,7 @@ export default async function RoomDetailPage({ params }: { params: Promise<{ id:
       .eq('room_id', id)
       .order('created_at', { ascending: false })
       .limit(5),
+    getLineIntegrationPublic(),
   ])
 
   if (!room) notFound()
@@ -175,6 +178,14 @@ export default async function RoomDetailPage({ params }: { params: Promise<{ id:
               <p className="text-sm text-slate-400 text-center py-4">ห้องว่าง</p>
             )}
           </div>
+
+          {/* Registration QR */}
+          <RegistrationQrCard
+            roomId={id}
+            roomNumber={room.room_number}
+            registrationToken={room.registration_token ?? null}
+            appUrl={lineConfig?.app_url ?? null}
+          />
 
           {/* Past tenants — history (แสดงเสมอ แม้ยังไม่มีประวัติ) */}
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
