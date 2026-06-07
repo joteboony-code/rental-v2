@@ -92,9 +92,6 @@ export default async function BillsPage({ searchParams }: Props) {
           <h1 className="text-2xl md:text-3xl font-bold text-slate-950 tracking-tight">บิล / ชำระเงิน</h1>
         </div>
         <div className="flex flex-col items-end gap-2">
-          <Suspense fallback={null}>
-            <LineQuotaBadge />
-          </Suspense>
           <div className="flex gap-2 flex-wrap">
           <Link href="/bills/payments"
             className={buttonVariants({ variant: 'outline', size: 'sm' }) + ' rounded-xl gap-1.5 border-slate-200 text-slate-600 hover:bg-slate-50'}>
@@ -121,17 +118,22 @@ export default async function BillsPage({ searchParams }: Props) {
       </div>
 
       {/* ── Billing month nav + action buttons ── */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <BillingMonthNav currentMonth={currentMonth} />
-        <div className="flex items-center gap-2 flex-wrap">
-          <SendRemindersButton
-            billingMonth={billingMonth}
-            isReminderDay={todayIsRemDay}
-            nextReminderDay={nextRemDay}
-            reminderDays={reminderDays}
-          />
-          <BulkLineButton billingMonth={billingMonth} />
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <BillingMonthNav currentMonth={currentMonth} />
+          <div className="flex items-center gap-2 flex-wrap">
+            <SendRemindersButton
+              billingMonth={billingMonth}
+              isReminderDay={todayIsRemDay}
+              nextReminderDay={nextRemDay}
+              reminderDays={reminderDays}
+            />
+            <BulkLineButton billingMonth={billingMonth} />
+          </div>
         </div>
+        <Suspense fallback={null}>
+          <LineQuotaBadge />
+        </Suspense>
       </div>
 
       {/* ── Month picker ── */}

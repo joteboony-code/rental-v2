@@ -10,7 +10,7 @@ export async function LineQuotaBadge() {
   const low = !isUnlimited && quota.remaining < 50
 
   return (
-    <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs border ${
+    <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs border w-full ${
       low
         ? 'bg-rose-50 border-rose-100 text-rose-700'
         : 'bg-white border-slate-100 text-slate-500'
@@ -35,7 +35,7 @@ export async function LineQuotaBadge() {
         )}
       </span>
       {!isUnlimited && (
-        <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+        <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
           <div
             className={`h-full rounded-full ${low ? 'bg-rose-500' : 'bg-green-500'}`}
             style={{ width: `${Math.min(pct, 100)}%` }}
