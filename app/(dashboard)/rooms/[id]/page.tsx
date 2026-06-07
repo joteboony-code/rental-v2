@@ -185,6 +185,7 @@ export default async function RoomDetailPage({ params }: { params: Promise<{ id:
             roomNumber={room.room_number}
             registrationToken={room.registration_token ?? null}
             appUrl={lineConfig?.app_url ?? null}
+            liffId={lineConfig?.line_liff_id_pairing ?? null}
           />
 
           {/* Past tenants — history (แสดงเสมอ แม้ยังไม่มีประวัติ) */}
