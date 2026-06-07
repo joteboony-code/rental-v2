@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useTransition } from 'react'
 import { regenerateRegistrationToken } from '@/app/actions/registrations'
-import { buildRegisterUrl } from '@/lib/pair-url'
+import { buildRegisterUrl, buildPairUrl } from '@/lib/pair-url'
 import { QrCode, RefreshCw, Copy, Check } from 'lucide-react'
 
 export function RegistrationQrCard({
@@ -19,19 +19,29 @@ export function RegistrationQrCard({
   liffId: string | null
 }) {
   const [token, setToken] = useState(registrationToken)
+  const [tab, setTab] = useState<'register' | 'pair'>('register')
   const [copied, setCopied] = useState(false)
   const [isPending, startTransition] = useTransition()
 
   const [origin, setOrigin] = useState<string>('')
   useEffect(() => { setOrigin(window.location.origin) }, [])
   const appOrigin = appUrl || origin
+
   const registerUrl = token
     ? buildRegisterUrl({ appOrigin, registrationToken: token, liffId })
     : null
 
+  const pairUrl = buildPairUrl({ appOrigin, liffId, roomNumber })
+
+  const activeUrl = tab === 'register' ? registerUrl : pairUrl
+
+  const qrUrl = activeUrl
+    ? `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(activeUrl)}`
+    : null
+
   function handleCopy() {
-    if (!registerUrl) return
-    navigator.clipboard.writeText(registerUrl).then(() => {
+    if (!activeUrl) return
+    navigator.clipboard.writeText(activeUrl).then(() => {
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     })
@@ -44,40 +54,68 @@ export function RegistrationQrCard({
     })
   }
 
-  const qrUrl = registerUrl
-    ? `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(registerUrl)}`
-    : null
-
   return (
     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-4">
       <div className="flex items-center justify-between">
         <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest flex items-center gap-2">
-          <QrCode className="size-3.5" /> QR ลงทะเบียนผู้เช่า
+          <QrCode className="size-3.5" /> QR ลงทะเบียน / จับคู่
         </p>
+        {tab === 'register' && (
+          <button
+            type="button"
+            onClick={handleRegenerate}
+            disabled={isPending}
+            className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-slate-700 transition-colors"
+          >
+            <RefreshCw className={`size-3.5 ${isPending ? 'animate-spin' : ''}`} />
+            {isPending ? 'กำลังสร้าง...' : 'Regenerate'}
+          </button>
+        )}
+      </div>
+
+      {/* Tabs */}
+      <div className="flex rounded-xl overflow-hidden border border-slate-100 text-xs font-semibold">
         <button
           type="button"
-          onClick={handleRegenerate}
-          disabled={isPending}
-          className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-slate-700 transition-colors"
+          onClick={() => { setTab('register'); setCopied(false) }}
+          className={`flex-1 py-2 transition-colors ${
+            tab === 'register'
+              ? 'bg-violet-600 text-white'
+              : 'bg-slate-50 text-slate-500 hover:bg-slate-100'
+          }`}
         >
-          <RefreshCw className={`size-3.5 ${isPending ? 'animate-spin' : ''}`} />
-          {isPending ? 'กำลังสร้าง...' : 'Regenerate'}
+          ลงทะเบียนใหม่
+        </button>
+        <button
+          type="button"
+          onClick={() => { setTab('pair'); setCopied(false) }}
+          className={`flex-1 py-2 transition-colors ${
+            tab === 'pair'
+              ? 'bg-violet-600 text-white'
+              : 'bg-slate-50 text-slate-500 hover:bg-slate-100'
+          }`}
+        >
+          จับคู่ LINE เดิม
         </button>
       </div>
 
-      {qrUrl && registerUrl ? (
+      {qrUrl && activeUrl ? (
         <>
           <div className="flex gap-4 items-start">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={qrUrl}
-              alt="QR ลงทะเบียน"
+              alt={tab === 'register' ? 'QR ลงทะเบียน' : 'QR จับคู่ LINE'}
               className="size-32 rounded-xl border border-slate-100 shrink-0"
             />
             <div className="flex-1 min-w-0 space-y-2">
-              <p className="text-xs text-slate-500">ลิงก์ลงทะเบียน ห้อง {roomNumber}</p>
+              <p className="text-xs text-slate-500">
+                {tab === 'register'
+                  ? `ลิงก์ลงทะเบียน ห้อง ${roomNumber}`
+                  : `ลิงก์จับคู่ LINE ห้อง ${roomNumber}`}
+              </p>
               <p className="text-xs font-mono text-slate-600 break-all bg-slate-50 rounded-lg p-2 leading-relaxed">
-                {registerUrl}
+                {activeUrl}
               </p>
               <button
                 type="button"
@@ -88,7 +126,11 @@ export function RegistrationQrCard({
               </button>
             </div>
           </div>
-          <p className="text-xs text-slate-400">ให้ผู้เช่าสแกน QR นี้ผ่าน LINE เพื่อลงทะเบียนเข้าห้องพัก</p>
+          <p className="text-xs text-slate-400">
+            {tab === 'register'
+              ? 'ให้ผู้เช่าสแกน QR นี้ผ่าน LINE เพื่อกรอกข้อมูลและลงทะเบียนเข้าห้องพัก'
+              : 'สำหรับผู้เช่าปัจจุบันที่มีสัญญาแล้ว สแกนเพื่อผูก LINE กับห้องโดยไม่ต้องรอ approve'}
+          </p>
         </>
       ) : (
         <p className="text-sm text-slate-400 text-center py-4">ยังไม่มีลิงก์ลงทะเบียน</p>
