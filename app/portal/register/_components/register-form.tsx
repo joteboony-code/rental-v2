@@ -173,6 +173,11 @@ export function RegisterForm({ room, liffId }: { room: Room; liffId: string | nu
           </div>
 
           <div className="space-y-1">
+            <label className="text-sm font-medium text-slate-700">เงินมัดจำ (฿) <span className="text-slate-400 font-normal text-xs">(ไม่บังคับ)</span></label>
+            <Input name="deposit_paid" type="number" min="0" placeholder="เช่น 6000" className="h-11" />
+          </div>
+
+          <div className="space-y-1">
             <label className="text-sm font-medium text-slate-700">วันที่เข้าอยู่ <span className="text-slate-400 font-normal text-xs">(ไม่บังคับ)</span></label>
             <Input name="move_in_date" type="date" className="h-11" />
           </div>

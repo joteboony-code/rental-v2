@@ -18,6 +18,19 @@ export function buildAddFriendUrl(lineOaBasicId?: string | null): string | null 
   return `https://line.me/R/ti/p/%40${id}`
 }
 
+/** URL สำหรับหน้า portal/register (self-registration flow) */
+export function buildRegisterUrl({
+  appOrigin,
+  registrationToken,
+}: {
+  appOrigin: string
+  registrationToken?: string | null
+}) {
+  if (!registrationToken) return ''
+  const path = `/portal/register?token=${encodeURIComponent(registrationToken)}`
+  return appOrigin ? `${appOrigin}${path}` : path
+}
+
 /** URL สำหรับหน้า portal/pair (web-based pairing fallback) */
 export function buildPairUrl({
   appOrigin,

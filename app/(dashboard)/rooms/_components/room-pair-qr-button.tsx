@@ -15,20 +15,25 @@ import {
 
 type RoomPairQrButtonProps = {
   roomNumber: string
-  pairUrl: string
+  /** Registration URL (/portal/register?token=...) — preferred */
+  registrationUrl?: string
+  /** Legacy LIFF pairing URL — kept for backward compat, not shown by default */
+  pairUrl?: string
 }
 
-function isAbsoluteUrl(url: string) {
-  return /^https?:\/\//i.test(url)
+function isAbsoluteUrl(url?: string) {
+  return !!url && /^https?:\/\//i.test(url)
 }
 
-export function RoomPairQrButton({ roomNumber, pairUrl }: RoomPairQrButtonProps) {
+export function RoomPairQrButton({ roomNumber, registrationUrl, pairUrl }: RoomPairQrButtonProps) {
   const [copied, setCopied] = useState(false)
-  const isValid = isAbsoluteUrl(pairUrl)
+
+  const displayUrl = registrationUrl || pairUrl || ''
+  const isValid = isAbsoluteUrl(displayUrl)
 
   async function copyLink() {
-    if (!navigator.clipboard) return
-    await navigator.clipboard.writeText(pairUrl)
+    if (!navigator.clipboard || !displayUrl) return
+    await navigator.clipboard.writeText(displayUrl)
     setCopied(true)
     window.setTimeout(() => setCopied(false), 1800)
   }
@@ -48,25 +53,24 @@ export function RoomPairQrButton({ roomNumber, pairUrl }: RoomPairQrButtonProps)
       </DialogTrigger>
       <DialogContent className="max-w-sm">
         <DialogHeader>
-          <DialogTitle>QR จับคู่ห้อง {roomNumber}</DialogTitle>
+          <DialogTitle>QR ลงทะเบียนผู้เช่า ห้อง {roomNumber}</DialogTitle>
           <DialogDescription>
-            ให้ผู้เช่าสแกน QR นี้จาก LINE app เพื่อจับคู่บัญชี LINE กับห้อง
+            ให้ผู้เช่าสแกนเพื่อกรอกข้อมูลและจับคู่ LINE กับห้อง
           </DialogDescription>
         </DialogHeader>
 
         {!isValid ? (
           <div className="rounded-xl bg-amber-50 border border-amber-200 px-4 py-4 space-y-2">
-            <p className="text-sm font-semibold text-amber-800">ยังไม่ได้ตั้งค่า LIFF</p>
+            <p className="text-sm font-semibold text-amber-800">ยังไม่มีลิงก์ลงทะเบียน</p>
             <p className="text-xs text-amber-700">
-              กรุณาไปที่ <strong>ตั้งค่า → LINE Integration</strong> แล้วกรอก <strong>LIFF ID (จับคู่ห้อง)</strong>
-              และ <strong>URL ของเว็บ</strong> ให้ครบก่อน
+              กรุณาเข้าหน้ารายละเอียดห้องเพื่อสร้างลิงก์ลงทะเบียน
             </p>
           </div>
         ) : (
           <div className="space-y-3">
             <div className="flex justify-center rounded-xl bg-white p-4 ring-1 ring-slate-100">
               <QRCode
-                value={pairUrl}
+                value={displayUrl}
                 size={208}
                 className="h-auto w-full max-w-[208px]"
                 viewBox="0 0 256 256"
@@ -74,7 +78,7 @@ export function RoomPairQrButton({ roomNumber, pairUrl }: RoomPairQrButtonProps)
             </div>
             <div className="rounded-lg bg-slate-50 px-3 py-2">
               <p className="break-all text-center text-[11px] leading-relaxed text-slate-500">
-                {pairUrl}
+                {displayUrl}
               </p>
             </div>
             <Button
