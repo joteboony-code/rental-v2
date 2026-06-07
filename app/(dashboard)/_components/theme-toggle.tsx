@@ -24,10 +24,8 @@ export function ThemeToggle() {
   const dark = useSyncExternalStore(subscribeTheme, getThemeSnapshot, getServerThemeSnapshot)
 
   useEffect(() => {
-    const stored = window.localStorage.getItem('theme')
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-    const nextDark = stored ? stored === 'dark' : prefersDark
-    document.documentElement.classList.toggle('dark', nextDark)
+    // Inline script in layout.tsx already applied the class before paint.
+    // Just sync the icon state by dispatching the event.
     window.dispatchEvent(new Event('themechange'))
   }, [])
 
