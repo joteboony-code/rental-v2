@@ -228,7 +228,7 @@ export async function deleteContractImage(
 }
 
 // ─── Terminate Contract ───────────────────────────────────────
-export async function terminateContract(contractId: string, tenantId: string): Promise<void> {
+export async function terminateContract(contractId: string, tenantId: string): Promise<{ error?: string }> {
   const supabase = await createClient()
 
   const { data: contractData } = await supabase
@@ -242,13 +242,18 @@ export async function terminateContract(contractId: string, tenantId: string): P
     .update({ status: 'terminated', end_date: new Date().toISOString().split('T')[0] })
     .eq('id', contractId)
 
-  if (error) throw new Error(error.message)
+  if (error) return { error: error.message }
+
+  if (contractData?.room_id) {
+    await supabase.from('rooms').update({ status: 'available' }).eq('id', contractData.room_id)
+  }
 
   logAudit({ action: 'contract_terminate', entityType: 'contract', entityId: contractId, tenantId: contractData?.tenant_id ?? tenantId, roomId: contractData?.room_id ?? null, description: `ยกเลิกสัญญาห้อง ${contractData?.room_id ?? ''}` }).catch(() => {})
 
   revalidatePath('/tenants')
   revalidatePath(`/tenants/${tenantId}`)
   revalidatePath('/rooms')
+  return {}
 }
 
 
