@@ -157,7 +157,7 @@ export default async function RoomsPage() {
                 const activeContract = (room.contracts as { status: string; tenants: { id: string; full_name: string } | null }[] | null)
                   ?.find((c) => c.status === 'active')
                 const roomPairUrl = buildPairUrl({ appOrigin, liffId: line?.line_liff_id_pairing, roomNumber: room.room_number })
-                const registrationUrl = buildRegisterUrl({ appOrigin, registrationToken: room.registration_token })
+                const registrationUrl = buildRegisterUrl({ appOrigin, registrationToken: room.registration_token, liffId: line?.line_liff_id_pairing })
                 return (
                   <div key={room.id} className="flex items-center gap-4 p-4">
                     <Link href={`/rooms/${room.id}`} className="size-11 rounded-xl bg-slate-100 flex items-center justify-center text-sm font-bold text-slate-700 shrink-0">
