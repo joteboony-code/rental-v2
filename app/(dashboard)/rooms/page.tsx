@@ -106,12 +106,12 @@ export default async function RoomsPage() {
                   return (
                     <tr key={room.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/60 transition-colors group">
                       <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
+                        <Link href={`/rooms/${room.id}`} className="flex items-center gap-3">
                           <div className="size-9 rounded-xl bg-slate-100 group-hover:bg-slate-200 flex items-center justify-center text-sm font-bold text-slate-700 transition-colors">
                             {room.room_number}
                           </div>
                           <span className="text-xs text-slate-400">แถวที่ {roomRow(room.room_number)}</span>
-                        </div>
+                        </Link>
                       </td>
                       <td className="px-4 py-4 text-slate-700 font-medium">
                         {activeContract?.tenants ? (
@@ -158,12 +158,12 @@ export default async function RoomsPage() {
                 const roomPairUrl = buildPairUrl({ appOrigin, liffId: line?.line_liff_id_pairing, roomNumber: room.room_number })
                 return (
                   <div key={room.id} className="flex items-center gap-4 p-4">
-                    <div className="size-11 rounded-xl bg-slate-100 flex items-center justify-center text-sm font-bold text-slate-700 shrink-0">
+                    <Link href={`/rooms/${room.id}`} className="size-11 rounded-xl bg-slate-100 flex items-center justify-center text-sm font-bold text-slate-700 shrink-0">
                       {room.room_number}
-                    </div>
+                    </Link>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-0.5">
-                        <span className="font-semibold text-slate-800 text-sm">ห้อง {room.room_number}</span>
+                        <Link href={`/rooms/${room.id}`} className="font-semibold text-slate-800 text-sm hover:underline">ห้อง {room.room_number}</Link>
                         {room.floor && <span className="text-xs text-slate-400">ชั้น {room.floor}</span>}
                         <RoomStatusBadge status={room.status} />
                       </div>
