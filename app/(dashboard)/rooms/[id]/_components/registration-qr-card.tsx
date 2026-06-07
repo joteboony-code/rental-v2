@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useEffect, useTransition } from 'react'
 import { regenerateRegistrationToken } from '@/app/actions/registrations'
 import { QrCode, RefreshCw, Copy, Check } from 'lucide-react'
 
@@ -19,8 +19,10 @@ export function RegistrationQrCard({
   const [copied, setCopied] = useState(false)
   const [isPending, startTransition] = useTransition()
 
-  const baseUrl = appUrl ?? ''
-  const registerUrl = token ? `${baseUrl}/portal/register?token=${token}` : null
+  const [origin, setOrigin] = useState<string>('')
+  useEffect(() => { setOrigin(window.location.origin) }, [])
+  const baseUrl = appUrl || origin
+  const registerUrl = token && baseUrl ? `${baseUrl}/portal/register?token=${token}` : null
 
   function handleCopy() {
     if (!registerUrl) return
