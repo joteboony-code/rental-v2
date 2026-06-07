@@ -168,6 +168,8 @@ export async function saveMeterAndGenerateBills(
     return { success: false, message: `เกิดข้อผิดพลาด: ${errors.join(' | ')}${suffix}` }
   }
 
+  logAudit({ action: 'bill_create', description: `สร้างบิลรอบ ${billing_month} จำนวน ${successCount} ห้อง` }).catch(() => {})
+
   return { success: true, message: `ออกบิลสำเร็จ ${successCount} ห้อง` }
 }
 
@@ -322,14 +324,12 @@ export async function markBillPaid(billId: string): Promise<{ success: boolean; 
 
   if (error) return { success: false, message: error.message }
   logAudit({
-    action: 'bill_update',
+    action: 'bill_mark_paid',
     entityType: 'bill',
     entityId: billId,
     tenantId: bill?.tenant_id ?? null,
     roomId: bill?.room_id ?? null,
-    oldValue: bill,
-    newValue: { ...bill, status: 'paid' },
-    description: `ทำเครื่องหมายบิล ${billId} เป็นชำระแล้ว`,
+    description: `ทำเครื่องหมายชำระแล้ว`,
   }).catch(() => {})
 
   revalidatePath('/bills')

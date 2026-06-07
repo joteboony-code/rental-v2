@@ -128,9 +128,9 @@ function RegistrationCard({ req }: { req: RegistrationRequest }) {
             )}
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-bold text-slate-700 bg-slate-100 px-3 py-1 rounded-xl">ห้อง {req.room_number}</span>
-          <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${statusCfg.cls}`}>
+        <div className="flex items-center gap-2 flex-wrap justify-end">
+          <span className="text-sm font-bold text-slate-700 bg-slate-100 px-3 py-1 rounded-xl shrink-0">ห้อง {req.room_number}</span>
+          <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border shrink-0 ${statusCfg.cls}`}>
             {statusCfg.label}
           </span>
         </div>

@@ -37,6 +37,8 @@ export async function createTenant(
     return { message: `เกิดข้อผิดพลาด: ${error.message}` }
   }
 
+  logAudit({ action: 'tenant_create', entityType: 'tenant', entityId: data.id, tenantId: data.id, description: `เพิ่มผู้เช่า ${parsed.data.full_name}` }).catch(() => {})
+
   revalidatePath('/tenants')
   redirect(`/tenants/${data.id}`)
 }
@@ -89,6 +91,7 @@ export async function deleteTenant(id: string): Promise<{ error?: string }> {
     }
     return { error: error.message }
   }
+  logAudit({ action: 'tenant_delete', entityType: 'tenant', entityId: id, description: `ลบผู้เช่า` }).catch(() => {})
   revalidatePath('/tenants')
   redirect('/tenants')
 }
@@ -125,14 +128,16 @@ export async function createContract(
   if (!room) return { message: 'ไม่พบห้องที่เลือก' }
   if (room.status === 'occupied') return { message: 'ห้องนี้มีผู้เช่าอยู่แล้ว' }
 
-  const { error } = await supabase.from('contracts').insert({
+  const { data: contract, error } = await supabase.from('contracts').insert({
     ...parsed.data,
     status: 'active',
-  })
+  }).select('id').single()
 
   if (error) {
     return { message: `เกิดข้อผิดพลาด: ${error.message}` }
   }
+
+  logAudit({ action: 'contract_create', entityType: 'contract', entityId: contract?.id ?? null, tenantId: parsed.data.tenant_id, roomId: parsed.data.room_id, description: `สร้างสัญญาห้อง ${parsed.data.room_id}` }).catch(() => {})
 
   revalidatePath('/tenants')
   revalidatePath('/rooms')
@@ -225,12 +230,22 @@ export async function deleteContractImage(
 // ─── Terminate Contract ───────────────────────────────────────
 export async function terminateContract(contractId: string, tenantId: string): Promise<void> {
   const supabase = await createClient()
+
+  const { data: contractData } = await supabase
+    .from('contracts')
+    .select('tenant_id, room_id')
+    .eq('id', contractId)
+    .single()
+
   const { error } = await supabase
     .from('contracts')
     .update({ status: 'terminated', end_date: new Date().toISOString().split('T')[0] })
     .eq('id', contractId)
 
   if (error) throw new Error(error.message)
+
+  logAudit({ action: 'contract_terminate', entityType: 'contract', entityId: contractId, tenantId: contractData?.tenant_id ?? tenantId, roomId: contractData?.room_id ?? null, description: `ยกเลิกสัญญาห้อง ${contractData?.room_id ?? ''}` }).catch(() => {})
+
   revalidatePath('/tenants')
   revalidatePath(`/tenants/${tenantId}`)
   revalidatePath('/rooms')
