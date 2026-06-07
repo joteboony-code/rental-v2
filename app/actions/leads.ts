@@ -3,6 +3,38 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
+import { decryptSecret } from '@/lib/crypto-secrets'
+
+async function notifyOwnerNewLead(name: string, phone: string, note: string | null) {
+  const supabase = createServiceClient()
+  const { data } = await supabase
+    .from('line_integrations')
+    .select('encrypted_channel_access_token, owner_line_user_id')
+    .maybeSingle()
+
+  if (!data?.encrypted_channel_access_token || !data?.owner_line_user_id) return
+
+  const token = await decryptSecret(data.encrypted_channel_access_token)
+  const text = [
+    '📬 มีคนสนใจเช่าห้องใหม่',
+    `ชื่อ: ${name}`,
+    `เบอร์: ${phone}`,
+    note ? `หมายเหตุ: ${note}` : '',
+    '\nดูรายชื่อได้ที่หน้า "คนสนใจห้อง"',
+  ].filter(Boolean).join('\n')
+
+  await fetch('https://api.line.me/v2/bot/message/push', {
+    method: 'POST',
+    headers: {
+      'Content-Type':  'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      to:       data.owner_line_user_id,
+      messages: [{ type: 'text', text }],
+    }),
+  })
+}
 
 export async function submitLead(
   _: unknown,
@@ -15,11 +47,13 @@ export async function submitLead(
   if (!name)  return { success: false, message: 'กรุณากรอกชื่อ' }
   if (!phone) return { success: false, message: 'กรุณากรอกเบอร์โทร' }
 
-  // ใช้ service client เพื่อ bypass RLS (public submission)
   const supabase = createServiceClient()
   const { error } = await supabase.from('leads').insert({ name, phone, note: note || null })
 
   if (error) return { success: false, message: `เกิดข้อผิดพลาด: ${error.message}` }
+
+  notifyOwnerNewLead(name, phone, note || null).catch(() => {})
+
   return { success: true, message: 'ฝากข้อมูลไว้เรียบร้อยแล้ว เจ้าของหอจะติดต่อกลับโดยเร็ว' }
 }
 
@@ -41,3 +75,4 @@ export async function deleteLead(id: string): Promise<{ error?: string }> {
   revalidatePath('/leads')
   return {}
 }
+
