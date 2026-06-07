@@ -119,13 +119,9 @@ export function RegisterForm({ room, liffId }: { room: Room; liffId: string | nu
       )}
 
       {liffStatus === 'need-login' && (
-        <button
-          type="button"
-          onClick={() => window.liff?.login({ redirectUri: window.location.href })}
-          className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 shadow-sm"
-        >
-          เข้าสู่ระบบด้วย LINE เพื่อดึงข้อมูลอัตโนมัติ
-        </button>
+        <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-500 text-center">
+          เปิดลิงก์นี้ในแอป LINE เพื่อดึงข้อมูล LINE อัตโนมัติ
+        </div>
       )}
 
       {/* LINE profile card */}
