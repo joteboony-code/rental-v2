@@ -77,6 +77,7 @@ async function doApprove(opts: {
   linePictureUrl: string | null
   matchedTenantId: string | null
   monthlyRent: number
+  depositPaid?: number
   reviewedBy?: string | null
 }): Promise<string | null> {
   const supabase = createServiceClient()
@@ -114,6 +115,7 @@ async function doApprove(opts: {
     tenant_id: tenantId,
     start_date: startDate,
     monthly_rent: opts.monthlyRent,
+    deposit_paid: opts.depositPaid ?? 0,
     status: 'active',
   })
   if (contractErr) return contractErr.message
@@ -144,6 +146,7 @@ export async function submitRegistration(formData: FormData): Promise<SubmitRegi
   const idCard          = String(formData.get('id_card')           ?? '').trim() || null
   const moveInDate      = String(formData.get('move_in_date')      ?? '').trim() || null
   const note            = String(formData.get('note')              ?? '').trim() || null
+  const depositPaid     = Number(formData.get('deposit_paid')      ?? 0) || 0
 
   if (!roomId || !roomNumber) return { success: false, message: 'ลิงก์ไม่ถูกต้อง กรุณาสแกน QR ใหม่' }
   if (!fullName)              return { success: false, message: 'กรุณากรอกชื่อ-นามสกุล' }
@@ -215,6 +218,7 @@ export async function submitRegistration(formData: FormData): Promise<SubmitRegi
       room_id: roomId, room_number: roomNumber,
       line_user_id: lineUserId, line_display_name: lineDisplayName, line_picture_url: linePictureUrl,
       full_name: fullName, phone, id_card: idCard, move_in_date: moveInDate, note,
+      deposit_paid: depositPaid,
       status, pending_reason: pendingReasons.join(', ') || null,
       matched_tenant_id: matchedTenantId,
     })
@@ -228,6 +232,7 @@ export async function submitRegistration(formData: FormData): Promise<SubmitRegi
       requestId: req.id, roomId, fullName, phone, idCard, moveInDate,
       lineUserId, lineDisplayName, linePictureUrl, matchedTenantId,
       monthlyRent: Number(room.monthly_rent),
+      depositPaid,
     })
     if (err) {
       await supabase.from('tenant_registration_requests')
@@ -297,6 +302,7 @@ export async function approveRegistration(
     lineUserId: req.line_user_id, lineDisplayName: req.line_display_name, linePictureUrl: req.line_picture_url,
     matchedTenantId: req.matched_tenant_id,
     monthlyRent: Number(room.monthly_rent),
+    depositPaid: Number(req.deposit_paid ?? 0),
     reviewedBy: user?.id ?? null,
   })
   if (err) return { success: false, message: err }
