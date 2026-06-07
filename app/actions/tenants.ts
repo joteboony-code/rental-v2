@@ -80,10 +80,15 @@ export async function updateTenant(
 }
 
 // ─── Delete Tenant ───────────────────────────────────────────
-export async function deleteTenant(id: string): Promise<void> {
+export async function deleteTenant(id: string): Promise<{ error?: string }> {
   const supabase = await createClient()
   const { error } = await supabase.from('tenants').delete().eq('id', id)
-  if (error) throw new Error(error.message)
+  if (error) {
+    if (error.code === '23503') {
+      return { error: 'ไม่สามารถลบได้ เนื่องจากมีข้อมูลอื่นอ้างอิงผู้เช่านี้อยู่ (บิล, สัญญา หรือประวัติการชำระ)' }
+    }
+    return { error: error.message }
+  }
   revalidatePath('/tenants')
   redirect('/tenants')
 }
