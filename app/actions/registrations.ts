@@ -120,6 +120,11 @@ async function doApprove(opts: {
   })
   if (contractErr) return contractErr.message
 
+  // อัปเดตค่ามัดจำของห้องให้ตรงกับที่ผู้เช่าระบุ
+  if (opts.depositPaid != null) {
+    await supabase.from('rooms').update({ deposit: opts.depositPaid }).eq('id', opts.roomId)
+  }
+
   await supabase.from('tenant_registration_requests').update({
     status: 'auto_approved',
     matched_tenant_id: tenantId,
