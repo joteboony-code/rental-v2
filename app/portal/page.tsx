@@ -1,9 +1,30 @@
 export const dynamic = 'force-dynamic'
 
+import { redirect } from 'next/navigation'
 import { getLineIntegrationPublic } from '@/lib/line-integration'
 import { TenantPortal } from './_components/tenant-portal'
 
-export default async function PortalPage() {
+function parseLiffState(liffState?: string | string[]): URLSearchParams {
+  if (!liffState) return new URLSearchParams()
+  const raw = Array.isArray(liffState) ? liffState[0] : liffState
+  try { return new URLSearchParams(raw.replace(/^\/?\??/, '')) } catch { return new URLSearchParams() }
+}
+
+export default async function PortalPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>
+}) {
+  const params = await searchParams
+  const liffStateParams = parseLiffState(params['liff.state'])
+
+  // ถ้า LIFF endpoint ตั้งเป็น /portal แต่มี registerToken ให้ redirect ไปหน้าลงทะเบียนเลย
+  const registerToken =
+    (params.registerToken as string | undefined) ?? liffStateParams.get('registerToken') ?? undefined
+  if (registerToken) {
+    redirect(`/portal/register?token=${encodeURIComponent(registerToken)}`)
+  }
+
   const line = await getLineIntegrationPublic()
 
   return (

@@ -36,7 +36,16 @@ export async function getLineIntegrationPublic(
     .eq('dorm_id', dormId)
     .maybeSingle()
 
-  if (data) return data as LineIntegrationPublic
+  if (data) {
+    const row = data as LineIntegrationPublic
+    // ถ้าตั้งค่า line_liff_id_pairing ไว้แล้วใช้เลย
+    // ถ้าไม่มี (column ไม่ถูก migrate หรือยังไม่ได้กรอก) ให้ fallback ไปใช้ line_liff_id
+    // เพื่อให้ QR ลงทะเบียนแสดงเป็น LIFF URL ได้เมื่อมี LIFF ID อย่างน้อยหนึ่งตัว
+    return {
+      ...row,
+      line_liff_id_pairing: row.line_liff_id_pairing ?? row.line_liff_id ?? null,
+    }
+  }
 
   const { data: legacySettings } = await supabase
     .from('settings')
@@ -50,7 +59,8 @@ export async function getLineIntegrationPublic(
     dorm_id: dormId,
     line_oa_basic_id: null,
     line_liff_id: legacySettings.line_liff_id ?? null,
-    line_liff_id_pairing: null,
+    // fallback: legacy ใช้ line_liff_id เป็น pairing ด้วย เพราะยังไม่มี column แยก
+    line_liff_id_pairing: legacySettings.line_liff_id ?? null,
     app_url: legacySettings.app_url ?? null,
     owner_line_user_id: null,
     token_last4: null,
