@@ -1,6 +1,5 @@
 'use client'
 
-import QRCode from 'react-qr-code'
 import { Check, Copy, QrCode } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
@@ -30,6 +29,10 @@ export function RoomPairQrButton({ roomNumber, registrationUrl, pairUrl }: RoomP
 
   const displayUrl = registrationUrl || pairUrl || ''
   const isValid = isAbsoluteUrl(displayUrl)
+
+  const qrImgUrl = isValid
+    ? `https://api.qrserver.com/v1/create-qr-code/?size=256x256&ecc=M&data=${encodeURIComponent(displayUrl)}`
+    : null
 
   async function copyLink() {
     if (!navigator.clipboard || !displayUrl) return
@@ -69,11 +72,13 @@ export function RoomPairQrButton({ roomNumber, registrationUrl, pairUrl }: RoomP
         ) : (
           <div className="space-y-3">
             <div className="flex justify-center rounded-xl bg-white p-4 ring-1 ring-slate-100">
-              <QRCode
-                value={displayUrl}
-                size={208}
-                className="h-auto w-full max-w-[208px]"
-                viewBox="0 0 256 256"
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={qrImgUrl!}
+                alt="QR ลงทะเบียน"
+                width={208}
+                height={208}
+                className="rounded-lg"
               />
             </div>
             <div className="rounded-lg bg-slate-50 px-3 py-2">
