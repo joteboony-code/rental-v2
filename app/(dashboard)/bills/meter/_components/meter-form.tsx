@@ -3,7 +3,7 @@
 import { useRef, useState, useTransition } from 'react'
 import { saveMeterAndGenerateBills } from '@/app/actions/bills'
 import { Input } from '@/components/ui/input'
-import { Loader2, Zap, Droplets, Check, AlertCircle, AlertTriangle, CalendarDays, Camera, X } from 'lucide-react'
+import { Loader2, Zap, Droplets, Check, AlertCircle, AlertTriangle, CalendarDays, Camera, X, ListChecks } from 'lucide-react'
 import { roomRow } from '@/lib/room-utils'
 
 export interface RoomRow {
@@ -130,6 +130,7 @@ export function MeterForm({ rooms, billingMonth, waterRate, electricityRate, ano
   })
 
   const [saveError, setSaveError] = useState<Record<string, string>>({})
+  const [isSavingAll, setIsSavingAll] = useState(false)
 
   function calcRow(roomId: string, waterPrev: number, electricityPrev: number, rent: number) {
     const wCurr  = parseFloat(curr[roomId]?.water || '0') || 0
@@ -144,47 +145,64 @@ export function MeterForm({ rooms, billingMonth, waterRate, electricityRate, ano
     }
   }
 
-  function saveRoom(room: RoomRow) {
+  async function doSaveRoom(room: RoomRow): Promise<boolean> {
     const wCurrVal = parseFloat(curr[room.room_id]?.water || '0') || 0
     const eCurrVal = parseFloat(curr[room.room_id]?.elec  || '0') || 0
 
     if (!curr[room.room_id]?.water || !curr[room.room_id]?.elec) {
       setSaveError(prev => ({ ...prev, [room.room_id]: 'กรุณากรอกค่ามิเตอร์น้ำและไฟ' }))
-      return
+      return false
     }
     if (wCurrVal < room.water_prev) {
       setSaveError(prev => ({ ...prev, [room.room_id]: 'มิเตอร์น้ำต้องมากกว่าค่าก่อนหน้า' }))
-      return
+      return false
     }
     if (eCurrVal < room.electricity_prev) {
       setSaveError(prev => ({ ...prev, [room.room_id]: 'มิเตอร์ไฟต้องมากกว่าค่าก่อนหน้า' }))
-      return
+      return false
     }
 
     setSaveStatus(prev => ({ ...prev, [room.room_id]: 'loading' }))
     setSaveError(prev => ({ ...prev, [room.room_id]: '' }))
 
-    startTransition(async () => {
-      const fd = new FormData()
-      fd.append('billing_month', billingMonth)
-      fd.append('room_ids', room.room_id)
-      fd.append(`room_${room.room_id}_contract_id`,       room.contract_id)
-      fd.append(`room_${room.room_id}_tenant_id`,          room.tenant_id)
-      fd.append(`room_${room.room_id}_rent`,               String(room.rent))
-      fd.append(`room_${room.room_id}_water_prev`,         String(room.water_prev))
-      fd.append(`room_${room.room_id}_water_curr`,         String(wCurrVal))
-      fd.append(`room_${room.room_id}_electricity_prev`,   String(room.electricity_prev))
-      fd.append(`room_${room.room_id}_electricity_curr`,   String(eCurrVal))
-      fd.append(`room_${room.room_id}_start_date`,          room.start_date)
+    const fd = new FormData()
+    fd.append('billing_month', billingMonth)
+    fd.append('room_ids', room.room_id)
+    fd.append(`room_${room.room_id}_contract_id`,       room.contract_id)
+    fd.append(`room_${room.room_id}_tenant_id`,          room.tenant_id)
+    fd.append(`room_${room.room_id}_rent`,               String(room.rent))
+    fd.append(`room_${room.room_id}_water_prev`,         String(room.water_prev))
+    fd.append(`room_${room.room_id}_water_curr`,         String(wCurrVal))
+    fd.append(`room_${room.room_id}_electricity_prev`,   String(room.electricity_prev))
+    fd.append(`room_${room.room_id}_electricity_curr`,   String(eCurrVal))
+    fd.append(`room_${room.room_id}_start_date`,          room.start_date)
 
-      const roomPhotos = photos[room.room_id]
-      if (roomPhotos?.water.file)  fd.append(`room_${room.room_id}_water_image`, roomPhotos.water.file)
-      if (roomPhotos?.elec.file)   fd.append(`room_${room.room_id}_elec_image`,  roomPhotos.elec.file)
+    const roomPhotos = photos[room.room_id]
+    if (roomPhotos?.water.file)  fd.append(`room_${room.room_id}_water_image`, roomPhotos.water.file)
+    if (roomPhotos?.elec.file)   fd.append(`room_${room.room_id}_elec_image`,  roomPhotos.elec.file)
 
-      const res = await saveMeterAndGenerateBills(fd)
-      setSaveStatus(prev => ({ ...prev, [room.room_id]: res.success ? 'saved' : 'error' }))
-      if (!res.success) setSaveError(prev => ({ ...prev, [room.room_id]: res.message }))
-    })
+    const res = await saveMeterAndGenerateBills(fd)
+    setSaveStatus(prev => ({ ...prev, [room.room_id]: res.success ? 'saved' : 'error' }))
+    if (!res.success) setSaveError(prev => ({ ...prev, [room.room_id]: res.message }))
+    return res.success
+  }
+
+  function saveRoom(room: RoomRow) {
+    startTransition(async () => { await doSaveRoom(room) })
+  }
+
+  async function saveAllRooms() {
+    const pending = rooms.filter((r) =>
+      saveStatus[r.room_id] !== 'saved' &&
+      saveStatus[r.room_id] !== 'loading' &&
+      !!(curr[r.room_id]?.water && curr[r.room_id]?.elec)
+    )
+    if (pending.length === 0) return
+    setIsSavingAll(true)
+    for (const room of pending) {
+      await doSaveRoom(room)
+    }
+    setIsSavingAll(false)
   }
 
   if (rooms.length === 0) {
@@ -196,6 +214,11 @@ export function MeterForm({ rooms, billingMonth, waterRate, electricityRate, ano
   }
 
   const savedCount = Object.values(saveStatus).filter(s => s === 'saved').length
+  const pendingWithDataCount = rooms.filter((r) =>
+    saveStatus[r.room_id] !== 'saved' &&
+    saveStatus[r.room_id] !== 'loading' &&
+    !!(curr[r.room_id]?.water && curr[r.room_id]?.elec)
+  ).length
 
   return (
     <div>
@@ -210,6 +233,20 @@ export function MeterForm({ rooms, billingMonth, waterRate, electricityRate, ano
         <span className="text-xs font-semibold text-slate-500 shrink-0">
           {savedCount}/{rooms.length} ห้อง
         </span>
+        {pendingWithDataCount > 0 && (
+          <button
+            type="button"
+            onClick={saveAllRooms}
+            disabled={isSavingAll}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-950 text-white text-xs font-semibold hover:bg-slate-800 disabled:opacity-50 transition-all shrink-0"
+          >
+            {isSavingAll ? (
+              <><Loader2 className="size-3 animate-spin" /> กำลังบันทึก...</>
+            ) : (
+              <><ListChecks className="size-3.5" /> บันทึกทั้งหมด ({pendingWithDataCount})</>
+            )}
+          </button>
+        )}
       </div>
 
       {/* ── Mobile: Cards ── */}
