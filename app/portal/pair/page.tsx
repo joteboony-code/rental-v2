@@ -1,3 +1,4 @@
+import { redirect } from 'next/navigation'
 import { getLineIntegrationPublic } from '@/lib/line-integration'
 import { createServiceClient } from '@/lib/supabase/service'
 import { PairForm } from './_components/pair-form'
@@ -22,15 +23,13 @@ async function getAlreadyLinked(roomNumber: string): Promise<boolean> {
   return !!tenant?.line_user_id
 }
 
-function parseLiffStateRoom(liffState?: string | string[]): string | undefined {
-  if (!liffState) return undefined
+function parseLiffState(liffState?: string | string[]): URLSearchParams {
+  if (!liffState) return new URLSearchParams()
   const raw = Array.isArray(liffState) ? liffState[0] : liffState
   try {
-    // liff.state is a relative URL like "/?room=101" or "?room=101"
-    const qs = raw.replace(/^\/?\??/, '')
-    return new URLSearchParams(qs).get('room') ?? undefined
+    return new URLSearchParams(raw.replace(/^\/?\??/, ''))
   } catch {
-    return undefined
+    return new URLSearchParams()
   }
 }
 
@@ -40,8 +39,16 @@ export default async function PairPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
   const params = await searchParams
-  const room = (params.room as string | undefined)
-    ?? parseLiffStateRoom(params['liff.state'])
+  const liffStateParams = parseLiffState(params['liff.state'])
+
+  // ถ้ามี registerToken ใน liff.state หรือ query param ให้ redirect ไปหน้า register
+  const registerToken =
+    (params.registerToken as string | undefined) ?? liffStateParams.get('registerToken') ?? undefined
+  if (registerToken) {
+    redirect(`/portal/register?token=${encodeURIComponent(registerToken)}`)
+  }
+
+  const room = (params.room as string | undefined) ?? liffStateParams.get('room') ?? undefined
   const line = await getLineIntegrationPublic()
   const alreadyLinked = room ? await getAlreadyLinked(room) : false
 

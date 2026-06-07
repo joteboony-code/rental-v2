@@ -18,15 +18,25 @@ export function buildAddFriendUrl(lineOaBasicId?: string | null): string | null 
   return `https://line.me/R/ti/p/%40${id}`
 }
 
-/** URL สำหรับหน้า portal/register (self-registration flow) */
+/** URL สำหรับหน้า portal/register (self-registration flow)
+ *  ถ้ามี liffId จะสร้าง LIFF URL ให้กล้องธรรมดาเปิด LINE ได้เลย
+ *  ถ้าไม่มีจะ fallback เป็น direct URL
+ */
 export function buildRegisterUrl({
   appOrigin,
   registrationToken,
+  liffId,
 }: {
   appOrigin: string
   registrationToken?: string | null
+  liffId?: string | null
 }) {
   if (!registrationToken) return ''
+  if (liffId) {
+    const url = new URL(`https://liff.line.me/${liffId}`)
+    url.searchParams.set('registerToken', registrationToken)
+    return url.toString()
+  }
   const path = `/portal/register?token=${encodeURIComponent(registrationToken)}`
   return appOrigin ? `${appOrigin}${path}` : path
 }

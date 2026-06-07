@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useTransition } from 'react'
 import { regenerateRegistrationToken } from '@/app/actions/registrations'
+import { buildRegisterUrl } from '@/lib/pair-url'
 import { QrCode, RefreshCw, Copy, Check } from 'lucide-react'
 
 export function RegistrationQrCard({
@@ -9,11 +10,13 @@ export function RegistrationQrCard({
   roomNumber,
   registrationToken,
   appUrl,
+  liffId,
 }: {
   roomId: string
   roomNumber: string
   registrationToken: string | null
   appUrl: string | null
+  liffId: string | null
 }) {
   const [token, setToken] = useState(registrationToken)
   const [copied, setCopied] = useState(false)
@@ -21,8 +24,10 @@ export function RegistrationQrCard({
 
   const [origin, setOrigin] = useState<string>('')
   useEffect(() => { setOrigin(window.location.origin) }, [])
-  const baseUrl = appUrl || origin
-  const registerUrl = token && baseUrl ? `${baseUrl}/portal/register?token=${token}` : null
+  const appOrigin = appUrl || origin
+  const registerUrl = token
+    ? buildRegisterUrl({ appOrigin, registrationToken: token, liffId })
+    : null
 
   function handleCopy() {
     if (!registerUrl) return

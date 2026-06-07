@@ -103,7 +103,7 @@ export default async function RoomsPage() {
                   const activeContract = (room.contracts as { status: string; tenants: { id: string; full_name: string } | null }[] | null)
                     ?.find((c) => c.status === 'active')
                   const roomPairUrl = buildPairUrl({ appOrigin, liffId: line?.line_liff_id_pairing, roomNumber: room.room_number })
-                  const registrationUrl = buildRegisterUrl({ appOrigin, registrationToken: room.registration_token })
+                  const registrationUrl = buildRegisterUrl({ appOrigin, registrationToken: room.registration_token, liffId: line?.line_liff_id_pairing })
                   return (
                     <tr key={room.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/60 transition-colors group">
                       <td className="px-6 py-4">
