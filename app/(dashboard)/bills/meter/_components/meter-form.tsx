@@ -2,8 +2,9 @@
 
 import { useRef, useState, useTransition } from 'react'
 import { saveMeterAndGenerateBills } from '@/app/actions/bills'
+import { readMeterOCR } from '@/app/actions/ocr'
 import { Input } from '@/components/ui/input'
-import { Loader2, Zap, Droplets, Check, AlertCircle, AlertTriangle, CalendarDays, Camera, X, ListChecks } from 'lucide-react'
+import { Loader2, Zap, Droplets, Check, AlertCircle, AlertTriangle, CalendarDays, Camera, X, ListChecks, ScanLine } from 'lucide-react'
 import { roomRow } from '@/lib/room-utils'
 
 export interface RoomRow {
@@ -72,6 +73,8 @@ async function compressImage(file: File, maxPx = 1200, quality = 0.82): Promise<
 type SaveStatus = 'idle' | 'loading' | 'saved' | 'error'
 type PhotoSlot = { file: File | null; preview: string | null; existing: string | null }
 type RoomPhotos = { water: PhotoSlot; elec: PhotoSlot }
+type OcrSlotState = 'idle' | 'reading' | 'done' | 'failed'
+type RoomOcrState = { water: OcrSlotState; elec: OcrSlotState }
 
 export function MeterForm({ rooms, billingMonth, waterRate, electricityRate, anomalyThreshold }: Props) {
   const [, startTransition] = useTransition()
@@ -109,12 +112,40 @@ export function MeterForm({ rooms, billingMonth, waterRate, electricityRate, ano
       ...prev,
       [roomId]: { ...prev[roomId], [slot]: { file: compressed, preview, existing: prev[roomId]?.[slot]?.existing ?? null } },
     }))
+
+    // OCR: read meter value automatically
+    setOcrState(prev => ({
+      ...prev,
+      [roomId]: { ...(prev[roomId] ?? { water: 'idle', elec: 'idle' }), [slot]: 'reading' },
+    }))
+    const fd = new FormData()
+    fd.append('image', compressed)
+    const result = await readMeterOCR(fd)
+
+    if (result.value !== null) {
+      const currKey = slot === 'water' ? 'water' : 'elec'
+      setCurr(prev => ({ ...prev, [roomId]: { ...prev[roomId], [currKey]: String(result.value) } }))
+      if (saveStatus[roomId] === 'saved') setSaveStatus(prev => ({ ...prev, [roomId]: 'idle' }))
+      setOcrState(prev => ({
+        ...prev,
+        [roomId]: { ...(prev[roomId] ?? { water: 'idle', elec: 'idle' }), [slot]: 'done' },
+      }))
+    } else {
+      setOcrState(prev => ({
+        ...prev,
+        [roomId]: { ...(prev[roomId] ?? { water: 'idle', elec: 'idle' }), [slot]: 'failed' },
+      }))
+    }
   }
 
   function clearPhoto(roomId: string, slot: 'water' | 'elec') {
     setPhotos(prev => ({
       ...prev,
       [roomId]: { ...prev[roomId], [slot]: { file: null, preview: null, existing: null } },
+    }))
+    setOcrState(prev => ({
+      ...prev,
+      [roomId]: { ...(prev[roomId] ?? { water: 'idle', elec: 'idle' }), [slot]: 'idle' },
     }))
     const ref = fileRefs.current[roomId]?.[slot]
     if (ref) ref.value = ''
@@ -128,6 +159,8 @@ export function MeterForm({ rooms, billingMonth, waterRate, electricityRate, ano
     })
     return init
   })
+
+  const [ocrState, setOcrState] = useState<Record<string, RoomOcrState>>({})
 
   const [saveError, setSaveError] = useState<Record<string, string>>({})
   const [isSavingAll, setIsSavingAll] = useState(false)
@@ -336,6 +369,7 @@ export function MeterForm({ rooms, billingMonth, waterRate, electricityRate, ano
                     onChange={(f) => handlePhoto(room.room_id, 'water', f)}
                     onClear={() => clearPhoto(room.room_id, 'water')}
                   />
+                  <OcrBadge state={ocrState[room.room_id]?.water} />
                 </div>
 
                 {/* Electricity */}
@@ -378,6 +412,7 @@ export function MeterForm({ rooms, billingMonth, waterRate, electricityRate, ano
                     onChange={(f) => handlePhoto(room.room_id, 'elec', f)}
                     onClear={() => clearPhoto(room.room_id, 'elec')}
                   />
+                  <OcrBadge state={ocrState[room.room_id]?.elec} />
                 </div>
               </div>
 
@@ -487,6 +522,7 @@ export function MeterForm({ rooms, billingMonth, waterRate, electricityRate, ano
                       onChange={(f) => handlePhoto(room.room_id, 'water', f)}
                       onClear={() => clearPhoto(room.room_id, 'water')}
                     />
+                    <OcrBadge state={ocrState[room.room_id]?.water} compact />
                   </td>
                   {/* Water calc + anomaly */}
                   <td className="px-3 py-3 text-center">
@@ -533,6 +569,7 @@ export function MeterForm({ rooms, billingMonth, waterRate, electricityRate, ano
                       onChange={(f) => handlePhoto(room.room_id, 'elec', f)}
                       onClear={() => clearPhoto(room.room_id, 'elec')}
                     />
+                    <OcrBadge state={ocrState[room.room_id]?.elec} compact />
                   </td>
                   {/* Electricity calc + anomaly */}
                   <td className="px-3 py-3 text-center">
@@ -587,6 +624,29 @@ export function MeterForm({ rooms, billingMonth, waterRate, electricityRate, ano
         </table>
       </div>
     </div>
+  )
+}
+
+// ── OcrBadge component ───────────────────────────────────────
+function OcrBadge({ state, compact = false }: { state: OcrSlotState | undefined; compact?: boolean }) {
+  if (!state || state === 'idle') return null
+  if (state === 'reading') return (
+    <p className={`flex items-center gap-1 text-[10px] text-slate-400 ${compact ? '' : 'mt-1'}`}>
+      <Loader2 className="size-3 animate-spin shrink-0" />
+      {!compact && 'กำลังอ่าน...'}
+    </p>
+  )
+  if (state === 'done') return (
+    <p className={`flex items-center gap-1 text-[10px] text-emerald-600 font-semibold ${compact ? '' : 'mt-1'}`}>
+      <ScanLine className="size-3 shrink-0" />
+      {compact ? 'OCR' : 'อ่านค่าได้แล้ว'}
+    </p>
+  )
+  return (
+    <p className={`flex items-center gap-1 text-[10px] text-amber-500 ${compact ? '' : 'mt-1'}`}>
+      <AlertCircle className="size-3 shrink-0" />
+      {compact ? '?' : 'อ่านไม่ได้ กรอกเอง'}
+    </p>
   )
 }
 
