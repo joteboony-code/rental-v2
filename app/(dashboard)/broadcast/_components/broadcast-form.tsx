@@ -1,11 +1,11 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useRef } from 'react'
 import { sendBroadcast } from '@/app/actions/line'
-import { Megaphone, MessageCircle, Loader2, Check, AlertCircle, Users, Home } from 'lucide-react'
+import { uploadBroadcastImage } from '@/app/actions/upload'
+import { Megaphone, Loader2, Check, AlertCircle, Users, ImagePlus, X } from 'lucide-react'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
-import { Input } from '@/components/ui/input'
 
 interface RoomInfo {
   room_id:     string
@@ -19,12 +19,43 @@ interface Props {
 }
 
 export function BroadcastForm({ rooms }: Props) {
-  const [pending, start]      = useTransition()
-  const [message, setMessage] = useState('')
+  const [pending, start]        = useTransition()
+  const [uploading, startUpload] = useTransition()
+  const [message, setMessage]   = useState('')
   const [imageUrl, setImageUrl] = useState('')
+  const [imagePreview, setImagePreview] = useState('')
+  const [uploadError, setUploadError]   = useState('')
   const [allRooms, setAllRooms] = useState(true)
   const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [result,  setResult]  = useState<{ success: boolean; sent: number; failed: number; message: string } | null>(null)
+  const [result,  setResult]   = useState<{ success: boolean; sent: number; failed: number; message: string } | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploadError('')
+    const preview = URL.createObjectURL(file)
+    setImagePreview(preview)
+    const fd = new FormData()
+    fd.set('file', file)
+    startUpload(async () => {
+      const res = await uploadBroadcastImage(fd)
+      if (res.success && res.url) {
+        setImageUrl(res.url)
+      } else {
+        setUploadError(res.message)
+        setImagePreview('')
+        setImageUrl('')
+      }
+    })
+  }
+
+  function removeImage() {
+    setImageUrl('')
+    setImagePreview('')
+    setUploadError('')
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
 
   const lineRooms     = rooms.filter((r) => r.has_line)
   const targetRooms   = allRooms ? lineRooms : lineRooms.filter((r) => selected.has(r.room_id))
@@ -126,16 +157,46 @@ export function BroadcastForm({ rooms }: Props) {
           <p className="text-xs text-slate-400 text-right">{message.length} ตัวอักษร</p>
         </div>
 
-        <div className="space-y-1.5">
-          <Label htmlFor="broadcast_img">URL รูปภาพ (ถ้ามี)</Label>
-          <Input
-            id="broadcast_img"
-            type="url"
-            value={imageUrl}
-            onChange={(e) => setImageUrl(e.target.value)}
-            placeholder="https://example.com/image.jpg"
+        <div className="space-y-2">
+          <Label>รูปภาพ (ถ้ามี)</Label>
+          {imagePreview ? (
+            <div className="relative inline-block">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={imagePreview} alt="preview" className="h-32 rounded-xl object-cover border border-slate-200" />
+              {uploading && (
+                <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-black/40">
+                  <Loader2 className="size-5 text-white animate-spin" />
+                </div>
+              )}
+              {!uploading && (
+                <button
+                  type="button"
+                  onClick={removeImage}
+                  className="absolute -top-2 -right-2 size-5 rounded-full bg-slate-700 text-white flex items-center justify-center hover:bg-rose-500 transition-colors"
+                >
+                  <X className="size-3" />
+                </button>
+              )}
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-dashed border-slate-300 text-sm text-slate-500 hover:border-violet-400 hover:text-violet-600 transition-colors"
+            >
+              <ImagePlus className="size-4" />
+              เลือกรูปภาพ
+            </button>
+          )}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/gif"
+            className="hidden"
+            onChange={handleFileChange}
           />
-          <p className="text-xs text-slate-400">รูปภาพจะแสดงหลังข้อความ รองรับ jpg/png</p>
+          {uploadError && <p className="text-xs text-rose-500">{uploadError}</p>}
+          <p className="text-xs text-slate-400">รูปภาพจะแสดงหลังข้อความ รองรับ jpg/png/webp (max 5MB)</p>
         </div>
       </div>
 
