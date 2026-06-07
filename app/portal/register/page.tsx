@@ -74,6 +74,7 @@ export default async function RegisterPage({
         <RegisterForm
           room={room}
           liffId={line?.line_liff_id_pairing ?? null}
+          registrationToken={token ?? null}
         />
       </div>
     </main>

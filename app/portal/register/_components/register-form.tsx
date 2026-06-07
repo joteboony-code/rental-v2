@@ -15,7 +15,7 @@ type Room = { id: string; room_number: string; status: string; monthly_rent: num
 
 type LiffStatus = 'loading' | 'ok' | 'need-login' | 'no-liff' | 'error'
 
-export function RegisterForm({ room, liffId }: { room: Room; liffId: string | null }) {
+export function RegisterForm({ room, liffId, registrationToken }: { room: Room; liffId: string | null; registrationToken: string | null }) {
   const [scriptReady, setScriptReady] = useState(false)
   const [liffStatus, setLiffStatus] = useState<LiffStatus>(liffId ? 'loading' : 'no-liff')
   const [lineUserId, setLineUserId] = useState('')
@@ -144,8 +144,7 @@ export function RegisterForm({ room, liffId }: { room: Room; liffId: string | nu
 
       {/* Registration form */}
       <form onSubmit={handleSubmit} className="space-y-3">
-        <input type="hidden" name="room_id"           value={room.id} />
-        <input type="hidden" name="room_number"       value={room.room_number} />
+        <input type="hidden" name="registration_token" value={registrationToken ?? ''} />
         <input type="hidden" name="line_user_id"      value={lineUserId} />
         <input type="hidden" name="line_display_name" value={lineDisplayName} />
         <input type="hidden" name="line_picture_url"  value={linePictureUrl} />

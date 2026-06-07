@@ -76,15 +76,19 @@ async function doApprove(opts: {
   lineDisplayName: string | null
   linePictureUrl: string | null
   matchedTenantId: string | null
+  skipContract: boolean
   monthlyRent: number
   depositPaid?: number
+  approvalType: 'auto_approved' | 'approved'
   reviewedBy?: string | null
-}): Promise<string | null> {
+}): Promise<{ tenantId: string | null; error: string | null }> {
   const supabase = createServiceClient()
 
   let tenantId: string | null = opts.matchedTenantId
+  let createdNewTenant = false
 
   if (tenantId) {
+    // อัปเดต tenant เดิม (ผู้เช่าปัจจุบันเพิ่ม LINE/เบอร์ หรือผู้เช่าที่ match จากเบอร์)
     const { error } = await supabase.from('tenants').update({
       full_name: opts.fullName,
       phone: opts.phone,
@@ -95,7 +99,7 @@ async function doApprove(opts: {
         line_picture_url: opts.linePictureUrl,
       } : {}),
     }).eq('id', tenantId)
-    if (error) return error.message
+    if (error) return { tenantId: null, error: error.message }
   } else {
     const { data: newTenant, error } = await supabase.from('tenants').insert({
       full_name: opts.fullName,
@@ -105,35 +109,45 @@ async function doApprove(opts: {
       line_display_name: opts.lineDisplayName,
       line_picture_url: opts.linePictureUrl,
     }).select('id').single()
-    if (error || !newTenant) return error?.message ?? 'create tenant failed'
+    if (error || !newTenant) return { tenantId: null, error: error?.message ?? 'create tenant failed' }
     tenantId = newTenant.id
+    createdNewTenant = true
   }
 
-  const startDate = opts.moveInDate ?? new Date().toISOString().split('T')[0]
-  const { error: contractErr } = await supabase.from('contracts').insert({
-    room_id: opts.roomId,
-    tenant_id: tenantId,
-    start_date: startDate,
-    monthly_rent: opts.monthlyRent,
-    deposit_paid: opts.depositPaid ?? 0,
-    status: 'active',
-  })
-  if (contractErr) return contractErr.message
+  // สร้าง contract ใหม่เฉพาะเมื่อห้องยังไม่มีผู้เช่า
+  // ถ้า skipContract = true แปลว่าผู้เช่าเดิมแค่เพิ่ม LINE/เบอร์ → อัปเดต tenant เท่านั้น ไม่แตะ contract/ห้อง
+  if (!opts.skipContract) {
+    const startDate = opts.moveInDate ?? new Date().toISOString().split('T')[0]
+    const { error: contractErr } = await supabase.from('contracts').insert({
+      room_id: opts.roomId,
+      tenant_id: tenantId,
+      start_date: startDate,
+      monthly_rent: opts.monthlyRent,
+      deposit_paid: opts.depositPaid ?? 0,
+      status: 'active',
+    })
+    if (contractErr) {
+      // rollback เฉพาะ tenant ที่เพิ่งสร้างใหม่ — ห้ามลบ tenant เดิมที่ match อยู่แล้ว
+      if (createdNewTenant) {
+        await supabase.from('tenants').delete().eq('id', tenantId)
+      }
+      return { tenantId: null, error: contractErr.message }
+    }
 
-  // อัปเดตค่ามัดจำของห้องให้ตรงกับที่ผู้เช่าระบุ
-  if (opts.depositPaid != null) {
-    await supabase.from('rooms').update({ deposit: opts.depositPaid }).eq('id', opts.roomId)
+    // อัปเดตห้องเป็นมีผู้เช่า + ค่ามัดจำให้ตรงกับที่ผู้เช่าระบุ
+    const roomUpdate: Record<string, unknown> = { status: 'occupied' }
+    if (opts.depositPaid != null) roomUpdate.deposit = opts.depositPaid
+    await supabase.from('rooms').update(roomUpdate).eq('id', opts.roomId)
   }
 
   await supabase.from('tenant_registration_requests').update({
-    status: 'auto_approved',
+    status: opts.approvalType,
     matched_tenant_id: tenantId,
     reviewed_at: new Date().toISOString(),
     reviewed_by: opts.reviewedBy ?? null,
   }).eq('id', opts.requestId)
 
-  await logAudit('registration_auto_approved', opts.roomId, tenantId, opts.requestId)
-  return null
+  return { tenantId, error: null }
 }
 
 // ── Public: submit registration from portal ──────────────────────────────────
@@ -141,8 +155,7 @@ async function doApprove(opts: {
 export async function submitRegistration(formData: FormData): Promise<SubmitRegistrationResult> {
   const supabase = createServiceClient()
 
-  const roomId          = String(formData.get('room_id')          ?? '').trim()
-  const roomNumber      = String(formData.get('room_number')       ?? '').trim()
+  const registrationToken = String(formData.get('registration_token') ?? '').trim()
   const lineUserId      = String(formData.get('line_user_id')      ?? '').trim() || null
   const lineDisplayName = String(formData.get('line_display_name') ?? '').trim() || null
   const linePictureUrl  = String(formData.get('line_picture_url')  ?? '').trim() || null
@@ -153,29 +166,41 @@ export async function submitRegistration(formData: FormData): Promise<SubmitRegi
   const note            = String(formData.get('note')              ?? '').trim() || null
   const depositPaid     = Number(formData.get('deposit_paid')      ?? 0) || 0
 
-  if (!roomId || !roomNumber) return { success: false, message: 'ลิงก์ไม่ถูกต้อง กรุณาสแกน QR ใหม่' }
-  if (!fullName)              return { success: false, message: 'กรุณากรอกชื่อ-นามสกุล' }
-  if (!phone)                 return { success: false, message: 'กรุณากรอกเบอร์โทรศัพท์' }
+  // ใช้ registration_token เป็นหลักเท่านั้น — ห้ามเชื่อ room_id/room_number จาก client
+  if (!registrationToken) return { success: false, message: 'ลิงก์ไม่ถูกต้อง กรุณาสแกน QR ใหม่' }
+  if (!fullName)          return { success: false, message: 'กรุณากรอกชื่อ-นามสกุล' }
+  if (!phone)             return { success: false, message: 'กรุณากรอกเบอร์โทรศัพท์' }
 
   const { data: room } = await supabase
     .from('rooms')
     .select('id, room_number, monthly_rent, status')
-    .eq('id', roomId)
+    .eq('registration_token', registrationToken)
     .maybeSingle()
 
-  if (!room) return { success: false, message: 'ไม่พบห้องที่ระบุ' }
+  if (!room) return { success: false, message: 'ลิงก์ไม่ถูกต้องหรือหมดอายุ กรุณาสแกน QR ใหม่' }
   if (room.status === 'maintenance') return { success: false, message: 'ห้องนี้ปิดปรับปรุง กรุณาติดต่อเจ้าของหอ' }
 
-  const pendingReasons: string[] = []
+  const roomId = room.id
+  const roomNumber = room.room_number
 
-  // Case B: room has active contract
+  const pendingReasons: string[] = []
+  let matchedTenantId: string | null = null
+
+  // ไม่มี line_user_id → เข้า pending เสมอ ห้าม auto approve
+  if (!lineUserId) pendingReasons.push('ไม่ได้เปิดผ่านแอป LINE จึงยังไม่มีข้อมูล LINE')
+
+  // Case B: ห้องมีผู้เช่าอยู่แล้ว → pending และ match กับผู้เช่าปัจจุบัน
+  // (สำหรับผู้เช่าเดิมสแกน QR เพื่อเพิ่ม LINE/เบอร์ — approve จะอัปเดต tenant เดิม)
   const { data: activeContract } = await supabase
     .from('contracts')
-    .select('id')
+    .select('id, tenant_id')
     .eq('room_id', roomId)
     .eq('status', 'active')
     .maybeSingle()
-  if (activeContract) pendingReasons.push('ห้องมีผู้เช่าอยู่แล้ว')
+  if (activeContract) {
+    pendingReasons.push('ห้องมีผู้เช่าอยู่แล้ว')
+    matchedTenantId = activeContract.tenant_id
+  }
 
   // Case C: LINE already paired to another room
   if (lineUserId) {
@@ -197,22 +222,17 @@ export async function submitRegistration(formData: FormData): Promise<SubmitRegi
     }
   }
 
-  // Case D: phone duplicate
-  let matchedTenantId: string | null = null
+  // Case D: เบอร์ซ้ำกับ tenant อื่นที่ไม่ใช่ผู้เช่าปัจจุบันของห้องนี้
+  // → เข้า pending ให้ admin ตรวจ ห้าม auto update tenant ผิดคน
   const { data: tenantByPhone } = await supabase
     .from('tenants')
     .select('id')
     .eq('phone', phone)
     .maybeSingle()
-  if (tenantByPhone) {
-    matchedTenantId = tenantByPhone.id
-    const { data: phoneContract } = await supabase
-      .from('contracts')
-      .select('id')
-      .eq('tenant_id', tenantByPhone.id)
-      .eq('status', 'active')
-      .maybeSingle()
-    if (phoneContract) pendingReasons.push('เบอร์โทรซ้ำกับผู้เช่าที่มีสัญญาอยู่')
+  if (tenantByPhone && tenantByPhone.id !== activeContract?.tenant_id) {
+    pendingReasons.push('เบอร์โทรซ้ำกับผู้เช่าในระบบ')
+    // เก็บไว้เป็นข้อมูลให้ admin ตรวจ — ไม่ทับ tenant ผู้เช่าปัจจุบันของห้อง
+    if (!matchedTenantId) matchedTenantId = tenantByPhone.id
   }
 
   const status = pendingReasons.length > 0 ? ('pending' as const) : ('auto_approved' as const)
@@ -233,18 +253,22 @@ export async function submitRegistration(formData: FormData): Promise<SubmitRegi
   if (insertErr || !req) return { success: false, message: 'เกิดข้อผิดพลาด กรุณาลองใหม่' }
 
   if (status === 'auto_approved') {
-    const err = await doApprove({
+    // auto path = ห้องว่าง + มี LINE + ไม่ซ้ำ → สร้าง tenant + contract ใหม่เสมอ
+    const { tenantId, error } = await doApprove({
       requestId: req.id, roomId, fullName, phone, idCard, moveInDate,
-      lineUserId, lineDisplayName, linePictureUrl, matchedTenantId,
+      lineUserId, lineDisplayName, linePictureUrl,
+      matchedTenantId: null, skipContract: false,
       monthlyRent: Number(room.monthly_rent),
       depositPaid,
+      approvalType: 'auto_approved',
     })
-    if (err) {
+    if (error) {
       await supabase.from('tenant_registration_requests')
         .update({ status: 'pending', pending_reason: 'เกิดข้อผิดพลาดระหว่างสร้างข้อมูล กรุณาติดต่อเจ้าของหอ' })
         .eq('id', req.id)
       return { success: false, message: 'เกิดข้อผิดพลาด กรุณาติดต่อเจ้าของหอ' }
     }
+    await logAudit('registration_auto_approved', roomId, tenantId, req.id)
   }
 
   const config = await getLineMessagingConfig()
@@ -290,24 +314,34 @@ export async function approveRegistration(
     .maybeSingle()
   if (!room) return { success: false, message: 'ไม่พบห้อง' }
 
-  const { data: existing } = await serviceSupabase
+  // ถ้าห้องมี active contract อยู่ = ผู้เช่าเดิมสแกน QR เพื่อเพิ่ม LINE/เบอร์
+  // → อัปเดต tenant เดิมของ contract นั้น ไม่สร้าง contract ใหม่ (ไม่ block)
+  const { data: activeContract } = await serviceSupabase
     .from('contracts')
-    .select('id')
+    .select('id, tenant_id')
     .eq('room_id', req.room_id)
     .eq('status', 'active')
     .maybeSingle()
-  if (existing) return { success: false, message: 'ห้องนี้มีผู้เช่าใหม่เข้ามาแล้ว กรุณาตรวจสอบ' }
+
+  let skipContract = false
+  let matchedTenantId: string | null = req.matched_tenant_id
+  if (activeContract) {
+    skipContract = true
+    matchedTenantId = activeContract.tenant_id
+  }
 
   const { data: { user } } = await supabase.auth.getUser()
 
-  const err = await doApprove({
+  const { tenantId, error: err } = await doApprove({
     requestId: req.id, roomId: req.room_id,
     fullName: req.full_name, phone: req.phone,
     idCard: req.id_card, moveInDate: req.move_in_date,
     lineUserId: req.line_user_id, lineDisplayName: req.line_display_name, linePictureUrl: req.line_picture_url,
-    matchedTenantId: req.matched_tenant_id,
+    matchedTenantId,
+    skipContract,
     monthlyRent: Number(room.monthly_rent),
     depositPaid: Number(req.deposit_paid ?? 0),
+    approvalType: 'approved',
     reviewedBy: user?.id ?? null,
   })
   if (err) return { success: false, message: err }
@@ -323,7 +357,7 @@ export async function approveRegistration(
     await pushLine(req.line_user_id, `✅ คำขอลงทะเบียนของคุณได้รับการอนุมัติแล้ว\nห้อง: ${req.room_number}\nชื่อ: ${req.full_name}\nยินดีต้อนรับ 🏠`, config.channelAccessToken)
   }
 
-  await logAudit('registration_approved', req.room_id, req.matched_tenant_id, requestId)
+  await logAudit('registration_approved', req.room_id, tenantId, requestId)
   revalidatePath('/tenant-registrations')
   revalidatePath('/rooms')
   revalidatePath('/tenants')
