@@ -178,7 +178,7 @@ export default async function BillsPage({ searchParams }: Props) {
             <div>
               <p className="text-slate-400 text-xs font-semibold uppercase tracking-widest mb-1">รายได้ที่รับแล้ว</p>
               <p className="text-3xl md:text-4xl font-bold tracking-tight">
-                ฿<CountUp value={stats.revenue} formatter={(n) => n.toLocaleString('th-TH', { maximumFractionDigits: 0 })} />
+                ฿<CountUp value={stats.revenue} format="currency-th" />
               </p>
             </div>
             <div className="text-right">

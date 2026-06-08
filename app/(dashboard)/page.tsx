@@ -108,7 +108,7 @@ export default async function DashboardPage() {
               <p className="text-slate-400 text-xs font-semibold uppercase tracking-widest">รายได้เดือนนี้</p>
             </div>
             <p className="text-3xl md:text-4xl font-bold tracking-tight">
-              ฿<CountUp value={stats.revenue} formatter={(n) => n.toLocaleString('th-TH', { maximumFractionDigits: 0 })} />
+              ฿<CountUp value={stats.revenue} format="currency-th" />
             </p>
           </div>
           <div className="text-right">
