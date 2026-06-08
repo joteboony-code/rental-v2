@@ -30,7 +30,7 @@ export default async function DashboardPage() {
   }
 
   return (
-    <div className="p-5 md:p-8 space-y-6 max-w-6xl animate-fade-in">
+    <div className="p-5 md:p-8 space-y-6 max-w-6xl">
 
       {/* ── Header ── */}
       <div>

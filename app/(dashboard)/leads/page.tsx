@@ -55,7 +55,7 @@ export default async function LeadsPage({ searchParams }: Props) {
   ]
 
   return (
-    <div className="p-5 md:p-8 space-y-6 max-w-4xl animate-fade-in">
+    <div className="p-5 md:p-8 space-y-6 max-w-4xl">
 
       {/* Header */}
       <div className="flex items-end justify-between flex-wrap gap-3">

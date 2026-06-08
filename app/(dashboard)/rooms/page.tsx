@@ -40,7 +40,7 @@ export default async function RoomsPage() {
   const occupancyRate = stats.total > 0 ? Math.round((stats.occupied / stats.total) * 100) : 0
 
   return (
-    <div className="p-5 md:p-8 space-y-6 max-w-6xl animate-fade-in">
+    <div className="p-5 md:p-8 space-y-6 max-w-6xl">
 
       {/* ── Page Header ── */}
       <div className="flex items-end justify-between">

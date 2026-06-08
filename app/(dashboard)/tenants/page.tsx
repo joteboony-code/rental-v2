@@ -5,6 +5,7 @@ import { buttonVariants } from '@/components/ui/button'
 import { ArrowRight, UserPlus, Users, Home, Phone } from 'lucide-react'
 import { roomRow } from '@/lib/room-utils'
 import { SyncLineButton } from './_components/sync-line-button'
+import { CountUp } from '@/components/ui/count-up'
 
 type ContractRow = {
   status: string
@@ -90,21 +91,21 @@ export default async function TenantsPage({ searchParams }: Props) {
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3">
           <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest">ทั้งหมด</p>
           <p className="text-4xl font-bold text-slate-950 tracking-tight leading-none">
-            {stats.total}<span className="text-sm font-normal text-slate-400 ml-1">คน</span>
+            <CountUp value={stats.total} /><span className="text-sm font-normal text-slate-400 ml-1">คน</span>
           </p>
           <div className="h-0.5 rounded-full bg-slate-700 opacity-40" />
         </div>
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3">
           <p className="text-xs font-semibold text-violet-500 uppercase tracking-widest">กำลังเช่า</p>
           <p className="text-4xl font-bold text-slate-950 tracking-tight leading-none">
-            {stats.active}<span className="text-sm font-normal text-slate-400 ml-1">คน</span>
+            <CountUp value={stats.active} /><span className="text-sm font-normal text-slate-400 ml-1">คน</span>
           </p>
           <div className="h-0.5 rounded-full bg-violet-500 opacity-40" />
         </div>
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3">
           <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest">ไม่มีสัญญา</p>
           <p className="text-4xl font-bold text-slate-950 tracking-tight leading-none">
-            {stats.inactive}<span className="text-sm font-normal text-slate-400 ml-1">คน</span>
+            <CountUp value={stats.inactive} /><span className="text-sm font-normal text-slate-400 ml-1">คน</span>
           </p>
           <div className="h-0.5 rounded-full bg-slate-400 opacity-40" />
         </div>
