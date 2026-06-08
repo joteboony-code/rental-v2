@@ -6,11 +6,20 @@ import { Megaphone } from 'lucide-react'
 
 export default async function InterestPage() {
   const supabase = createServiceClient()
+
+  // ดึง settings + นับ view พร้อมกัน
   const { data: settings } = await supabase
     .from('settings')
-    .select('lead_announcement')
+    .select('lead_announcement, interest_view_count')
     .eq('id', 1)
     .single()
+
+  // increment view count (fire-and-forget, ไม่ block render)
+  const currentCount = (settings as { interest_view_count?: number } | null)?.interest_view_count ?? 0
+  void supabase
+    .from('settings')
+    .update({ interest_view_count: currentCount + 1 })
+    .eq('id', 1)
 
   const announcement = (settings as { lead_announcement?: string | null } | null)?.lead_announcement ?? null
 

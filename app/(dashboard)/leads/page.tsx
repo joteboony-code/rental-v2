@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { createClient } from '@/lib/supabase/server'
 import { LeadActions } from './_components/lead-actions'
-import { Users } from 'lucide-react'
+import { Users, Eye } from 'lucide-react'
 import { CopyLinkButton } from './_components/copy-link-button'
 import { AnnouncementEditor } from './_components/announcement-editor'
 
@@ -35,7 +35,7 @@ export default async function LeadsPage({ searchParams }: Props) {
   const [{ data: leads }, { data: allLeads }, { data: settings }] = await Promise.all([
     query,
     supabase.from('leads').select('status'),
-    supabase.from('settings').select('lead_announcement').eq('id', 1).single(),
+    supabase.from('settings').select('lead_announcement, interest_view_count').eq('id', 1).single(),
   ])
 
   const counts = {
@@ -64,6 +64,16 @@ export default async function LeadsPage({ searchParams }: Props) {
           <h1 className="text-2xl md:text-3xl font-bold text-slate-950 tracking-tight">คนสนใจเช่าห้อง</h1>
         </div>
         <CopyLinkButton />
+      </div>
+
+      {/* View count */}
+      <div className="flex items-center gap-2 rounded-2xl border border-slate-100 bg-white px-5 py-3">
+        <Eye className="size-4 text-slate-400 shrink-0" />
+        <p className="text-sm text-slate-500">คนเปิดหน้าฟอร์ม</p>
+        <p className="ml-auto text-xl font-bold text-slate-800">
+          {((settings as { interest_view_count?: number } | null)?.interest_view_count ?? 0).toLocaleString('th-TH')}
+        </p>
+        <p className="text-xs text-slate-400">ครั้ง</p>
       </div>
 
       {/* Announcement editor */}
