@@ -59,7 +59,7 @@ export default async function DashboardPage() {
       {/* ── Stats Grid ── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
         <Link href="/rooms?status=available"
-          className="bg-gradient-to-br from-white to-emerald-50/60 rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+          className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
           <p className="text-xs font-semibold text-emerald-500 uppercase tracking-widest">ห้องว่าง</p>
           <p className="text-4xl font-bold text-slate-950 tracking-tight leading-none">
             <CountUp value={stats.availableRooms} />
@@ -69,7 +69,7 @@ export default async function DashboardPage() {
         </Link>
 
         <Link href="/bills?status=overdue"
-          className="bg-gradient-to-br from-white to-rose-50/60 rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+          className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
           <p className="text-xs font-semibold text-rose-500 uppercase tracking-widest">เกินกำหนด</p>
           <p className="text-4xl font-bold text-slate-950 tracking-tight leading-none">
             <CountUp value={stats.overdueCount} />
@@ -79,7 +79,7 @@ export default async function DashboardPage() {
         </Link>
 
         <Link href="/bills?status=pending"
-          className="bg-gradient-to-br from-white to-amber-50/60 rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+          className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
           <p className="text-xs font-semibold text-amber-500 uppercase tracking-widest">รอชำระ</p>
           <p className="text-4xl font-bold text-slate-950 tracking-tight leading-none">
             <CountUp value={stats.pendingCount} />
@@ -89,7 +89,7 @@ export default async function DashboardPage() {
         </Link>
 
         <Link href="/repairs"
-          className="bg-gradient-to-br from-white to-orange-50/60 rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+          className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
           <p className="text-xs font-semibold text-orange-500 uppercase tracking-widest">รอซ่อม</p>
           <p className="text-4xl font-bold text-slate-950 tracking-tight leading-none">
             <CountUp value={stats.repairsPending} />

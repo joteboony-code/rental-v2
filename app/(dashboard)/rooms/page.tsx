@@ -221,15 +221,8 @@ function StatCard({ value, label, sub, color }: {
     amber:   { bar: 'bg-amber-400',   text: 'text-amber-500'   },
   }[color]
 
-  const gradients: Record<typeof color, string> = {
-    slate:   'to-slate-50/60',
-    indigo:  'to-indigo-50/60',
-    emerald: 'to-emerald-50/60',
-    amber:   'to-amber-50/60',
-  }
-
   return (
-    <div className={`bg-gradient-to-br from-white ${gradients[color]} rounded-2xl border border-slate-100 shadow-sm p-3 md:p-5 space-y-2 md:space-y-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200`}>
+    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-3 md:p-5 space-y-2 md:space-y-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
       <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest">{label}</p>
       <p className="text-2xl md:text-4xl font-bold text-slate-950 tracking-tight leading-none">
         <CountUp value={value} />

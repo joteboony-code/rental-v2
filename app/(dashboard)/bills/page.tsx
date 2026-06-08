@@ -149,22 +149,22 @@ export default async function BillsPage({ searchParams }: Props) {
 
       {/* ── Stats row ── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
-        <div className="bg-gradient-to-br from-white to-slate-50/60 rounded-2xl border border-slate-100 shadow-sm p-5 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
           <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">ทั้งหมด</p>
           <p className="text-4xl font-bold text-slate-950 tracking-tight"><CountUp value={stats.total} /></p>
           <p className="text-xs text-slate-400 mt-1">รายการ</p>
         </div>
-        <div className="bg-gradient-to-br from-white to-amber-50/60 rounded-2xl border border-slate-100 shadow-sm p-5 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
           <p className="text-xs font-semibold text-amber-500 uppercase tracking-widest mb-2">รอชำระ</p>
           <p className="text-4xl font-bold text-slate-950 tracking-tight"><CountUp value={stats.pending} /></p>
           <p className="text-xs text-slate-400 mt-1">รายการ</p>
         </div>
-        <div className="bg-gradient-to-br from-white to-emerald-50/60 rounded-2xl border border-slate-100 shadow-sm p-5 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
           <p className="text-xs font-semibold text-emerald-500 uppercase tracking-widest mb-2">ชำระแล้ว</p>
           <p className="text-4xl font-bold text-slate-950 tracking-tight"><CountUp value={stats.paid} /></p>
           <p className="text-xs text-slate-400 mt-1">รายการ</p>
         </div>
-        <div className="bg-gradient-to-br from-white to-rose-50/60 rounded-2xl border border-slate-100 shadow-sm p-5 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
           <p className="text-xs font-semibold text-rose-500 uppercase tracking-widest mb-2">เกินกำหนด</p>
           <p className="text-4xl font-bold text-slate-950 tracking-tight"><CountUp value={stats.overdue} /></p>
           <p className="text-xs text-slate-400 mt-1">รายการ</p>
