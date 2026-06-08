@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { logout } from '@/app/actions/auth'
-import { Building2, LayoutDashboard, Home, Users, FileText, ClipboardList, Wrench, Settings, Menu, X, LogOut, History, Megaphone, Inbox } from 'lucide-react'
+import { Building2, LayoutDashboard, Home, Users, FileText, ClipboardList, Wrench, Settings, Menu, X, LogOut, History, Megaphone, Inbox, UserPlus, UserSearch } from 'lucide-react'
 import { ThemeToggle } from './theme-toggle'
 
 const navItems = [
@@ -31,6 +31,22 @@ const navItems = [
     accent:  'text-violet-500',
     bg:      'bg-violet-50',
     match:   (p: string) => p.startsWith('/tenants'),
+  },
+  {
+    href:    '/tenant-registrations',
+    label:   'ลงทะเบียนผู้เช่า',
+    icon:    UserPlus,
+    accent:  'text-amber-500',
+    bg:      'bg-amber-50',
+    match:   (p: string) => p.startsWith('/tenant-registrations'),
+  },
+  {
+    href:    '/leads',
+    label:   'คนสนใจห้อง',
+    icon:    UserSearch,
+    accent:  'text-pink-500',
+    bg:      'bg-pink-50',
+    match:   (p: string) => p.startsWith('/leads'),
   },
   {
     href:    '/bills',
