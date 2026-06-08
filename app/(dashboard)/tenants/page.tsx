@@ -88,21 +88,21 @@ export default async function TenantsPage({ searchParams }: Props) {
 
       {/* ── Stats ── */}
       <div className="grid grid-cols-3 gap-3 md:gap-4">
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3">
+        <div className="bg-gradient-to-br from-white to-slate-50/60 rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
           <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest">ทั้งหมด</p>
           <p className="text-4xl font-bold text-slate-950 tracking-tight leading-none">
             <CountUp value={stats.total} /><span className="text-sm font-normal text-slate-400 ml-1">คน</span>
           </p>
           <div className="h-0.5 rounded-full bg-slate-700 opacity-40" />
         </div>
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3">
+        <div className="bg-gradient-to-br from-white to-violet-50/60 rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
           <p className="text-xs font-semibold text-violet-500 uppercase tracking-widest">กำลังเช่า</p>
           <p className="text-4xl font-bold text-slate-950 tracking-tight leading-none">
             <CountUp value={stats.active} /><span className="text-sm font-normal text-slate-400 ml-1">คน</span>
           </p>
           <div className="h-0.5 rounded-full bg-violet-500 opacity-40" />
         </div>
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3">
+        <div className="bg-gradient-to-br from-white to-slate-50/60 rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
           <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest">ไม่มีสัญญา</p>
           <p className="text-4xl font-bold text-slate-950 tracking-tight leading-none">
             <CountUp value={stats.inactive} /><span className="text-sm font-normal text-slate-400 ml-1">คน</span>
