@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { createServiceClient } from '@/lib/supabase/service'
 import { InterestForm } from './_components/interest-form'
 import { Megaphone } from 'lucide-react'
