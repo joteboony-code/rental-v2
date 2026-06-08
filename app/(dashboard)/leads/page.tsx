@@ -2,8 +2,9 @@ export const dynamic = 'force-dynamic'
 
 import { createClient } from '@/lib/supabase/server'
 import { LeadActions } from './_components/lead-actions'
-import { Users, QrCode, Copy } from 'lucide-react'
+import { Users } from 'lucide-react'
 import { CopyLinkButton } from './_components/copy-link-button'
+import { AnnouncementEditor } from './_components/announcement-editor'
 
 type Lead = {
   id: string
@@ -31,9 +32,10 @@ export default async function LeadsPage({ searchParams }: Props) {
     query = query.eq('status', status)
   }
 
-  const [{ data: leads }, { data: allLeads }] = await Promise.all([
+  const [{ data: leads }, { data: allLeads }, { data: settings }] = await Promise.all([
     query,
     supabase.from('leads').select('status'),
+    supabase.from('settings').select('lead_announcement').eq('id', 1).single(),
   ])
 
   const counts = {
@@ -63,6 +65,9 @@ export default async function LeadsPage({ searchParams }: Props) {
         </div>
         <CopyLinkButton />
       </div>
+
+      {/* Announcement editor */}
+      <AnnouncementEditor initial={(settings as { lead_announcement?: string | null } | null)?.lead_announcement ?? null} />
 
       {/* Filter tabs */}
       <div className="flex gap-2 flex-wrap">

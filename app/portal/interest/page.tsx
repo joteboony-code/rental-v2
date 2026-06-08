@@ -1,6 +1,17 @@
+import { createServiceClient } from '@/lib/supabase/service'
 import { InterestForm } from './_components/interest-form'
+import { Megaphone } from 'lucide-react'
 
-export default function InterestPage() {
+export default async function InterestPage() {
+  const supabase = createServiceClient()
+  const { data: settings } = await supabase
+    .from('settings')
+    .select('lead_announcement')
+    .eq('id', 1)
+    .single()
+
+  const announcement = (settings as { lead_announcement?: string | null } | null)?.lead_announcement ?? null
+
   return (
     <main className="min-h-dvh bg-slate-50">
       <div className="bg-[#0C1B4D] px-5 pt-14 pb-8">
@@ -11,6 +22,12 @@ export default function InterestPage() {
         </div>
       </div>
       <div className="mx-auto max-w-lg px-4 py-6 space-y-4">
+        {announcement && (
+          <div className="rounded-2xl bg-amber-50 border border-amber-100 px-5 py-4 flex gap-3">
+            <Megaphone className="size-4 text-amber-500 shrink-0 mt-0.5" />
+            <p className="text-sm text-amber-800 whitespace-pre-wrap leading-relaxed">{announcement}</p>
+          </div>
+        )}
         <InterestForm />
       </div>
     </main>

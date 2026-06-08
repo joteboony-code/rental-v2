@@ -57,6 +57,17 @@ export async function submitLead(
   return { success: true, message: 'ฝากข้อมูลไว้เรียบร้อยแล้ว เจ้าของหอจะติดต่อกลับโดยเร็ว' }
 }
 
+export async function updateLeadAnnouncement(text: string): Promise<{ error?: string }> {
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from('settings')
+    .update({ lead_announcement: text.trim() || null })
+    .eq('id', 1)
+  if (error) return { error: error.message }
+  revalidatePath('/leads')
+  return {}
+}
+
 export async function updateLeadStatus(
   id: string,
   status: 'new' | 'contacted' | 'converted' | 'dismissed'
