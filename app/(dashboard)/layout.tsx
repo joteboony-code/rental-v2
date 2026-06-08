@@ -6,6 +6,7 @@ import { NavItems } from './_components/nav-items'
 import { MobileNav } from './_components/mobile-nav'
 import { GlobalSearch } from './_components/global-search'
 import { ThemeToggle } from './_components/theme-toggle'
+import { PageTransition } from '@/components/ui/page-transition'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
@@ -72,7 +73,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         </div>
         <MobileNav displayName={displayName} initials={initials} notifications={notifications} />
         <main className="flex-1 overflow-auto pb-6 md:pb-0">
-          {children}
+          <PageTransition>{children}</PageTransition>
         </main>
       </div>
     </div>

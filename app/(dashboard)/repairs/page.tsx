@@ -4,6 +4,7 @@ import { buttonVariants } from '@/components/ui/button'
 import { RepairStatusBadge, RepairPriorityBadge } from './_components/repair-status-badge'
 import { Wrench, Plus } from 'lucide-react'
 import { roomRow } from '@/lib/room-utils'
+import { CountUp } from '@/components/ui/count-up'
 
 interface Props {
   searchParams: Promise<{ status?: string }>
@@ -62,28 +63,28 @@ export default async function RepairsPage({ searchParams }: Props) {
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3">
           <p className="text-xs font-semibold text-amber-500 uppercase tracking-widest">รอดำเนินการ</p>
           <p className="text-4xl font-bold text-slate-950 tracking-tight leading-none">
-            {stats.pending}<span className="text-sm font-normal text-slate-400 ml-1">รายการ</span>
+            <CountUp value={stats.pending} /><span className="text-sm font-normal text-slate-400 ml-1">รายการ</span>
           </p>
           <div className="h-0.5 rounded-full bg-amber-400 opacity-40" />
         </div>
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3">
           <p className="text-xs font-semibold text-blue-500 uppercase tracking-widest">กำลังซ่อม</p>
           <p className="text-4xl font-bold text-slate-950 tracking-tight leading-none">
-            {stats.in_progress}<span className="text-sm font-normal text-slate-400 ml-1">รายการ</span>
+            <CountUp value={stats.in_progress} /><span className="text-sm font-normal text-slate-400 ml-1">รายการ</span>
           </p>
           <div className="h-0.5 rounded-full bg-blue-500 opacity-40" />
         </div>
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3">
           <p className="text-xs font-semibold text-emerald-500 uppercase tracking-widest">เสร็จแล้ว</p>
           <p className="text-4xl font-bold text-slate-950 tracking-tight leading-none">
-            {stats.done}<span className="text-sm font-normal text-slate-400 ml-1">รายการ</span>
+            <CountUp value={stats.done} /><span className="text-sm font-normal text-slate-400 ml-1">รายการ</span>
           </p>
           <div className="h-0.5 rounded-full bg-emerald-500 opacity-40" />
         </div>
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3">
           <p className={`text-xs font-semibold uppercase tracking-widest ${stats.urgent > 0 ? 'text-rose-500' : 'text-slate-400'}`}>ด่วนมาก</p>
           <p className="text-4xl font-bold text-slate-950 tracking-tight leading-none">
-            {stats.urgent}<span className="text-sm font-normal text-slate-400 ml-1">รายการ</span>
+            <CountUp value={stats.urgent} /><span className="text-sm font-normal text-slate-400 ml-1">รายการ</span>
           </p>
           <div className={`h-0.5 rounded-full opacity-40 ${stats.urgent > 0 ? 'bg-rose-500' : 'bg-slate-400'}`} />
         </div>

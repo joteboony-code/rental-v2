@@ -11,6 +11,7 @@ import { SendRemindersButton } from './_components/send-reminders-button'
 import { SnoozeButton } from './_components/snooze-button'
 import { LineQuotaBadge } from './_components/line-quota-badge'
 import { parseReminderDays, isTodayReminderDay, nextReminderDay } from '@/lib/reminder-utils'
+import { CountUp } from '@/components/ui/count-up'
 
 interface Props {
   searchParams: Promise<{ month?: string; status?: string }>
@@ -150,22 +151,22 @@ export default async function BillsPage({ searchParams }: Props) {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
           <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">ทั้งหมด</p>
-          <p className="text-4xl font-bold text-slate-950 tracking-tight">{stats.total}</p>
+          <p className="text-4xl font-bold text-slate-950 tracking-tight"><CountUp value={stats.total} /></p>
           <p className="text-xs text-slate-400 mt-1">รายการ</p>
         </div>
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
           <p className="text-xs font-semibold text-amber-500 uppercase tracking-widest mb-2">รอชำระ</p>
-          <p className="text-4xl font-bold text-slate-950 tracking-tight">{stats.pending}</p>
+          <p className="text-4xl font-bold text-slate-950 tracking-tight"><CountUp value={stats.pending} /></p>
           <p className="text-xs text-slate-400 mt-1">รายการ</p>
         </div>
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
           <p className="text-xs font-semibold text-emerald-500 uppercase tracking-widest mb-2">ชำระแล้ว</p>
-          <p className="text-4xl font-bold text-slate-950 tracking-tight">{stats.paid}</p>
+          <p className="text-4xl font-bold text-slate-950 tracking-tight"><CountUp value={stats.paid} /></p>
           <p className="text-xs text-slate-400 mt-1">รายการ</p>
         </div>
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
           <p className="text-xs font-semibold text-rose-500 uppercase tracking-widest mb-2">เกินกำหนด</p>
-          <p className="text-4xl font-bold text-slate-950 tracking-tight">{stats.overdue}</p>
+          <p className="text-4xl font-bold text-slate-950 tracking-tight"><CountUp value={stats.overdue} /></p>
           <p className="text-xs text-slate-400 mt-1">รายการ</p>
         </div>
       </div>
@@ -177,7 +178,7 @@ export default async function BillsPage({ searchParams }: Props) {
             <div>
               <p className="text-slate-400 text-xs font-semibold uppercase tracking-widest mb-1">รายได้ที่รับแล้ว</p>
               <p className="text-3xl md:text-4xl font-bold tracking-tight">
-                ฿{stats.revenue.toLocaleString('th-TH', { maximumFractionDigits: 0 })}
+                ฿<CountUp value={stats.revenue} formatter={(n) => n.toLocaleString('th-TH', { maximumFractionDigits: 0 })} />
               </p>
             </div>
             <div className="text-right">
