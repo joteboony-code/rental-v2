@@ -59,7 +59,7 @@ export default async function DashboardPage() {
       {/* ── Stats Grid ── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
         <Link href="/rooms?status=available"
-          className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3 hover:shadow-md transition-shadow">
+          className="bg-gradient-to-br from-white to-emerald-50/60 rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
           <p className="text-xs font-semibold text-emerald-500 uppercase tracking-widest">ห้องว่าง</p>
           <p className="text-4xl font-bold text-slate-950 tracking-tight leading-none">
             <CountUp value={stats.availableRooms} />
@@ -69,7 +69,7 @@ export default async function DashboardPage() {
         </Link>
 
         <Link href="/bills?status=overdue"
-          className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3 hover:shadow-md transition-shadow">
+          className="bg-gradient-to-br from-white to-rose-50/60 rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
           <p className="text-xs font-semibold text-rose-500 uppercase tracking-widest">เกินกำหนด</p>
           <p className="text-4xl font-bold text-slate-950 tracking-tight leading-none">
             <CountUp value={stats.overdueCount} />
@@ -79,7 +79,7 @@ export default async function DashboardPage() {
         </Link>
 
         <Link href="/bills?status=pending"
-          className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3 hover:shadow-md transition-shadow">
+          className="bg-gradient-to-br from-white to-amber-50/60 rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
           <p className="text-xs font-semibold text-amber-500 uppercase tracking-widest">รอชำระ</p>
           <p className="text-4xl font-bold text-slate-950 tracking-tight leading-none">
             <CountUp value={stats.pendingCount} />
@@ -89,7 +89,7 @@ export default async function DashboardPage() {
         </Link>
 
         <Link href="/repairs"
-          className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3 hover:shadow-md transition-shadow">
+          className="bg-gradient-to-br from-white to-orange-50/60 rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
           <p className="text-xs font-semibold text-orange-500 uppercase tracking-widest">รอซ่อม</p>
           <p className="text-4xl font-bold text-slate-950 tracking-tight leading-none">
             <CountUp value={stats.repairsPending} />
@@ -135,7 +135,7 @@ export default async function DashboardPage() {
           { href: '/repairs', icon: Wrench,    label: 'แจ้งซ่อม',    color: 'text-amber-500',  bg: 'bg-amber-50'  },
         ].map(({ href, icon: Icon, label, color, bg }) => (
           <Link key={href} href={href}
-            className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 flex flex-col items-center gap-3 hover:shadow-md transition-shadow text-center">
+            className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 flex flex-col items-center gap-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 text-center">
             <div className={`size-10 rounded-xl ${bg} flex items-center justify-center`}>
               <Icon className={`size-5 ${color}`} />
             </div>
