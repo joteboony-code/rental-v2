@@ -1,5 +1,6 @@
 import type { Metadata } from "next"
 import { Prompt } from "next/font/google"
+import { Toaster } from "sonner"
 import "./globals.css"
 
 const prompt = Prompt({
@@ -27,6 +28,11 @@ export default function RootLayout({
           }}
         />
         {children}
+        <Toaster
+          position="bottom-right"
+          richColors
+          toastOptions={{ duration: 3000 }}
+        />
       </body>
     </html>
   )

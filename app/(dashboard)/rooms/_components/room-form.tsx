@@ -1,12 +1,13 @@
 'use client'
 
-import { useActionState } from 'react'
+import { useActionState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { type RoomFormState, type Room } from '@/lib/definitions'
-import { CheckCircle2, AlertCircle } from 'lucide-react'
 
 type Props = {
   action: (state: RoomFormState, formData: FormData) => Promise<RoomFormState>
@@ -16,18 +17,23 @@ type Props = {
 
 export function RoomForm({ action, room, submitLabel = 'บันทึก' }: Props) {
   const [state, formAction, pending] = useActionState(action, undefined)
+  const router = useRouter()
+
+  useEffect(() => {
+    if (!state?.message) return
+    if (state.success) {
+      toast.success(state.message, { description: room ? undefined : 'ห้องใหม่พร้อมใช้งานแล้ว' })
+      if (!room) router.push('/rooms')
+    } else {
+      toast.error(state.message)
+    }
+  }, [state])
 
   return (
     <form action={formAction} className="space-y-4">
-      {state?.message && (
-        <div className={`flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-medium ${
-          state.success
-            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-            : 'bg-red-50 text-red-600 border border-red-200'
-        }`}>
-          {state.success
-            ? <CheckCircle2 className="size-4 shrink-0" />
-            : <AlertCircle className="size-4 shrink-0" />}
+      {/* field-level errors only — success/error messages now use toast */}
+      {state?.message && !state.success && !state.errors && (
+        <div className="flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-medium bg-red-50 text-red-600 border border-red-200">
           {state.message}
         </div>
       )}

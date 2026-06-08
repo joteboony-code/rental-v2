@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { Home, Users, FileText, Wrench, AlertTriangle, TrendingUp, DoorOpen, Clock } from 'lucide-react'
+import { CountUp } from '@/components/ui/count-up'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -29,7 +30,7 @@ export default async function DashboardPage() {
   }
 
   return (
-    <div className="p-5 md:p-8 space-y-6 max-w-6xl">
+    <div className="p-5 md:p-8 space-y-6 max-w-6xl animate-fade-in">
 
       {/* ── Header ── */}
       <div>
@@ -61,7 +62,7 @@ export default async function DashboardPage() {
           className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3 hover:shadow-md transition-shadow">
           <p className="text-xs font-semibold text-emerald-500 uppercase tracking-widest">ห้องว่าง</p>
           <p className="text-4xl font-bold text-slate-950 tracking-tight leading-none">
-            {stats.availableRooms}
+            <CountUp value={stats.availableRooms} />
             <span className="text-sm font-normal text-slate-400 ml-1">ห้อง</span>
           </p>
           <div className="h-0.5 rounded-full bg-emerald-500 opacity-40" />
@@ -71,7 +72,7 @@ export default async function DashboardPage() {
           className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3 hover:shadow-md transition-shadow">
           <p className="text-xs font-semibold text-rose-500 uppercase tracking-widest">เกินกำหนด</p>
           <p className="text-4xl font-bold text-slate-950 tracking-tight leading-none">
-            {stats.overdueCount}
+            <CountUp value={stats.overdueCount} />
             <span className="text-sm font-normal text-slate-400 ml-1">บิล</span>
           </p>
           <div className="h-0.5 rounded-full bg-rose-500 opacity-40" />
@@ -81,7 +82,7 @@ export default async function DashboardPage() {
           className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3 hover:shadow-md transition-shadow">
           <p className="text-xs font-semibold text-amber-500 uppercase tracking-widest">รอชำระ</p>
           <p className="text-4xl font-bold text-slate-950 tracking-tight leading-none">
-            {stats.pendingCount}
+            <CountUp value={stats.pendingCount} />
             <span className="text-sm font-normal text-slate-400 ml-1">บิล</span>
           </p>
           <div className="h-0.5 rounded-full bg-amber-400 opacity-40" />
@@ -91,7 +92,7 @@ export default async function DashboardPage() {
           className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3 hover:shadow-md transition-shadow">
           <p className="text-xs font-semibold text-orange-500 uppercase tracking-widest">รอซ่อม</p>
           <p className="text-4xl font-bold text-slate-950 tracking-tight leading-none">
-            {stats.repairsPending}
+            <CountUp value={stats.repairsPending} />
             <span className="text-sm font-normal text-slate-400 ml-1">รายการ</span>
           </p>
           <div className="h-0.5 rounded-full bg-orange-400 opacity-40" />
@@ -107,13 +108,13 @@ export default async function DashboardPage() {
               <p className="text-slate-400 text-xs font-semibold uppercase tracking-widest">รายได้เดือนนี้</p>
             </div>
             <p className="text-3xl md:text-4xl font-bold tracking-tight">
-              ฿{stats.revenue.toLocaleString('th-TH', { maximumFractionDigits: 0 })}
+              ฿<CountUp value={stats.revenue} formatter={(n) => n.toLocaleString('th-TH', { maximumFractionDigits: 0 })} />
             </p>
           </div>
           <div className="text-right">
             <p className="text-slate-400 text-xs mb-1">อัตราการเข้าพัก</p>
             <p className="text-2xl font-bold text-slate-200">
-              {stats.totalRooms > 0 ? Math.round((stats.occupiedRooms / stats.totalRooms) * 100) : 0}
+              <CountUp value={stats.totalRooms > 0 ? Math.round((stats.occupiedRooms / stats.totalRooms) * 100) : 0} />
               <span className="text-sm font-normal text-slate-400">%</span>
             </p>
             <p className="text-slate-500 text-xs mt-0.5">{stats.occupiedRooms}/{stats.totalRooms} ห้อง</p>
