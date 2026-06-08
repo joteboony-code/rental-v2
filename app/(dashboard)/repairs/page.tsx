@@ -60,28 +60,28 @@ export default async function RepairsPage({ searchParams }: Props) {
 
       {/* ── Stats ── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
-        <div className="bg-gradient-to-br from-white to-amber-50/60 rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
           <p className="text-xs font-semibold text-amber-500 uppercase tracking-widest">รอดำเนินการ</p>
           <p className="text-4xl font-bold text-slate-950 tracking-tight leading-none">
             <CountUp value={stats.pending} /><span className="text-sm font-normal text-slate-400 ml-1">รายการ</span>
           </p>
           <div className="h-0.5 rounded-full bg-amber-400 opacity-40" />
         </div>
-        <div className="bg-gradient-to-br from-white to-blue-50/60 rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
           <p className="text-xs font-semibold text-blue-500 uppercase tracking-widest">กำลังซ่อม</p>
           <p className="text-4xl font-bold text-slate-950 tracking-tight leading-none">
             <CountUp value={stats.in_progress} /><span className="text-sm font-normal text-slate-400 ml-1">รายการ</span>
           </p>
           <div className="h-0.5 rounded-full bg-blue-500 opacity-40" />
         </div>
-        <div className="bg-gradient-to-br from-white to-emerald-50/60 rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
           <p className="text-xs font-semibold text-emerald-500 uppercase tracking-widest">เสร็จแล้ว</p>
           <p className="text-4xl font-bold text-slate-950 tracking-tight leading-none">
             <CountUp value={stats.done} /><span className="text-sm font-normal text-slate-400 ml-1">รายการ</span>
           </p>
           <div className="h-0.5 rounded-full bg-emerald-500 opacity-40" />
         </div>
-        <div className={`bg-gradient-to-br rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 ${stats.urgent > 0 ? 'from-white to-rose-50/60' : 'from-white to-slate-50/60'}`}>
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
           <p className={`text-xs font-semibold uppercase tracking-widest ${stats.urgent > 0 ? 'text-rose-500' : 'text-slate-400'}`}>ด่วนมาก</p>
           <p className="text-4xl font-bold text-slate-950 tracking-tight leading-none">
             <CountUp value={stats.urgent} /><span className="text-sm font-normal text-slate-400 ml-1">รายการ</span>
