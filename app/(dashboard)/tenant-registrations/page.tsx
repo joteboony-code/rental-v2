@@ -17,31 +17,36 @@ export default async function TenantRegistrationsPage({
   const { status: statusFilter } = await searchParams
   const serviceSupabase = createServiceClient()
 
-  let query = serviceSupabase
+  // ดึงทั้งหมดไว้นับ count แยก + ดึงที่ filter ไว้แสดง
+  let filteredQuery = serviceSupabase
     .from('tenant_registration_requests')
     .select('*')
-    .order('status', { ascending: true })  // pending first alphabetically won't work — use case
     .order('created_at', { ascending: false })
 
   if (statusFilter && statusFilter !== 'all') {
-    query = query.eq('status', statusFilter)
+    filteredQuery = filteredQuery.eq('status', statusFilter)
   }
 
-  const { data: requests } = await query
-  const all = (requests ?? []) as RegistrationRequest[]
+  const [{ data: filteredRequests }, { data: allRequests }] = await Promise.all([
+    filteredQuery,
+    serviceSupabase.from('tenant_registration_requests').select('id, status'),
+  ])
 
-  // Sort: pending first, then others
+  const allCounts = (allRequests ?? []) as { id: string; status: string }[]
+  const filtered = (filteredRequests ?? []) as RegistrationRequest[]
+
+  // Sort filtered: pending first
   const sorted = [
-    ...all.filter(r => r.status === 'pending'),
-    ...all.filter(r => r.status !== 'pending'),
+    ...filtered.filter(r => r.status === 'pending'),
+    ...filtered.filter(r => r.status !== 'pending'),
   ]
 
-  const pendingCount = all.filter(r => r.status === 'pending').length
+  const pendingCount = allCounts.filter(r => r.status === 'pending').length
   const tabs = [
-    { value: 'all',           label: 'ทั้งหมด',      count: all.length },
-    { value: 'pending',       label: 'รอตรวจ',       count: pendingCount },
-    { value: 'approved',      label: 'อนุมัติแล้ว',  count: all.filter(r => r.status === 'approved' || r.status === 'auto_approved').length },
-    { value: 'rejected',      label: 'ปฏิเสธ',       count: all.filter(r => r.status === 'rejected').length },
+    { value: 'all',      label: 'ทั้งหมด',     count: allCounts.length },
+    { value: 'pending',  label: 'รอตรวจ',      count: pendingCount },
+    { value: 'approved', label: 'อนุมัติแล้ว', count: allCounts.filter(r => r.status === 'approved' || r.status === 'auto_approved').length },
+    { value: 'rejected', label: 'ปฏิเสธ',      count: allCounts.filter(r => r.status === 'rejected').length },
   ]
 
   const current = statusFilter ?? 'all'

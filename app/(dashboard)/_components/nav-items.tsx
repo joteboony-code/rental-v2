@@ -6,88 +6,91 @@ import { Home, Users, FileText, ClipboardList, Wrench, Settings, History, Megaph
 
 const navItems = [
   {
-    href:     '/home',
-    label:    'หน้าหลัก',
-    icon:     LayoutDashboard,
-    dot:      'bg-slate-400',
-    match:    (p: string) => p === '/home',
+    href:   '/home',
+    label:  'หน้าหลัก',
+    icon:   LayoutDashboard,
+    dot:    'bg-slate-400',
+    match:  (p: string) => p === '/home',
   },
   {
-    href:     '/rooms',
-    label:    'ห้องเช่า',
-    icon:     Home,
-    dot:      'bg-sky-400',
-    match:    (p: string) => p.startsWith('/rooms'),
+    href:   '/rooms',
+    label:  'ห้องเช่า',
+    icon:   Home,
+    dot:    'bg-sky-400',
+    match:  (p: string) => p.startsWith('/rooms'),
   },
   {
-    href:     '/tenants',
-    label:    'ผู้เช่า',
-    icon:     Users,
-    dot:      'bg-violet-400',
-    match:    (p: string) => p.startsWith('/tenants'),
+    href:   '/tenants',
+    label:  'ผู้เช่า',
+    icon:   Users,
+    dot:    'bg-violet-400',
+    match:  (p: string) => p.startsWith('/tenants'),
   },
   {
-    href:     '/tenant-registrations',
-    label:    'ลงทะเบียนผู้เช่า',
-    icon:     UserPlus,
-    dot:      'bg-amber-400',
-    match:    (p: string) => p.startsWith('/tenant-registrations'),
+    href:    '/tenant-registrations',
+    label:   'ลงทะเบียนผู้เช่า',
+    icon:    UserPlus,
+    dot:     'bg-amber-400',
+    match:   (p: string) => p.startsWith('/tenant-registrations'),
+    indent:  true,
   },
   {
-    href:     '/leads',
-    label:    'คนสนใจห้อง',
-    icon:     UserSearch,
-    dot:      'bg-pink-400',
-    match:    (p: string) => p.startsWith('/leads'),
+    href:    '/leads',
+    label:   'คนสนใจห้อง',
+    icon:    UserSearch,
+    dot:     'bg-pink-400',
+    match:   (p: string) => p.startsWith('/leads'),
+    indent:  true,
+    last:    true,
   },
   {
-    href:     '/bills',
-    label:    'บิล/ชำระเงิน',
-    icon:     FileText,
-    dot:      'bg-emerald-400',
-    match:    (p: string) => p.startsWith('/bills') && !p.startsWith('/bills/meter'),
+    href:   '/bills',
+    label:  'บิล/ชำระเงิน',
+    icon:   FileText,
+    dot:    'bg-emerald-400',
+    match:  (p: string) => p.startsWith('/bills') && !p.startsWith('/bills/meter'),
   },
   {
-    href:     '/bills/meter',
-    label:    'จดมิเตอร์',
-    icon:     ClipboardList,
-    dot:      'bg-teal-400',
-    match:    (p: string) => p.startsWith('/bills/meter'),
+    href:   '/bills/meter',
+    label:  'จดมิเตอร์',
+    icon:   ClipboardList,
+    dot:    'bg-teal-400',
+    match:  (p: string) => p.startsWith('/bills/meter'),
   },
   {
-    href:     '/repairs',
-    label:    'แจ้งซ่อม',
-    icon:     Wrench,
-    dot:      'bg-amber-400',
-    match:    (p: string) => p.startsWith('/repairs'),
+    href:   '/repairs',
+    label:  'แจ้งซ่อม',
+    icon:   Wrench,
+    dot:    'bg-amber-400',
+    match:  (p: string) => p.startsWith('/repairs'),
   },
   {
-    href:     '/payment-reviews',
-    label:    'สลิปรอตรวจ',
-    icon:     Inbox,
-    dot:      'bg-orange-400',
-    match:    (p: string) => p.startsWith('/payment-reviews'),
+    href:   '/payment-reviews',
+    label:  'สลิปรอตรวจ',
+    icon:   Inbox,
+    dot:    'bg-orange-400',
+    match:  (p: string) => p.startsWith('/payment-reviews'),
   },
   {
-    href:     '/broadcast',
-    label:    'ประกาศ',
-    icon:     Megaphone,
-    dot:      'bg-violet-400',
-    match:    (p: string) => p.startsWith('/broadcast'),
+    href:   '/broadcast',
+    label:  'ประกาศ',
+    icon:   Megaphone,
+    dot:    'bg-violet-400',
+    match:  (p: string) => p.startsWith('/broadcast'),
   },
   {
-    href:     '/audit-logs',
-    label:    'ประวัติการกระทำ',
-    icon:     History,
-    dot:      'bg-rose-400',
-    match:    (p: string) => p.startsWith('/audit-logs'),
+    href:   '/audit-logs',
+    label:  'ประวัติการกระทำ',
+    icon:   History,
+    dot:    'bg-rose-400',
+    match:  (p: string) => p.startsWith('/audit-logs'),
   },
   {
-    href:     '/settings',
-    label:    'ตั้งค่า',
-    icon:     Settings,
-    dot:      'bg-slate-400',
-    match:    (p: string) => p.startsWith('/settings'),
+    href:   '/settings',
+    label:  'ตั้งค่า',
+    icon:   Settings,
+    dot:    'bg-slate-400',
+    match:  (p: string) => p.startsWith('/settings'),
   },
 ]
 
@@ -102,50 +105,53 @@ export function NavItems({ notifications = {} }: { notifications?: Notifications
 
   return (
     <nav className="flex flex-col items-center gap-0.5 flex-1 py-1">
-      {navItems.map(({ href, label, icon: Icon, dot, match }) => {
+      {navItems.map(({ href, label, icon: Icon, dot, match, indent, last }) => {
         const isActive = match(pathname)
         const notificationCount = notifications[href] ?? 0
         const hasNotification = notificationCount > 0
         return (
-          <Link
-            key={href}
-            href={href}
-            aria-label={hasNotification ? `${label} (${notificationCount})` : label}
-            className={`sidebar-item group relative flex items-center justify-center size-10 rounded-xl transition-all duration-150 ${
-              isActive
-                ? 'bg-slate-950 text-white shadow-md shadow-slate-900/20'
-                : 'text-slate-400 hover:bg-slate-100 hover:text-slate-700'
-            }`}
-          >
-            <Icon className="size-[18px]" strokeWidth={isActive ? 2 : 1.75} />
-
-            {/* Active dot */}
-            {isActive && !hasNotification && (
-              <span className={`absolute -right-0.5 -top-0.5 size-2 rounded-full ${dot} ring-2 ring-white`} />
+          <div key={href} className="relative w-full flex flex-col items-center">
+            {/* Vertical connector line for sub-items */}
+            {indent && (
+              <span className={`absolute left-1/2 -translate-x-1/2 w-px bg-slate-200 ${last ? 'top-0 h-4' : 'top-0 h-full'}`} />
             )}
+            <Link
+              href={href}
+              aria-label={hasNotification ? `${label} (${notificationCount})` : label}
+              className={`sidebar-item group relative flex items-center justify-center transition-all duration-150 ${
+                indent ? 'size-8 rounded-lg' : 'size-10 rounded-xl'
+              } ${
+                isActive
+                  ? 'bg-slate-950 text-white shadow-md shadow-slate-900/20'
+                  : 'text-slate-400 hover:bg-slate-100 hover:text-slate-700'
+              }`}
+            >
+              <Icon className={indent ? 'size-3.5' : 'size-[18px]'} strokeWidth={isActive ? 2 : 1.75} />
 
-            {/* Notification badge */}
-            {hasNotification && (
-              <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-orange-500 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-white">
-                {badgeText(notificationCount)}
-              </span>
-            )}
+              {isActive && !hasNotification && (
+                <span className={`absolute -right-0.5 -top-0.5 rounded-full ${dot} ring-2 ring-white ${indent ? 'size-1.5' : 'size-2'}`} />
+              )}
 
-            {/* Tooltip */}
-            <span className="sidebar-tooltip absolute left-[calc(100%+10px)] z-50 flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-950 text-white text-xs font-medium rounded-lg shadow-xl">
-              <span className={`size-1.5 rounded-full ${dot}`} />
-              {label}
               {hasNotification && (
-                <span className="ml-1 rounded-full bg-orange-500 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
-                  {notificationCount}
+                <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-orange-500 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-white">
+                  {badgeText(notificationCount)}
                 </span>
               )}
-            </span>
-          </Link>
+
+              <span className="sidebar-tooltip absolute left-[calc(100%+10px)] z-50 flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-950 text-white text-xs font-medium rounded-lg shadow-xl">
+                <span className={`size-1.5 rounded-full ${dot}`} />
+                {label}
+                {hasNotification && (
+                  <span className="ml-1 rounded-full bg-orange-500 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
+                    {notificationCount}
+                  </span>
+                )}
+              </span>
+            </Link>
+          </div>
         )
       })}
     </nav>
   )
 }
-
 
