@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { logout } from '@/app/actions/auth'
-import { Building2, LayoutDashboard, Home, Users, FileText, ClipboardList, Wrench, Settings, Menu, X, LogOut, History, Megaphone, Inbox, UserPlus, UserSearch } from 'lucide-react'
+import { Building2, LayoutDashboard, Home, Users, FileText, ClipboardList, Wrench, Settings, Menu, X, LogOut, History, Megaphone, Inbox } from 'lucide-react'
 import { ThemeToggle } from './theme-toggle'
 
 const navItems = [
@@ -25,31 +25,12 @@ const navItems = [
     match:   (p: string) => p.startsWith('/rooms'),
   },
   {
-    href:    '/tenants',
-    label:   'ผู้เช่า',
-    icon:    Users,
-    accent:  'text-violet-500',
-    bg:      'bg-violet-50',
-    match:   (p: string) => p.startsWith('/tenants'),
-  },
-  {
-    href:    '/tenant-registrations',
-    label:   'ลงทะเบียนผู้เช่า',
-    icon:    UserPlus,
-    accent:  'text-amber-500',
-    bg:      'bg-amber-50',
-    match:   (p: string) => p.startsWith('/tenant-registrations'),
-    indent:  true,
-  },
-  {
-    href:    '/leads',
-    label:   'คนสนใจห้อง',
-    icon:    UserSearch,
-    accent:  'text-pink-500',
-    bg:      'bg-pink-50',
-    match:   (p: string) => p.startsWith('/leads'),
-    indent:  true,
-    last:    true,
+    href:   '/tenants',
+    label:  'ผู้เช่า',
+    icon:   Users,
+    accent: 'text-violet-500',
+    bg:     'bg-violet-50',
+    match:  (p: string) => p.startsWith('/tenants') || p.startsWith('/tenant-registrations') || p.startsWith('/leads'),
   },
   {
     href:    '/bills',
@@ -222,41 +203,32 @@ export function MobileNav({ displayName, initials, notifications = {} }: Props) 
 
         {/* Nav links */}
         <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
-          {navItems.map(({ href, label, icon: Icon, accent, bg, match, indent, last }) => {
+          {navItems.map(({ href, label, icon: Icon, accent, bg, match }) => {
             const isActive = match(pathname)
             const notificationCount = notifications[href] ?? 0
             return (
-              <div key={href} className={indent ? 'relative' : undefined}>
-                {/* Vertical connector line */}
-                {indent && (
-                  <span className={`absolute left-7 top-0 w-px bg-slate-200 ${last ? 'h-1/2' : 'h-full'}`} />
-                )}
-                <Link
-                  href={href}
-                  onClick={() => setOpen(false)}
-                  className={`flex items-center gap-3 rounded-xl text-sm font-medium transition-colors ${
-                    indent ? 'pl-7 pr-3 py-2' : 'px-3 py-3'
-                  } ${
-                    isActive
-                      ? 'bg-slate-950 text-white'
-                      : 'text-slate-600 active:bg-slate-100'
-                  }`}
-                >
-                  <span className={`flex items-center justify-center rounded-lg shrink-0 ${
-                    indent ? 'w-6 h-6' : 'w-8 h-8'
-                  } ${isActive ? 'bg-white/10' : bg}`}>
-                    <Icon className={`${indent ? 'w-3.5 h-3.5' : 'w-4 h-4'} ${isActive ? 'text-white' : accent}`} strokeWidth={1.75} />
+              <Link
+                key={href}
+                href={href}
+                onClick={() => setOpen(false)}
+                className={`flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium transition-colors ${
+                  isActive
+                    ? 'bg-slate-950 text-white'
+                    : 'text-slate-600 active:bg-slate-100'
+                }`}
+              >
+                <span className={`flex items-center justify-center w-8 h-8 rounded-lg ${isActive ? 'bg-white/10' : bg}`}>
+                  <Icon className={`w-4 h-4 ${isActive ? 'text-white' : accent}`} strokeWidth={1.75} />
+                </span>
+                <span className="flex-1 truncate">{label}</span>
+                {notificationCount > 0 && (
+                  <span className={`flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-bold leading-none ${
+                    isActive ? 'bg-orange-400 text-white' : 'bg-orange-500 text-white'
+                  }`}>
+                    {badgeText(notificationCount)}
                   </span>
-                  <span className={`flex-1 truncate ${indent ? 'text-xs' : ''}`}>{label}</span>
-                  {notificationCount > 0 && (
-                    <span className={`flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-bold leading-none ${
-                      isActive ? 'bg-orange-400 text-white' : 'bg-orange-500 text-white'
-                    }`}>
-                      {badgeText(notificationCount)}
-                    </span>
-                  )}
-                </Link>
-              </div>
+                )}
+              </Link>
             )
           })}
         </nav>

@@ -2,7 +2,7 @@ import { Fragment } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { buttonVariants } from '@/components/ui/button'
-import { ArrowRight, UserPlus, Users, Home, Phone } from 'lucide-react'
+import { ArrowRight, UserPlus, Users, Home, Phone, ClipboardList, UserSearch } from 'lucide-react'
 import { roomRow } from '@/lib/room-utils'
 import { SyncLineButton } from './_components/sync-line-button'
 import { CountUp } from '@/components/ui/count-up'
@@ -77,7 +77,15 @@ export default async function TenantsPage({ searchParams }: Props) {
           <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-1">จัดการ</p>
           <h1 className="text-2xl md:text-3xl font-bold text-slate-950 tracking-tight">ผู้เช่า</h1>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap justify-end">
+          <Link href="/tenant-registrations"
+            className={buttonVariants({ variant: 'outline', size: 'sm' }) + ' gap-1.5 rounded-xl border-slate-200 text-slate-600 hover:bg-slate-50'}>
+            <ClipboardList className="size-3.5" /> ลงทะเบียน
+          </Link>
+          <Link href="/leads"
+            className={buttonVariants({ variant: 'outline', size: 'sm' }) + ' gap-1.5 rounded-xl border-slate-200 text-slate-600 hover:bg-slate-50'}>
+            <UserSearch className="size-3.5" /> คนสนใจห้อง
+          </Link>
           <SyncLineButton />
           <Link href="/tenants/new"
             className={buttonVariants({ variant: 'default', size: 'sm' }) + ' gap-1.5 rounded-xl bg-slate-950 hover:bg-slate-800 text-white shadow-md shadow-slate-900/20'}>
