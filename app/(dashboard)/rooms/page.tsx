@@ -9,6 +9,7 @@ import { roomRow } from '@/lib/room-utils'
 import { getLineIntegrationPublic } from '@/lib/line-integration'
 import { buildPairUrl, buildRegisterUrl, normalizeOrigin } from '@/lib/pair-url'
 import { RoomPairQrButton } from './_components/room-pair-qr-button'
+import { CountUp } from '@/components/ui/count-up'
 
 export default async function RoomsPage() {
   const supabase = await createClient()
@@ -39,7 +40,7 @@ export default async function RoomsPage() {
   const occupancyRate = stats.total > 0 ? Math.round((stats.occupied / stats.total) * 100) : 0
 
   return (
-    <div className="p-5 md:p-8 space-y-6 max-w-6xl">
+    <div className="p-5 md:p-8 space-y-6 max-w-6xl animate-fade-in">
 
       {/* ── Page Header ── */}
       <div className="flex items-end justify-between">
@@ -224,7 +225,7 @@ function StatCard({ value, label, sub, color }: {
     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-3 md:p-5 space-y-2 md:space-y-3">
       <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest">{label}</p>
       <p className="text-2xl md:text-4xl font-bold text-slate-950 tracking-tight leading-none">
-        {value}
+        <CountUp value={value} />
         <span className="text-sm font-normal text-slate-400 ml-1">{sub}</span>
       </p>
       <div className={`h-0.5 rounded-full ${accent.bar} opacity-40`} />
