@@ -1,5 +1,5 @@
 name = "rental-v2"
-main = ".open-next/worker.js"
+main = "worker-cron.js"
 compatibility_date = "2026-05-29"
 compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public"]
 
@@ -11,10 +11,9 @@ binding = "ASSETS"
 binding = "WORKER_SELF_REFERENCE"
 service = "rental-v2"
 
-# Cron is handled by external service (cron-job.org) calling:
-#   GET /api/cron/reminders?secret=CRON_SECRET   (daily 09:00 Thai)
-#   GET /api/cron/contracts?secret=CRON_SECRET   (daily 09:00 Thai)
-# The reminders endpoint self-checks reminder_days, so calling daily is safe.
+[triggers]
+# 02:00 UTC = 09:00 Thai time (UTC+7)
+crons = ["0 2 * * *"]
 
 [vars]
 # ตั้งค่า environment variables ใน Cloudflare dashboard > Workers > rental > Settings > Variables
