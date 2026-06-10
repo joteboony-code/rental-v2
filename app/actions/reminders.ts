@@ -105,7 +105,7 @@ export async function sendOverdueReminders(
       snooze_until, snooze_note,
       rooms   ( room_number ),
       tenants ( full_name, line_user_id ),
-      meter_readings ( water_units, electricity_units, water_unit_price, electricity_unit_price )
+      meter_readings ( water_units, electricity_units )
     `)
     .eq('billing_month', billingMonth)
     .in('status', ['pending', 'overdue'])
@@ -134,7 +134,7 @@ export async function sendOverdueReminders(
   for (const bill of bills) {
     type TJ = { full_name: string; line_user_id: string | null }
     type RJ = { room_number: string }
-    type MJ = { water_units: number | null; electricity_units: number | null; water_unit_price: number | null; electricity_unit_price: number | null }
+    type MJ = { water_units: number | null; electricity_units: number | null }
 
     const tenant = bill.tenants as unknown as TJ | null
     const room = bill.rooms as unknown as RJ | null
