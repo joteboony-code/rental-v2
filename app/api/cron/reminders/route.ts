@@ -91,7 +91,7 @@ export async function GET(req: NextRequest) {
       snooze_until, tenant_id, status,
       rooms   ( room_number ),
       tenants ( full_name, line_user_id ),
-      meter_readings ( water_units, electricity_units, water_unit_price, electricity_unit_price ),
+      meter_readings ( water_units, electricity_units ),
       payments ( amount )
     `)
     .in('status', ['pending', 'overdue'])
@@ -119,7 +119,7 @@ export async function GET(req: NextRequest) {
   // Group bills by tenant
   type TJ = { full_name: string; line_user_id: string | null }
   type RJ = { room_number: string }
-  type MJ = { water_units: number | null; electricity_units: number | null; water_unit_price: number | null; electricity_unit_price: number | null }
+  type MJ = { water_units: number | null; electricity_units: number | null }
   type PJ = { amount: number }
 
   const byTenant = new Map<string, typeof bills>()
