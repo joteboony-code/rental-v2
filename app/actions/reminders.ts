@@ -187,13 +187,13 @@ export async function sendOverdueReminders(
 
     {
       const units = meter?.electricity_units ?? null
-      const rate = meter?.electricity_unit_price ?? settings?.electricity_unit_price ?? 8
+      const rate = settings?.electricity_unit_price ?? 8
       const unitsText = units != null ? `${units} หน่วย × ${fmt(rate)} = ` : ''
       lines.push(`⚡ ค่าไฟ: ${unitsText}${fmt(elecAmt)} บาท`)
     }
     {
       const units = meter?.water_units ?? null
-      const rate = meter?.water_unit_price ?? settings?.water_unit_price ?? 18
+      const rate = settings?.water_unit_price ?? 18
       const unitsText = units != null ? `${units} หน่วย × ${fmt(rate)} = ` : ''
       lines.push(`💧 ค่าน้ำ: ${unitsText}${fmt(waterAmt)} บาท`)
     }
