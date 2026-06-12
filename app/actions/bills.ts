@@ -98,6 +98,7 @@ export async function saveMeterAndGenerateBills(
       electricity_prev,
       electricity_curr,
       recorded_by: user?.id ?? null,
+      reading_date: new Date().toISOString().split('T')[0],
     }
     if (water_image_url)       meterPayload.water_image_url       = water_image_url
     if (electricity_image_url) meterPayload.electricity_image_url = electricity_image_url
