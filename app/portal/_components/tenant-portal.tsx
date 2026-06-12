@@ -2,12 +2,18 @@
 
 import Script from 'next/script'
 import Link from 'next/link'
+import dynamic from 'next/dynamic'
 import { useCallback, useEffect, useMemo, useState, useTransition } from 'react'
 import {
   AlertCircle, CalendarDays, CheckCircle2, Clock,
   Droplets, ExternalLink, Home, Loader2, Receipt,
   Wallet, Wrench, Wifi, Trash2, Zap,
 } from 'lucide-react'
+
+const PromptPayQR = dynamic(
+  () => import('@/app/(dashboard)/bills/[id]/_components/promptpay-qr').then((m) => m.PromptPayQR),
+  { ssr: false }
+)
 import { getTenantPortalDashboard, getPortalRepairs, getPortalRooms, type TenantPortalData, type PortalRepairItem, type PortalRoom } from '@/app/actions/portal'
 import { Badge } from '@/components/ui/badge'
 import { RepairSubmit } from './repair-submit'
@@ -187,7 +193,7 @@ export function TenantPortal({ liffId }: TenantPortalProps) {
                     ยังไม่พบสัญญาเช่าที่กำลังใช้งาน
                   </div>
                 )}
-                {currentBill && <CurrentBillCard bill={currentBill} />}
+                {currentBill && <CurrentBillCard bill={currentBill} promptpay={data.promptpay} />}
                 <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
                   <div className="mb-3 flex items-center gap-2">
                     <Clock className="size-4 text-slate-400" />
@@ -283,7 +289,13 @@ function PortalLoadingState({ status }: { status: string }) {
   )
 }
 
-function CurrentBillCard({ bill }: { bill: TenantPortalData['bills'][number] }) {
+function CurrentBillCard({
+  bill,
+  promptpay,
+}: {
+  bill: TenantPortalData['bills'][number]
+  promptpay: TenantPortalData['promptpay']
+}) {
   return (
     <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
       <div className="mb-4 flex items-start justify-between gap-3">
@@ -318,6 +330,17 @@ function CurrentBillCard({ bill }: { bill: TenantPortalData['bills'][number] }) 
         <span className="text-xs text-slate-500">ครบกำหนด</span>
         <span className="text-sm font-semibold text-slate-800">{dateFmt.format(new Date(bill.due_date))}</span>
       </div>
+
+      {bill.remaining_amount > 0 && promptpay.id && (
+        <div className="mt-4 border-t border-slate-100 pt-4">
+          <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-slate-400">สแกน QR ชำระเงิน</p>
+          <PromptPayQR
+            promptpayId={promptpay.id}
+            promptpayName={promptpay.name ?? ''}
+            amount={bill.remaining_amount}
+          />
+        </div>
+      )}
     </section>
   )
 }
