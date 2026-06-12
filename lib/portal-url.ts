@@ -28,6 +28,10 @@ export function buildBillPortalUrl(
   liffId: string | null,
   appUrl: string | null
 ) {
-  // LIFF ไม่รองรับ subpath — ใช้ direct URL เสมอ
+  // ถ้ามี LIFF — เปิด portal เต็ม (ผู้เช่า login เห็นข้อมูลห้อง/บิล/ประวัติ/QR ครบ)
+  const cleanLiffId = getLiffId(liffId)
+  if (cleanLiffId) return `https://liff.line.me/${cleanLiffId}`
+
+  // ไม่มี LIFF — fallback เป็นหน้าบิลเดี่ยวแบบ URL ปกติ
   return `${getAppOrigin(appUrl)}/portal/${billId}`
 }
