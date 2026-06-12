@@ -331,7 +331,7 @@ function CurrentBillCard({
         <span className="text-sm font-semibold text-slate-800">{dateFmt.format(new Date(bill.due_date))}</span>
       </div>
 
-      {bill.remaining_amount > 0 && promptpay.id && (
+      {bill.status !== 'paid' && bill.remaining_amount > 0 && promptpay.id && (
         <div className="mt-4 border-t border-slate-100 pt-4">
           <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-slate-400">สแกน QR ชำระเงิน</p>
           <PromptPayQR
