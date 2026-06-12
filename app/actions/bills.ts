@@ -44,9 +44,17 @@ export async function saveMeterAndGenerateBills(
   const due_day          = Number(settings?.due_day                 ?? 10)
   const trash_fee        = Number(settings?.trash_fee               ?? 50)
 
-  // Due date = same month as billing_month, on due_day
+  // Due date = billing_month on due_day; if that date is already past, move to next month
   const [yearStr, monthStr] = billing_month.split('-')
-  const due_date = `${yearStr}-${monthStr}-${String(due_day).padStart(2, '0')}`
+  const candidate = `${yearStr}-${monthStr}-${String(due_day).padStart(2, '0')}`
+  const today = new Date().toISOString().split('T')[0]
+  let due_date = candidate
+  if (candidate < today) {
+    const next = new Date(parseInt(yearStr), parseInt(monthStr), 1) // day 1 of next month
+    const ny = String(next.getFullYear())
+    const nm = String(next.getMonth() + 1).padStart(2, '0')
+    due_date = `${ny}-${nm}-${String(due_day).padStart(2, '0')}`
+  }
 
   const roomIds = formData.getAll('room_ids') as string[]
   if (roomIds.length === 0) return { success: false, message: 'ไม่มีห้องที่ต้องออกบิล' }
