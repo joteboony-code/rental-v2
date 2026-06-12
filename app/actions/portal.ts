@@ -57,6 +57,7 @@ export type TenantPortalData = {
       paid_at: string
     }>
   }>
+  promptpay: { id: string | null; name: string | null }
 }
 
 type PortalResult =
@@ -124,7 +125,19 @@ export async function getTenantPortalDashboard(lineUserId: string, roomId?: stri
     await svc.from('tenants').update({ last_portal_open_at: new Date().toISOString() }).eq('line_user_id', trimmed)
   } catch { /* ไม่ critical — เปิด portal ต่อได้ */ }
 
-  return { success: true, data: data as TenantPortalData }
+  const svc2 = createServiceClient()
+  const { data: settings } = await svc2.from('settings').select('promptpay_id, promptpay_name').eq('id', 1).maybeSingle()
+
+  return {
+    success: true,
+    data: {
+      ...(data as TenantPortalData),
+      promptpay: {
+        id:   (settings as { promptpay_id?: string | null } | null)?.promptpay_id   ?? null,
+        name: (settings as { promptpay_name?: string | null } | null)?.promptpay_name ?? null,
+      },
+    },
+  }
 }
 
 // ── Repair requests ──────────────────────────────────────────
