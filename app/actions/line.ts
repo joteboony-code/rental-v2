@@ -200,7 +200,7 @@ async function fetchRoomStatements(supabase: any, tenantId: string): Promise<{
       rent_amount, water_amount, electricity_amount, wifi_amount, trash_amount, other_amount, other_note,
       total_amount,
       rooms ( room_number, floor ),
-      meter_readings ( created_at ),
+      meter_readings ( reading_date, created_at ),
       payments ( amount )
     `)
     .eq('tenant_id', tenantId)
@@ -214,7 +214,7 @@ async function fetchRoomStatements(supabase: any, tenantId: string): Promise<{
     wifi_amount: number; trash_amount: number; other_amount: number; other_note: string | null
     total_amount: number
     rooms: { room_number: string; floor: number | null } | null
-    meter_readings: { created_at: string } | null
+    meter_readings: { reading_date: string | null; created_at: string } | null
     payments: PayJ[] | null
   }
 
@@ -256,7 +256,7 @@ async function fetchRoomStatements(supabase: any, tenantId: string): Promise<{
       otherAmt:    Number(main.other_amount),
       otherNote:   main.other_note,
       currentTotal: Number(main.total_amount),
-      meterRecordedAt: main.meter_readings?.created_at ?? null,
+      meterRecordedAt: main.meter_readings?.reading_date ?? main.meter_readings?.created_at ?? null,
       overdueBills,
       overdueTotal: overdueBills.reduce((s, o) => s + o.remaining, 0),
     })
@@ -416,7 +416,7 @@ export async function sendLineBillNotification(
       *,
       rooms   ( room_number, floor ),
       tenants ( full_name, line_user_id ),
-      meter_readings ( created_at ),
+      meter_readings ( reading_date, created_at ),
       payments ( amount )
     `)
     .eq('id', billId)
@@ -426,7 +426,7 @@ export async function sendLineBillNotification(
 
   type RoomJoin   = { room_number: string; floor: number | null }
   type TenantJoin = { full_name: string; line_user_id: string | null }
-  type MeterJoin  = { created_at: string } | null
+  type MeterJoin  = { reading_date: string | null; created_at: string } | null
 
   const room   = bill.rooms   as unknown as RoomJoin   | null
   const tenant = bill.tenants as unknown as TenantJoin | null
@@ -544,7 +544,7 @@ export async function sendLineBillNotification(
         totalAmt:    Number(bill.total_amount),
         portalUrl,
         tenantPortalUrl,
-        meterRecordedAt: meter?.created_at ?? null,
+        meterRecordedAt: meter?.reading_date ?? meter?.created_at ?? null,
       })
       await pushMessage(tenant.line_user_id, lineConfig.channelAccessToken, [flexMsg])
     }
@@ -985,7 +985,7 @@ export async function sendBulkLineBillNotification(
       total_amount, due_date, billing_month,
       rooms   ( room_number, floor ),
       tenants ( full_name, line_user_id ),
-      meter_readings ( created_at ),
+      meter_readings ( reading_date, created_at ),
       payments ( amount )
     `)
     .eq('billing_month', billingMonth)
@@ -1014,7 +1014,7 @@ export async function sendBulkLineBillNotification(
 
   type TenantJ = { full_name: string; line_user_id: string | null }
   type RoomJ   = { room_number: string; floor: number | null }
-  type MeterJ  = { created_at: string } | null
+  type MeterJ  = { reading_date: string | null; created_at: string } | null
 
   const auditBulkLineBillSent = (bill: (typeof payableBills)[number], extra: Record<string, unknown> = {}) => {
     const remaining = billRemaining(bill.total_amount, bill.payments as { amount: unknown }[] | null)
@@ -1149,7 +1149,7 @@ export async function sendBulkLineBillNotification(
             totalAmt:    Number(bill.total_amount),
             portalUrl,
             tenantPortalUrl,
-            meterRecordedAt: meter?.created_at ?? null,
+            meterRecordedAt: meter?.reading_date ?? meter?.created_at ?? null,
           })
           await pushMessage(lineUserId, lineConfig.channelAccessToken, [flexMsg])
         }

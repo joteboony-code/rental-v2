@@ -152,6 +152,7 @@ create table public.meter_readings (
   electricity_prev     numeric(10,2) not null default 0,
   electricity_curr     numeric(10,2) not null default 0,
   recorded_by          uuid references public.profiles(id),
+  reading_date         date,
   created_at           timestamptz not null default now(),
   unique (room_id, billing_month)
 );
