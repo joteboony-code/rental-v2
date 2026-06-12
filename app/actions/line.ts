@@ -58,7 +58,6 @@ function buildFlexBubble(data: {
   trashAmt:     number
   totalAmt:     number
   portalUrl:    string
-  tenantPortalUrl: string
   meterRecordedAt?: string | null
 }) {
   const rows: object[] = [
@@ -133,7 +132,6 @@ function buildFlexBubble(data: {
       footer: {
         type: 'box',
         layout: 'vertical',
-        spacing: 'sm',
         paddingAll: '16px',
         backgroundColor: '#F8FAFC',
         contents: [
@@ -142,12 +140,6 @@ function buildFlexBubble(data: {
             action: { type: 'uri', label: '🔗 ดูบิล / ชำระเงิน', uri: data.portalUrl },
             style: 'primary',
             color: '#0C1B4D',
-            height: 'sm',
-          },
-          {
-            type: 'button',
-            action: { type: 'uri', label: 'ดูข้อมูลห้อง', uri: data.tenantPortalUrl },
-            style: 'secondary',
             height: 'sm',
           },
         ],
@@ -503,7 +495,6 @@ export async function sendLineBillNotification(
 
   const month      = thaiMonth(bill.billing_month)
   const portalUrl  = buildBillPortalUrl(billId, lineConfig.liffId, lineConfig.appUrl)
-  const tenantPortalUrl = buildTenantPortalUrl(lineConfig.liffId, lineConfig.appUrl)
   const roomNumber = room?.room_number ?? '—'
   const floor      = room?.floor ?? null
 
@@ -524,7 +515,6 @@ export async function sendLineBillNotification(
         `ครบกำหนด: ${new Date(bill.due_date).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })}`
       )
       lines.push(``, `🔗 ดูบิล: ${portalUrl}`)
-      lines.push(`🏠 ดูข้อมูลห้อง: ${tenantPortalUrl}`)
 
       await pushMessage(tenant.line_user_id, lineConfig.channelAccessToken, [
         { type: 'text', text: lines.join('\n') },
@@ -543,7 +533,6 @@ export async function sendLineBillNotification(
         trashAmt:    Number(bill.trash_amount),
         totalAmt:    Number(bill.total_amount),
         portalUrl,
-        tenantPortalUrl,
         meterRecordedAt: meter?.reading_date ?? meter?.created_at ?? null,
       })
       await pushMessage(tenant.line_user_id, lineConfig.channelAccessToken, [flexMsg])
@@ -1112,7 +1101,6 @@ export async function sendBulkLineBillNotification(
       const meter      = bill.meter_readings as unknown as MeterJ
       const month      = thaiMonth(bill.billing_month as string)
       const portalUrl  = buildBillPortalUrl(bill.id, lineConfig.liffId, lineConfig.appUrl)
-      const tenantPortalUrl = buildTenantPortalUrl(lineConfig.liffId, lineConfig.appUrl)
       const roomNumber = room?.room_number ?? '—'
       const floor      = room?.floor ?? null
 
@@ -1132,7 +1120,6 @@ export async function sendBulkLineBillNotification(
           lines.push(``, `รวม: ฿${fmt(Number(bill.total_amount))}`)
           lines.push(`ครบกำหนด: ${new Date(bill.due_date as string).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })}`)
           lines.push(``, `🔗 ดูบิล: ${portalUrl}`)
-          lines.push(`🏠 ดูข้อมูลห้อง: ${tenantPortalUrl}`)
           await pushMessage(lineUserId, lineConfig.channelAccessToken, [{ type: 'text', text: lines.join('\n') }])
         } else {
           const flexMsg = buildFlexBubble({
@@ -1148,7 +1135,6 @@ export async function sendBulkLineBillNotification(
             trashAmt:    Number(bill.trash_amount),
             totalAmt:    Number(bill.total_amount),
             portalUrl,
-            tenantPortalUrl,
             meterRecordedAt: meter?.reading_date ?? meter?.created_at ?? null,
           })
           await pushMessage(lineUserId, lineConfig.channelAccessToken, [flexMsg])
