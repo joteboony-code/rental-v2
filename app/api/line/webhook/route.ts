@@ -539,9 +539,8 @@ async function handleSlipImage(
       return
     }
 
-    await reply(replyToken, token, [{ type: 'text', text: RECEIVED_REPLY }])
     const reviewLink = cfg.appUrl ? `${cfg.appUrl}/payment-reviews` : ''
-    await notifyOwner(cfg, `🧾 มีสลิปเข้ามาครับ\n🏠 ห้อง ${roomNumber} — ${tenant.full_name}\n⚠️ SlipOK ตรวจไม่ผ่าน\nสาเหตุ: ${reason}${reviewLink ? `\n🔗 ${reviewLink}` : ''}`)
+    await notifyOwner(cfg, `🧾 มีรูปเข้ามาครับ\n🏠 ห้อง ${roomNumber} — ${tenant.full_name}\n⚠️ SlipOK ตรวจไม่ผ่าน\nสาเหตุ: ${reason}${reviewLink ? `\n🔗 ${reviewLink}` : ''}`)
     await savePendingSlip(supabase, { tenantId: tenant.id, lineUserId, slipUrl, amount: null, paidAt: null, slipRef: null, senderName: null, slipokStatus: 'failed', slipokCode: slipResult.code, slipokMessage: slipResult.message })
     return
   }
