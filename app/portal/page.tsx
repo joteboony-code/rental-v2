@@ -25,6 +25,13 @@ export default async function PortalPage({
     redirect(`/portal/register?token=${encodeURIComponent(registerToken)}`)
   }
 
+  // redirect ไปหน้าลงนามสัญญา
+  const signContractId =
+    (params.signContractId as string | undefined) ?? liffStateParams.get('signContractId') ?? undefined
+  if (signContractId) {
+    redirect(`/portal/sign-agreement?contractId=${encodeURIComponent(signContractId)}`)
+  }
+
   const line = await getLineIntegrationPublic()
 
   return (
