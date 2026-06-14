@@ -14,6 +14,7 @@ ALTER TABLE public.contracts ADD COLUMN IF NOT EXISTS signed_at timestamptz;
 ALTER TABLE public.settings ADD COLUMN IF NOT EXISTS owner_name text;
 ALTER TABLE public.settings ADD COLUMN IF NOT EXISTS owner_id_card text;
 ALTER TABLE public.settings ADD COLUMN IF NOT EXISTS owner_address text;
+ALTER TABLE public.settings ADD COLUMN IF NOT EXISTS owner_signature_url text;
 
 -- 4. สร้าง Storage bucket สำหรับ signed agreements (ถ้ายังไม่มี)
 -- ทำใน Supabase Dashboard → Storage → New bucket → ชื่อ "tenant-documents" (public)

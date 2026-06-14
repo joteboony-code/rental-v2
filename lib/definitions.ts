@@ -322,6 +322,7 @@ export type Settings = {
   owner_name:                     string | null
   owner_id_card:                  string | null
   owner_address:                  string | null
+  owner_signature_url:            string | null
   updated_at:                     string
 }
 

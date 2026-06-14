@@ -28,6 +28,7 @@ export type AgreementData = {
     owner_name: string
     owner_id_card: string | null
     owner_address: string
+    owner_signature_url: string | null
   }
 }
 
@@ -60,9 +61,19 @@ export async function getSignAgreementData(
 
   const { data: settings } = await supabase
     .from('settings')
-    .select('water_unit_price, electricity_unit_price, owner_name, owner_id_card, owner_address')
+    .select('water_unit_price, electricity_unit_price, owner_name, owner_id_card, owner_address, owner_signature_url')
     .eq('id', 1)
     .maybeSingle()
+
+  type SettingsRow = {
+    water_unit_price?: number | null
+    electricity_unit_price?: number | null
+    owner_name?: string | null
+    owner_id_card?: string | null
+    owner_address?: string | null
+    owner_signature_url?: string | null
+  }
+  const s = settings as SettingsRow | null
 
   return {
     success: true,
@@ -85,11 +96,12 @@ export async function getSignAgreementData(
         room: contract.rooms as unknown as { room_number: string; floor: number | null } | null,
       },
       settings: {
-        water_unit_price: Number(settings?.water_unit_price ?? 18),
-        electricity_unit_price: Number(settings?.electricity_unit_price ?? 8),
-        owner_name: (settings as { owner_name?: string | null } | null)?.owner_name || 'นายบุญรัตน์ อาส',
-        owner_id_card: (settings as { owner_id_card?: string | null } | null)?.owner_id_card ?? null,
-        owner_address: (settings as { owner_address?: string | null } | null)?.owner_address || '58/10 ม.9 ถ.บางนโยม อ.พานทอง จ.ชลบุรี',
+        water_unit_price: Number(s?.water_unit_price ?? 18),
+        electricity_unit_price: Number(s?.electricity_unit_price ?? 8),
+        owner_name: s?.owner_name || 'นายบุญรัตน์ อาส',
+        owner_id_card: s?.owner_id_card ?? null,
+        owner_address: s?.owner_address || '58/10 ม.9 ถ.บางนโยม อ.พานทอง จ.ชลบุรี',
+        owner_signature_url: s?.owner_signature_url ?? null,
       },
     },
   }
@@ -267,4 +279,32 @@ export async function sendAgreementLinkToTenant(
   }
 
   return { success: true, message: `ส่งลิงก์สัญญาไปยัง LINE ของ ${tenant.full_name} แล้ว` }
+}
+
+// ──────────────────────────────────────────────
+// Admin: อัพโหลดลายเซ็นเจ้าของหอ
+// ──────────────────────────────────────────────
+export async function uploadOwnerSignature(
+  formData: FormData
+): Promise<{ success: boolean; message: string; url?: string }> {
+  const supabase = createServiceClient()
+  const file = formData.get('signature') as File | null
+  if (!file || file.size === 0) return { success: false, message: 'ไม่พบไฟล์' }
+
+  const ext = file.name.split('.').pop() ?? 'png'
+  const buffer = await file.arrayBuffer()
+  const { data: upload, error } = await supabase.storage
+    .from('tenant-documents')
+    .upload(`signatures/owner_signature.${ext}`, buffer, {
+      contentType: file.type,
+      upsert: true,
+    })
+
+  if (error || !upload) return { success: false, message: `อัพโหลดไม่สำเร็จ: ${error?.message ?? 'unknown'}` }
+
+  const url = supabase.storage.from('tenant-documents').getPublicUrl(upload.path).data.publicUrl
+
+  await supabase.from('settings').update({ owner_signature_url: url }).eq('id', 1)
+
+  return { success: true, message: 'บันทึกลายเซ็นเรียบร้อยแล้ว', url }
 }
