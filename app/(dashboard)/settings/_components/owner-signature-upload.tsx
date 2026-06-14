@@ -9,24 +9,25 @@ interface Props {
 }
 
 export function OwnerSignatureUpload({ currentUrl }: Props) {
-  const [url, setUrl]           = useState<string | null>(currentUrl)
-  const [preview, setPreview]   = useState<string | null>(null)
-  const [result, setResult]     = useState<{ success: boolean; message: string } | null>(null)
-  const [isPending, startTrans] = useTransition()
+  const [url, setUrl]             = useState<string | null>(currentUrl)
+  const [preview, setPreview]     = useState<string | null>(null)
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [result, setResult]       = useState<{ success: boolean; message: string } | null>(null)
+  const [isPending, startTrans]   = useTransition()
   const fileRef = useRef<HTMLInputElement>(null)
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
+    setSelectedFile(file)
     setPreview(URL.createObjectURL(file))
     setResult(null)
   }
 
   function handleUpload() {
-    const file = fileRef.current?.files?.[0]
-    if (!file) return
+    if (!selectedFile) return
     const fd = new FormData()
-    fd.append('signature', file)
+    fd.append('signature', selectedFile)
     setResult(null)
     startTrans(async () => {
       const res = await uploadOwnerSignature(fd)
@@ -34,6 +35,7 @@ export function OwnerSignatureUpload({ currentUrl }: Props) {
       if (res.success && res.url) {
         setUrl(res.url)
         setPreview(null)
+        setSelectedFile(null)
         if (fileRef.current) fileRef.current.value = ''
       }
     })
