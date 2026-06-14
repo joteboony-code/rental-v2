@@ -237,11 +237,11 @@ export async function sendAgreementLinkToTenant(
   const liffId = cfg.line_liff_id
   const roomNumber = (contractRes.data?.rooms as unknown as { room_number: string } | null)?.room_number ?? '-'
 
-  // ถ้ามี LIFF ให้ส่งเป็น LIFF URL พร้อม liff.state
+  // ถ้ามี LIFF ให้ส่ง signContractId เป็น query param ใน liff.state (pattern เดียวกับ registerToken)
   const signPath = `/portal/sign-agreement?contractId=${contractId}`
   let signUrl: string
   if (liffId) {
-    signUrl = `https://liff.line.me/${liffId}?liff.state=${encodeURIComponent(signPath)}`
+    signUrl = `https://liff.line.me/${liffId}?liff.state=${encodeURIComponent(`?signContractId=${contractId}`)}`
   } else {
     signUrl = `${appUrl}${signPath}`
   }
