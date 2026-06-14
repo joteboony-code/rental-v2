@@ -165,8 +165,27 @@ export function AgreementTemplate({ data, signatureDataUrl, idCard, address, sig
               display: 'flex',
               alignItems: 'flex-end',
               justifyContent: 'center',
+              position: 'relative',
             }}>
-              <span style={{ fontSize: '12px', color: '#555' }}>ลงชื่อ.................................</span>
+              {settings.owner_signature_url
+                ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={settings.owner_signature_url}
+                    alt="ลายเซ็นผู้ให้เช่า"
+                    style={{
+                      position: 'absolute',
+                      bottom: '4px',
+                      left: '50%',
+                      transform: 'translateX(-50%)',
+                      maxHeight: '56px',
+                      maxWidth: '160px',
+                      objectFit: 'contain',
+                    }}
+                  />
+                )
+                : <span style={{ fontSize: '12px', color: '#555' }}>ลงชื่อ.................................</span>
+              }
             </div>
             <p style={{ fontSize: '13px' }}>ผู้ให้เช่า</p>
             <p style={{ fontSize: '12px', color: '#555' }}>({settings.owner_name})</p>
