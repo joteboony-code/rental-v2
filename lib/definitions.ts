@@ -108,6 +108,7 @@ export const TenantSchema = z.object({
   phone:              z.string().optional(),
   line_user_id:       z.string().optional(),
   id_card:            z.string().optional(),
+  address:            z.string().optional(),
   emergency_contact:  z.string().optional(),
   emergency_phone:    z.string().optional(),
   note:               z.string().optional(),
@@ -139,6 +140,7 @@ export type Tenant = {
   line_display_name:  string | null
   line_picture_url:   string | null
   id_card:            string | null
+  address:            string | null
   emergency_contact:  string | null
   emergency_phone:    string | null
   note:               string | null
@@ -179,20 +181,22 @@ export type ContractFormState =
   | undefined
 
 export type Contract = {
-  id:           string
-  room_id:      string
-  tenant_id:    string
-  start_date:   string
-  end_date:     string | null
-  monthly_rent: number
-  deposit_paid: number
-  status:       'active' | 'expired' | 'terminated'
-  note:         string | null
-  created_at:   string
-  updated_at:   string
+  id:                 string
+  room_id:            string
+  tenant_id:          string
+  start_date:         string
+  end_date:           string | null
+  monthly_rent:       number
+  deposit_paid:       number
+  status:             'active' | 'expired' | 'terminated'
+  note:               string | null
+  agreement_pdf_url:  string | null
+  signed_at:          string | null
+  created_at:         string
+  updated_at:         string
   // joined
-  rooms?:       Pick<Room, 'room_number' | 'floor'>
-  tenants?:     Pick<Tenant, 'full_name' | 'phone'>
+  rooms?:             Pick<Room, 'room_number' | 'floor'>
+  tenants?:           Pick<Tenant, 'full_name' | 'phone'>
 }
 
 // ============================================================
@@ -260,6 +264,9 @@ export const SettingsSchema = z.object({
   anomaly_threshold_pct:        z.coerce.number().int().min(10).max(500).default(50),
   slipok_branch_id:             z.string().optional().default(''),
   bank_accounts_text:           z.string().optional().default(''),
+  owner_name:                   z.string().optional().default(''),
+  owner_id_card:                z.string().optional().default(''),
+  owner_address:                z.string().optional().default(''),
 })
 
 export const LineIntegrationSchema = z.object({
@@ -310,8 +317,11 @@ export type Settings = {
   reminder_days:                  string    // "5,10" format
   reminder_enabled:               boolean
   anomaly_threshold_pct:          number    // % increase to flag as anomaly
-  slipok_branch_id:                string | null
+  slipok_branch_id:               string | null
   bank_accounts_text:             string | null
+  owner_name:                     string | null
+  owner_id_card:                  string | null
+  owner_address:                  string | null
   updated_at:                     string
 }
 

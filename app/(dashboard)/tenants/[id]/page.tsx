@@ -9,6 +9,7 @@ import { TerminateContractButton } from '../_components/terminate-contract-butto
 import { ContractDocuments } from './_components/contract-documents'
 import { TenantDocuments } from './_components/tenant-documents'
 import { LinePairCard } from './_components/line-pair-card'
+import { SendAgreementButton } from './_components/send-agreement-button'
 import { createContract } from '@/app/actions/tenants'
 import { getTenantDocuments } from '@/app/actions/tenant-documents'
 
@@ -182,7 +183,14 @@ export default async function TenantDetailPage({
                   </div>
                 )}
               </div>
-              <div className="mt-5 pt-4 border-t border-slate-100">
+              <div className="mt-5 pt-4 border-t border-slate-100 space-y-3">
+                <SendAgreementButton
+                  tenantId={id}
+                  contractId={c.id}
+                  agreementPdfUrl={(c as { agreement_pdf_url?: string | null }).agreement_pdf_url ?? null}
+                  signedAt={(c as { signed_at?: string | null }).signed_at ?? null}
+                  lineUserId={tenant.line_user_id}
+                />
                 <TerminateContractButton contractId={c.id} tenantId={id} />
               </div>
             </div>

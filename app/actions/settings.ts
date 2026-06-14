@@ -28,6 +28,9 @@ export async function updateSettings(
     anomaly_threshold_pct:      formData.get('anomaly_threshold_pct'),
     slipok_branch_id:           formData.get('slipok_branch_id'),
     bank_accounts_text:         formData.get('bank_accounts_text'),
+    owner_name:                 formData.get('owner_name'),
+    owner_id_card:              formData.get('owner_id_card'),
+    owner_address:              formData.get('owner_address'),
   }
   const slipokApiKey = String(formData.get('slipok_api_key') ?? '').trim()
   const lineRaw = {

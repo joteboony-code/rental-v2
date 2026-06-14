@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { type SettingsFormState, type Settings } from '@/lib/definitions'
 import { type LineIntegrationPublic } from '@/lib/line-integration'
-import { Loader2, Droplets, Zap, AlertCircle, Calendar, QrCode, MessageCircle, Globe, ShieldCheck, Bell, Banknote, FileText, Download } from 'lucide-react'
+import { Loader2, Droplets, Zap, AlertCircle, Calendar, QrCode, MessageCircle, Globe, ShieldCheck, Bell, Banknote, FileText, Download, UserCheck } from 'lucide-react'
 
 interface Props {
   action: (state: SettingsFormState, formData: FormData) => Promise<SettingsFormState>
@@ -235,6 +235,29 @@ export function SettingsForm({ action, settings, lineIntegration, hasSlipokKey }
             slipok.com
           </a>
         </p>
+      </Section>
+
+      {/* ── ข้อมูลผู้ให้เช่า ── */}
+      <Section title="ข้อมูลผู้ให้เช่า (สำหรับสัญญาเช่า)" icon={<UserCheck className="size-4 text-indigo-500" />}>
+        <div className="grid grid-cols-1 gap-4">
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="ชื่อ-นามสกุลผู้ให้เช่า" hint="แสดงในสัญญาเช่า">
+              <Input id="owner_name" name="owner_name"
+                defaultValue={settings?.owner_name ?? ''}
+                placeholder="เช่น นายบุญรัตน์ อาส" />
+            </Field>
+            <Field label="เลขบัตรประชาชนผู้ให้เช่า">
+              <Input id="owner_id_card" name="owner_id_card"
+                defaultValue={settings?.owner_id_card ?? ''}
+                placeholder="1-xxxx-xxxxx-xx-x" className="font-mono" />
+            </Field>
+          </div>
+          <Field label="ที่อยู่ผู้ให้เช่า / ที่ตั้งหอพัก" hint="แสดงในสัญญาเช่า">
+            <Input id="owner_address" name="owner_address"
+              defaultValue={settings?.owner_address ?? ''}
+              placeholder="เช่น 58/10 ม.9 ถ.บางนโยม อ.พานทอง จ.ชลบุรี" />
+          </Field>
+        </div>
       </Section>
 
       {/* ── เอกสาร ── */}
