@@ -11,7 +11,7 @@ export default async function SettingsPage() {
     supabase
       .from('settings')
       .select(
-        'id, water_unit_price, electricity_unit_price, late_fee_per_day, billing_day, due_day, promptpay_id, promptpay_name, trash_fee, current_billing_month, reminder_days, reminder_enabled, anomaly_threshold_pct, slipok_branch_id, bank_accounts_text, updated_at'
+        'id, water_unit_price, electricity_unit_price, late_fee_per_day, billing_day, due_day, promptpay_id, promptpay_name, trash_fee, current_billing_month, reminder_days, reminder_enabled, anomaly_threshold_pct, slipok_branch_id, bank_accounts_text, owner_name, owner_id_card, owner_address, updated_at'
       )
       .eq('id', 1)
       .single(),
