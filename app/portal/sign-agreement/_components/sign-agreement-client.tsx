@@ -238,10 +238,13 @@ export function SignAgreementClient({ contractId, liffId }: Props) {
               <FileText className="size-4" /> ยืนยันและลงนาม
             </button>
           </div>
-          {/* Hidden full-size template for html2canvas */}
-          <div style={{ position: 'fixed', top: '-9999px', left: '-9999px', zIndex: -1 }}>
-            <AgreementTemplate data={data} signatureDataUrl={sigDataUrl} idCard={idCard} address={address} signedDate={new Date()} />
-          </div>
+        </div>
+      )}
+
+      {/* Hidden full-size template for html2canvas — ต้องอยู่ใน DOM ตอน preview และ submitting */}
+      {(status === 'preview' || status === 'submitting') && data && sigDataUrl && (
+        <div style={{ position: 'fixed', top: '-9999px', left: '-9999px', zIndex: -1 }}>
+          <AgreementTemplate data={data} signatureDataUrl={sigDataUrl} idCard={idCard} address={address} signedDate={new Date()} />
         </div>
       )}
 
