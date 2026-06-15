@@ -140,8 +140,21 @@ export function SignAgreementClient({ contractId, liffId }: Props) {
       const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: '#ffffff', logging: false })
       const imgData = canvas.toDataURL('image/jpeg', 0.92)
       const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
-      const pdfW = pdf.internal.pageSize.getWidth()
-      pdf.addImage(imgData, 'JPEG', 0, 0, pdfW, pdfW * (canvas.height / canvas.width))
+      const pageW = pdf.internal.pageSize.getWidth()
+      const pageH = pdf.internal.pageSize.getHeight()
+      const imgH = pageW * (canvas.height / canvas.width)
+
+      // แบ่งเนื้อหาเป็นหลายหน้า A4 ถ้ายาวเกิน 1 หน้า (กันลายเซ็นโดนตัด)
+      let position = 0
+      let heightLeft = imgH
+      pdf.addImage(imgData, 'JPEG', 0, position, pageW, imgH)
+      heightLeft -= pageH
+      while (heightLeft > 0) {
+        position -= pageH
+        pdf.addPage()
+        pdf.addImage(imgData, 'JPEG', 0, position, pageW, imgH)
+        heightLeft -= pageH
+      }
 
       const pdfBlob = pdf.output('blob')
       const pdfFile = new File([pdfBlob], 'agreement.pdf', { type: 'application/pdf' })
