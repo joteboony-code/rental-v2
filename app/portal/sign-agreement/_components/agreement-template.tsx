@@ -58,12 +58,11 @@ export function AgreementTemplate({ data, signatureDataUrl, idCard, address, sig
         lineHeight: '1.85',
         color: '#000',
         backgroundColor: '#fff',
-        padding: '52px 56px',
         width: '794px',
-        minHeight: '1123px',
-        boxSizing: 'border-box',
       }}
     >
+    {/* ── หน้า 1 (สูงพอดี A4 = 1123px) ── */}
+    <div style={{ height: '1123px', padding: '52px 56px', boxSizing: 'border-box', overflow: 'hidden' }}>
       {/* ── ชื่อเรื่อง ── */}
       <h1 style={{
         textAlign: 'center',
@@ -168,10 +167,10 @@ export function AgreementTemplate({ data, signatureDataUrl, idCard, address, sig
         ผู้เช่าต้องเป็นผู้รับผิดชอบค่าใช้จ่ายในการซ่อมแซม
       </p>
 
-      {/* ── ตัวคั่นหน้า ── */}
-      <div style={{ margin: '20px 0 18px', textAlign: 'center', color: '#aaa', fontSize: '12px', letterSpacing: '2px' }}>
-        — หน้า 2 จาก 2 —
-      </div>
+      </div>{/* end หน้า 1 */}
+
+      {/* ── หน้า 2 (ข้อ 6 + ลายเซ็น) ── */}
+      <div style={{ minHeight: '1123px', padding: '52px 56px', boxSizing: 'border-box' }}>
 
       {/* ── ข้อ 6 ── */}
       <p style={h}>ข้อ 6. การบอกเลิกสัญญา</p>
@@ -253,6 +252,8 @@ export function AgreementTemplate({ data, signatureDataUrl, idCard, address, sig
           <p style={{ fontSize: '12px', margin: 0 }}>({D(16)})</p>
         </div>
       </div>
+
+      </div>{/* end หน้า 2 */}
     </div>
   )
 }
