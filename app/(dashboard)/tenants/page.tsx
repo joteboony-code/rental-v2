@@ -6,6 +6,7 @@ import { ArrowRight, UserPlus, Users, Home, Phone, ClipboardList, UserSearch } f
 import { roomRow } from '@/lib/room-utils'
 import { SyncLineButton } from './_components/sync-line-button'
 import { CountUp } from '@/components/ui/count-up'
+import { LineAvatar } from '@/components/line-avatar'
 
 type ContractRow = {
   status: string
@@ -191,7 +192,11 @@ export default async function TenantsPage({ searchParams }: Props) {
                     <tr className="border-b border-slate-50 last:border-0 hover:bg-slate-50/60 transition-colors group">
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
-                          <LineAvatar name={tenant.full_name} pictureUrl={tenant.line_picture_url} size="md" />
+                          <LineAvatar
+                            name={tenant.full_name}
+                            pictureUrl={tenant.line_picture_url}
+                            className="size-9 rounded-xl text-xs"
+                          />
                           <span className="font-semibold text-slate-700">{tenant.full_name}</span>
                         </div>
                       </td>
@@ -271,7 +276,11 @@ export default async function TenantsPage({ searchParams }: Props) {
                     )}
                   <Link href={`/tenants/${tenant.id}`}
                     className="flex items-center gap-4 p-4 hover:bg-slate-50 transition-colors">
-                    <LineAvatar name={tenant.full_name} pictureUrl={tenant.line_picture_url} size="lg" />
+                    <LineAvatar
+                      name={tenant.full_name}
+                      pictureUrl={tenant.line_picture_url}
+                      className="size-11 rounded-xl text-sm"
+                    />
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold text-slate-800 text-sm truncate">{tenant.full_name}</p>
                       <div className="flex items-center gap-2 mt-0.5">
@@ -315,32 +324,6 @@ export default async function TenantsPage({ searchParams }: Props) {
         )}
       </div>
     </div>
-  )
-}
-
-function LineAvatar({ name, pictureUrl, size }: {
-  name: string
-  pictureUrl?: string | null
-  size: 'md' | 'lg'
-}) {
-  const sizeClass = size === 'lg' ? 'size-11 rounded-xl text-sm' : 'size-9 rounded-xl text-xs'
-  const initials = name.slice(0, 2).toUpperCase()
-
-  if (pictureUrl) {
-    return (
-      <img
-        src={pictureUrl}
-        alt={`รูป LINE ของ ${name}`}
-        referrerPolicy="no-referrer"
-        className={`${sizeClass} object-cover ring-1 ring-white/70 shadow-sm shrink-0`}
-      />
-    )
-  }
-
-  return (
-    <span className={`${sizeClass} bg-slate-100 flex items-center justify-center font-bold text-slate-600 shrink-0`}>
-      {initials}
-    </span>
   )
 }
 
