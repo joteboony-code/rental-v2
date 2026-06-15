@@ -11,12 +11,17 @@ import { buildPairUrl, buildRegisterUrl, normalizeOrigin } from '@/lib/pair-url'
 import { RoomPairQrButton } from './_components/room-pair-qr-button'
 import { CountUp } from '@/components/ui/count-up'
 
+type ActiveContract = {
+  status: string
+  tenants: { id: string; full_name: string; line_picture_url: string | null } | null
+}
+
 export default async function RoomsPage() {
   const supabase = await createClient()
   const [{ data: rawRooms }, line, headerList] = await Promise.all([
     supabase
       .from('rooms')
-      .select(`*, registration_token, contracts!left ( status, monthly_rent, tenants ( id, full_name ) )`),
+      .select(`*, registration_token, contracts!left ( status, monthly_rent, tenants ( id, full_name, line_picture_url ) )`),
     getLineIntegrationPublic(),
     headers(),
   ])
@@ -101,7 +106,7 @@ export default async function RoomsPage() {
               </thead>
               <tbody>
                 {rooms.map((room) => {
-                  const activeContract = (room.contracts as { status: string; tenants: { id: string; full_name: string } | null }[] | null)
+                  const activeContract = (room.contracts as ActiveContract[] | null)
                     ?.find((c) => c.status === 'active')
                   const roomPairUrl = buildPairUrl({ appOrigin, liffId: line?.line_liff_id_pairing, roomNumber: room.room_number })
                   const registrationUrl = buildRegisterUrl({ appOrigin, registrationToken: room.registration_token, liffId: line?.line_liff_id_pairing })
@@ -118,8 +123,13 @@ export default async function RoomsPage() {
                       <td className="px-4 py-4 text-slate-700 font-medium">
                         {activeContract?.tenants ? (
                           <Link href={`/tenants/${activeContract.tenants.id}`}
-                            className="hover:text-indigo-600 hover:underline transition-colors">
-                            {activeContract.tenants.full_name}
+                            className="inline-flex items-center gap-2 hover:text-indigo-600 hover:underline transition-colors">
+                            <LineAvatar
+                              name={activeContract.tenants.full_name}
+                              pictureUrl={activeContract.tenants.line_picture_url}
+                              size="sm"
+                            />
+                            <span>{activeContract.tenants.full_name}</span>
                           </Link>
                         ) : (
                           <span className="text-slate-300 text-xs font-normal">—</span>
@@ -155,7 +165,7 @@ export default async function RoomsPage() {
             {/* Mobile Cards */}
             <div className="md:hidden divide-y divide-slate-100">
               {rooms.map((room) => {
-                const activeContract = (room.contracts as { status: string; tenants: { id: string; full_name: string } | null }[] | null)
+                const activeContract = (room.contracts as ActiveContract[] | null)
                   ?.find((c) => c.status === 'active')
                 const roomPairUrl = buildPairUrl({ appOrigin, liffId: line?.line_liff_id_pairing, roomNumber: room.room_number })
                 const registrationUrl = buildRegisterUrl({ appOrigin, registrationToken: room.registration_token, liffId: line?.line_liff_id_pairing })
@@ -172,8 +182,13 @@ export default async function RoomsPage() {
                       </div>
                       {activeContract?.tenants ? (
                         <Link href={`/tenants/${activeContract.tenants.id}`}
-                          className="text-xs text-slate-500 truncate hover:text-indigo-600 hover:underline transition-colors">
-                          {activeContract.tenants.full_name}
+                          className="inline-flex max-w-full items-center gap-2 text-xs text-slate-500 truncate hover:text-indigo-600 hover:underline transition-colors">
+                          <LineAvatar
+                            name={activeContract.tenants.full_name}
+                            pictureUrl={activeContract.tenants.line_picture_url}
+                            size="xs"
+                          />
+                          <span className="truncate">{activeContract.tenants.full_name}</span>
                         </Link>
                       ) : (
                         <p className="text-xs text-slate-500 truncate">ว่าง</p>
@@ -210,6 +225,32 @@ export default async function RoomsPage() {
   )
 }
 
+function LineAvatar({ name, pictureUrl, size }: {
+  name: string
+  pictureUrl?: string | null
+  size: 'xs' | 'sm'
+}) {
+  const sizeClass = size === 'sm' ? 'size-8 rounded-xl text-[10px]' : 'size-5 rounded-md text-[9px]'
+  const initials = name.slice(0, 2).toUpperCase()
+
+  if (pictureUrl) {
+    return (
+      <img
+        src={pictureUrl}
+        alt={`รูป LINE ของ ${name}`}
+        referrerPolicy="no-referrer"
+        className={`${sizeClass} shrink-0 object-cover ring-1 ring-white/70 shadow-sm`}
+      />
+    )
+  }
+
+  return (
+    <span className={`${sizeClass} bg-slate-100 flex items-center justify-center font-bold text-slate-600 shrink-0`}>
+      {initials}
+    </span>
+  )
+}
+
 function StatCard({ value, label, sub, color }: {
   value: number; label: string; sub: string
   color: 'slate' | 'indigo' | 'emerald' | 'amber'
@@ -232,5 +273,3 @@ function StatCard({ value, label, sub, color }: {
     </div>
   )
 }
-
-
