@@ -12,6 +12,15 @@ type ContractRow = {
   rooms: { id: string; room_number: string; floor: number | null } | null
 }
 
+type TenantRow = {
+  id: string
+  full_name: string
+  phone: string | null
+  line_picture_url: string | null
+  last_portal_open_at: string | null
+  contracts: ContractRow[] | null
+}
+
 interface Props {
   searchParams: Promise<{ status?: string }>
 }
@@ -30,7 +39,7 @@ export default async function TenantsPage({ searchParams }: Props) {
       )
     `)
 
-  const getActive = (t: NonNullable<typeof rawTenants>[number]) =>
+  const getActive = (t: TenantRow) =>
     (t.contracts as ContractRow[] | null)?.find((c) => c.status === 'active') ?? null
 
   const sortRoomNum = (r: string) => {
@@ -38,7 +47,7 @@ export default async function TenantsPage({ searchParams }: Props) {
     return isNaN(n) ? r.padStart(10, '0') : String(n).padStart(10, '0')
   }
 
-  const allTenants = rawTenants?.slice().sort((a, b) => {
+  const allTenants = (rawTenants as TenantRow[] | null)?.slice().sort((a, b) => {
     const ca = getActive(a)
     const cb = getActive(b)
     if (ca && cb) {
@@ -182,9 +191,7 @@ export default async function TenantsPage({ searchParams }: Props) {
                     <tr className="border-b border-slate-50 last:border-0 hover:bg-slate-50/60 transition-colors group">
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
-                          <div className="size-9 rounded-xl bg-slate-100 group-hover:bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-600 transition-colors shrink-0">
-                            {tenant.full_name.slice(0, 2).toUpperCase()}
-                          </div>
+                          <LineAvatar name={tenant.full_name} pictureUrl={tenant.line_picture_url} size="md" />
                           <span className="font-semibold text-slate-700">{tenant.full_name}</span>
                         </div>
                       </td>
@@ -264,9 +271,7 @@ export default async function TenantsPage({ searchParams }: Props) {
                     )}
                   <Link href={`/tenants/${tenant.id}`}
                     className="flex items-center gap-4 p-4 hover:bg-slate-50 transition-colors">
-                    <div className="size-11 rounded-xl bg-slate-100 flex items-center justify-center text-sm font-bold text-slate-600 shrink-0">
-                      {tenant.full_name.slice(0, 2).toUpperCase()}
-                    </div>
+                    <LineAvatar name={tenant.full_name} pictureUrl={tenant.line_picture_url} size="lg" />
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold text-slate-800 text-sm truncate">{tenant.full_name}</p>
                       <div className="flex items-center gap-2 mt-0.5">
@@ -313,9 +318,34 @@ export default async function TenantsPage({ searchParams }: Props) {
   )
 }
 
+function LineAvatar({ name, pictureUrl, size }: {
+  name: string
+  pictureUrl?: string | null
+  size: 'md' | 'lg'
+}) {
+  const sizeClass = size === 'lg' ? 'size-11 rounded-xl text-sm' : 'size-9 rounded-xl text-xs'
+  const initials = name.slice(0, 2).toUpperCase()
+
+  if (pictureUrl) {
+    return (
+      <img
+        src={pictureUrl}
+        alt={`รูป LINE ของ ${name}`}
+        referrerPolicy="no-referrer"
+        className={`${sizeClass} object-cover ring-1 ring-white/70 shadow-sm shrink-0`}
+      />
+    )
+  }
+
+  return (
+    <span className={`${sizeClass} bg-slate-100 flex items-center justify-center font-bold text-slate-600 shrink-0`}>
+      {initials}
+    </span>
+  )
+}
+
 function fmtPortalOpen(s: string) {
   return new Date(s).toLocaleString('th-TH', {
     day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
   })
 }
-
