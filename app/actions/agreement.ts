@@ -25,6 +25,7 @@ export type AgreementData = {
   settings: {
     water_unit_price: number
     electricity_unit_price: number
+    due_day: number
     owner_name: string
     owner_id_card: string | null
     owner_address: string
@@ -61,13 +62,14 @@ export async function getSignAgreementData(
 
   const { data: settings } = await supabase
     .from('settings')
-    .select('water_unit_price, electricity_unit_price, owner_name, owner_id_card, owner_address, owner_signature_url')
+    .select('water_unit_price, electricity_unit_price, due_day, owner_name, owner_id_card, owner_address, owner_signature_url')
     .eq('id', 1)
     .maybeSingle()
 
   type SettingsRow = {
     water_unit_price?: number | null
     electricity_unit_price?: number | null
+    due_day?: number | null
     owner_name?: string | null
     owner_id_card?: string | null
     owner_address?: string | null
@@ -98,6 +100,7 @@ export async function getSignAgreementData(
       settings: {
         water_unit_price: Number(s?.water_unit_price ?? 18),
         electricity_unit_price: Number(s?.electricity_unit_price ?? 8),
+        due_day: Number(s?.due_day ?? 5),
         owner_name: s?.owner_name || 'นายบุญรัตน์ อาส',
         owner_id_card: s?.owner_id_card ?? null,
         owner_address: s?.owner_address || '58/10 ม.9 ถ.บางนโยม อ.พานทอง จ.ชลบุรี',

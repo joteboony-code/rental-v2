@@ -32,6 +32,16 @@ function numTH(n: number) {
 
 const D = (n = 18) => '.'.repeat(n)
 
+// สไตล์สำหรับข้อมูลที่กรอกลงไป → ตัวหนา + ขีดเส้นใต้
+const fillStyle: React.CSSProperties = {
+  fontWeight: 'bold',
+  textDecoration: 'underline',
+  textUnderlineOffset: '3px',
+}
+function F({ children }: { children: React.ReactNode }) {
+  return <span style={fillStyle}>{children}</span>
+}
+
 export function AgreementTemplate({ data, signatureDataUrl, idCard, address, signedDate }: Props) {
   const { tenant, contract, settings } = data
   const room = contract.room
@@ -66,29 +76,29 @@ export function AgreementTemplate({ data, signatureDataUrl, idCard, address, sig
         สัญญาเช่าห้องพัก
       </h1>
 
-      {/* ── ทำที่ / วันที่ ── */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '14px' }}>
-        <span>ทำที่ {settings.owner_address || D(30)}</span>
-        <span>วันที่ {thaiDate(signedDate)}</span>
+      {/* ── ทำที่ / วันที่ (ชิดขวา เรียงซ้อน) ── */}
+      <div style={{ textAlign: 'right', marginBottom: '14px' }}>
+        <p style={{ margin: '0 0 2px 0' }}>ทำที่ <F>{settings.owner_address || D(25)}</F></p>
+        <p style={{ margin: 0 }}>วันที่ <F>{thaiDate(signedDate)}</F></p>
       </div>
 
       {/* ── ผู้ให้เช่า ── */}
       <p style={p}>
         สัญญาฉบับนี้ทำขึ้นระหว่าง{' '}
-        <strong>{settings.owner_name || D(20)}</strong>
-        {settings.owner_id_card && <> เลขบัตรประชาชน {settings.owner_id_card}</>}
-        {' '}อยู่บ้านเลขที่ {settings.owner_address || D(25)}
+        <F>{settings.owner_name || D(20)}</F>
+        {settings.owner_id_card && <> เลขบัตรประชาชน <F>{settings.owner_id_card}</F></>}
+        {' '}อยู่บ้านเลขที่ <F>{settings.owner_address || D(25)}</F>
         {' '}ซึ่งต่อไปในสัญญานี้เรียกว่า <strong>&ldquo;ผู้ให้เช่า&rdquo;</strong> ฝ่ายหนึ่ง กับ
       </p>
 
       {/* ── ผู้เช่า (3 บรรทัด ชิดซ้าย) ── */}
       <p style={{ ...p, marginBottom: '2px' }}>
-        <strong>{tenant.full_name}</strong>{' '}
-        อยู่บ้านเลขที่ {address || D(28)}
+        <F>{tenant.full_name}</F>{' '}
+        อยู่บ้านเลขที่ <F>{address || D(28)}</F>
       </p>
       <p style={{ ...p, marginBottom: '2px' }}>
-        ถือบัตรประจำตัวประชาชนเลขที่ {idCard || D(16)}
-        {' '}เบอร์โทรศัพท์ {tenant.phone || D(14)}
+        ถือบัตรประจำตัวประชาชนเลขที่ <F>{idCard || D(16)}</F>
+        {' '}เบอร์โทรศัพท์ <F>{tenant.phone || D(14)}</F>
       </p>
       <p style={{ ...p, marginBottom: '14px' }}>
         ซึ่งต่อไปในสัญญานี้เรียกว่า <strong>&ldquo;ผู้เช่า&rdquo;</strong> อีกฝ่ายหนึ่ง
@@ -100,12 +110,12 @@ export function AgreementTemplate({ data, signatureDataUrl, idCard, address, sig
       <p style={h}>ข้อ 1. วัตถุประสงค์แห่งสัญญา</p>
       <p style={p}>
         ผู้ให้เช่าตกลงให้เช่า และผู้เช่าตกลงเช่าห้องพัก เลขที่{' '}
-        <strong>{room?.room_number ?? D(6)}</strong>
+        <F>{room?.room_number ?? D(6)}</F>
         {room?.floor != null
-          ? <> ชั้นที่ <strong>{room.floor}</strong></>
-          : <> ชั้นที่ {D(4)}</>
+          ? <> ชั้นที่ <F>{room.floor}</F></>
+          : <> ชั้นที่ <F>{D(4)}</F></>
         }
-        {' '}ตั้งอยู่ที่ {settings.owner_address || D(30)}
+        {' '}ตั้งอยู่ที่ <F>{settings.owner_address || D(30)}</F>
         {' '}เพื่อใช้เป็นที่อยู่อาศัยเท่านั้น
       </p>
 
@@ -113,13 +123,13 @@ export function AgreementTemplate({ data, signatureDataUrl, idCard, address, sig
       <p style={h}>ข้อ 2. กำหนดระยะเวลาเช่าและค่าเช่า</p>
       <p style={p}>
         คู่สัญญาตกลงกำหนดระยะเวลาเช่าแบบรายเดือน เริ่มตั้งแต่วันที่{' '}
-        <strong>{thaiShortDate(contract.start_date)}</strong>
+        <F>{thaiShortDate(contract.start_date)}</F>
         {contract.end_date && (
-          <> ถึงวันที่ <strong>{thaiShortDate(contract.end_date)}</strong></>
+          <> ถึงวันที่ <F>{thaiShortDate(contract.end_date)}</F></>
         )}
         {' '}โดยผู้เช่าตกลงชำระค่าเช่าในอัตราเดือนละ{' '}
-        <strong>{numTH(contract.monthly_rent)}</strong> บาท
-        {' '}และกำหนดชำระในวันที่ {D(6)} ของทุกเดือน
+        <F>{numTH(contract.monthly_rent)}</F> บาท
+        {' '}และกำหนดชำระในวันที่ <F>{settings.due_day}</F> ของทุกเดือน
       </p>
 
       {/* ── ข้อ 3 ── */}
@@ -129,7 +139,7 @@ export function AgreementTemplate({ data, signatureDataUrl, idCard, address, sig
       </p>
       <p style={{ ...p, marginBottom: '2px', paddingLeft: '1em' }}>
         1) เงินประกันความเสียหายและประกันการเช่า เป็นจำนวนเงิน{' '}
-        <strong>{numTH(contract.deposit_paid)}</strong> บาท
+        <F>{numTH(contract.deposit_paid)}</F> บาท
       </p>
       <p style={{ ...p, marginBottom: '4px', paddingLeft: '1em' }}>
         2) ค่าล่วงหน้า {D(6)} เดือน เป็นจำนวนเงิน {D(12)} บาท
@@ -143,9 +153,9 @@ export function AgreementTemplate({ data, signatureDataUrl, idCard, address, sig
       <p style={h}>ข้อ 4. ค่าสาธารณูปโภค</p>
       <p style={p}>
         ผู้เช่าตกลงเป็นผู้ชำระค่าไฟฟ้า หน่วยละ{' '}
-        <strong>{numTH(settings.electricity_unit_price)}</strong> บาท
+        <F>{numTH(settings.electricity_unit_price)}</F> บาท
         {' '}และค่าน้ำประปา หน่วยละ{' '}
-        <strong>{numTH(settings.water_unit_price)}</strong> บาท
+        <F>{numTH(settings.water_unit_price)}</F> บาท
         {' '}ตามที่ได้ตกลงกัน
       </p>
 
@@ -198,8 +208,8 @@ export function AgreementTemplate({ data, signatureDataUrl, idCard, address, sig
           <p style={{ fontSize: '13px', borderTop: '1px solid #000', paddingTop: '2px', margin: '0 0 2px 0' }}>
             ลงชื่อ{D(18)}ผู้ให้เช่า
           </p>
-          <p style={{ fontSize: '12px', margin: '0 0 2px 0' }}>({settings.owner_name || D(16)})</p>
-          <p style={{ fontSize: '12px', color: '#555', margin: 0 }}>วันที่ {thaiDate(signedDate)}</p>
+          <p style={{ fontSize: '12px', margin: '0 0 2px 0' }}>(<F>{settings.owner_name || D(16)}</F>)</p>
+          <p style={{ fontSize: '12px', color: '#555', margin: 0 }}>วันที่ <F>{thaiDate(signedDate)}</F></p>
         </div>
 
         {/* ผู้เช่า */}
@@ -221,8 +231,8 @@ export function AgreementTemplate({ data, signatureDataUrl, idCard, address, sig
           <p style={{ fontSize: '13px', borderTop: '1px solid #000', paddingTop: '2px', margin: '0 0 2px 0' }}>
             ลงชื่อ{D(18)}ผู้เช่า
           </p>
-          <p style={{ fontSize: '12px', margin: '0 0 2px 0' }}>({tenant.full_name})</p>
-          <p style={{ fontSize: '12px', color: '#555', margin: 0 }}>วันที่ {thaiDate(signedDate)}</p>
+          <p style={{ fontSize: '12px', margin: '0 0 2px 0' }}>(<F>{tenant.full_name}</F>)</p>
+          <p style={{ fontSize: '12px', color: '#555', margin: 0 }}>วันที่ <F>{thaiDate(signedDate)}</F></p>
         </div>
       </div>
 
