@@ -12,6 +12,8 @@ import { SnoozeButton } from './_components/snooze-button'
 import { LineQuotaBadge } from './_components/line-quota-badge'
 import { parseReminderDays, isTodayReminderDay, nextReminderDay } from '@/lib/reminder-utils'
 import { CountUp } from '@/components/ui/count-up'
+import { StatCard } from '@/components/ui/stat-card'
+import { EmptyState } from '@/components/ui/empty-state'
 
 interface Props {
   searchParams: Promise<{ month?: string; status?: string }>
@@ -149,26 +151,10 @@ export default async function BillsPage({ searchParams }: Props) {
 
       {/* ── Stats row ── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
-          <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">ทั้งหมด</p>
-          <p className="text-4xl font-bold text-slate-950 tracking-tight"><CountUp value={stats.total} /></p>
-          <p className="text-xs text-slate-400 mt-1">รายการ</p>
-        </div>
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
-          <p className="text-xs font-semibold text-amber-500 uppercase tracking-widest mb-2">รอชำระ</p>
-          <p className="text-4xl font-bold text-slate-950 tracking-tight"><CountUp value={stats.pending} /></p>
-          <p className="text-xs text-slate-400 mt-1">รายการ</p>
-        </div>
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
-          <p className="text-xs font-semibold text-emerald-500 uppercase tracking-widest mb-2">ชำระแล้ว</p>
-          <p className="text-4xl font-bold text-slate-950 tracking-tight"><CountUp value={stats.paid} /></p>
-          <p className="text-xs text-slate-400 mt-1">รายการ</p>
-        </div>
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
-          <p className="text-xs font-semibold text-rose-500 uppercase tracking-widest mb-2">เกินกำหนด</p>
-          <p className="text-4xl font-bold text-slate-950 tracking-tight"><CountUp value={stats.overdue} /></p>
-          <p className="text-xs text-slate-400 mt-1">รายการ</p>
-        </div>
+        <StatCard tone="slate"   label="ทั้งหมด"    value={<CountUp value={stats.total} />}   hint="รายการ" />
+        <StatCard tone="amber"   label="รอชำระ"    value={<CountUp value={stats.pending} />} hint="รายการ" />
+        <StatCard tone="emerald" label="ชำระแล้ว"  value={<CountUp value={stats.paid} />}    hint="รายการ" />
+        <StatCard tone="rose"    label="เกินกำหนด" value={<CountUp value={stats.overdue} />} hint="รายการ" />
       </div>
 
       {/* ── Revenue + progress ── */}
@@ -215,12 +201,16 @@ export default async function BillsPage({ searchParams }: Props) {
       {/* ── Table / Cards ── */}
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
         {!bills || bills.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-24 text-slate-400">
-            <p className="font-semibold text-slate-600 mb-1">ยังไม่มีบิลในเดือนนี้</p>
-            <Link href={`/bills/meter?month=${currentMonth}`}
-              className={buttonVariants({ variant: 'default', size: 'sm' }) + ' mt-4 rounded-xl bg-slate-950 hover:bg-slate-800'}>
-              บันทึกมิเตอร์ + ออกบิล
-            </Link>
+          <div className="p-8">
+            <EmptyState
+              title="ยังไม่มีบิลในเดือนนี้"
+              action={
+                <Link href={`/bills/meter?month=${currentMonth}`}
+                  className={buttonVariants({ variant: 'default', size: 'sm' }) + ' mt-1 rounded-xl bg-slate-950 hover:bg-slate-800'}>
+                  บันทึกมิเตอร์ + ออกบิล
+                </Link>
+              }
+            />
           </div>
         ) : (
           <>
