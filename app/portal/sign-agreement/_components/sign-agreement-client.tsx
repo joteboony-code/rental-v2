@@ -124,7 +124,6 @@ export function SignAgreementClient({ contractId, liffId }: Props) {
     const url = sigCanvasRef.current?.toDataURL('image/png') ?? null
     setSigDataUrl(url)
     setStatus('preview')
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const handleSubmit = useCallback(async () => {
@@ -174,7 +173,6 @@ export function SignAgreementClient({ contractId, liffId }: Props) {
       setStatus('error')
       setErrorMsg(e instanceof Error ? e.message : 'เกิดข้อผิดพลาด')
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, sigDataUrl, lineUserId, idCard, address])
 
   return (

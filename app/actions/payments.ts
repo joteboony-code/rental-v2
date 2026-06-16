@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
-import { sendPaymentConfirmedNotification, sendPaymentReceiptNotification } from './line'
+import { sendPaymentReceiptNotification } from './line'
 import { logAudit } from './audit'
 
 export async function recordPayment(

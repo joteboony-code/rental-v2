@@ -27,7 +27,7 @@ export function RoomForm({ action, room, submitLabel = 'บันทึก' }: P
     } else {
       toast.error(state.message)
     }
-  }, [state])
+  }, [state, room, router])
 
   return (
     <form action={formAction} className="space-y-4">

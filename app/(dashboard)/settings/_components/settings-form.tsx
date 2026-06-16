@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { type SettingsFormState, type Settings } from '@/lib/definitions'
 import { type LineIntegrationPublic } from '@/lib/line-integration'
-import { Loader2, Droplets, Zap, AlertCircle, Calendar, QrCode, MessageCircle, Globe, ShieldCheck, Bell, Banknote, FileText, Download, UserCheck } from 'lucide-react'
+import { Loader2, Droplets, Zap, Calendar, QrCode, MessageCircle, Globe, ShieldCheck, Bell, Banknote, FileText, Download, UserCheck } from 'lucide-react'
 
 interface Props {
   action: (state: SettingsFormState, formData: FormData) => Promise<SettingsFormState>

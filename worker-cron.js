@@ -4,7 +4,7 @@
 export * from './.open-next/worker.js'
 import openNextWorker from './.open-next/worker.js'
 
-export default {
+const worker = {
   fetch(request, env, ctx) {
     return openNextWorker.fetch(request, env, ctx)
   },
@@ -20,3 +20,5 @@ export default {
     ]))
   },
 }
+
+export default worker

@@ -40,7 +40,6 @@ export default async function TenantDetailPage({
   const documents = await getTenantDocuments(id)
 
   const activeContracts = contracts?.filter((c) => c.status === 'active') ?? []
-  const activeContract  = activeContracts[0] ?? null
   const hasActiveContract = activeContracts.length > 0
 
   const boundCreateContract = async (state: Parameters<typeof createContract>[0], formData: FormData) => {

@@ -6,6 +6,7 @@ import { Pencil, BarChart2, Building2 } from 'lucide-react'
 import { roomRow } from '@/lib/room-utils'
 import { SearchInput } from '@/components/ui/search-input'
 import { EmptyState } from '@/components/ui/empty-state'
+import { roomStatusVisual } from '@/lib/status'
 import { RoomStatusBadge } from './room-status-badge'
 import { RoomPairQrButton } from './room-pair-qr-button'
 import { DeleteRoomButton } from './delete-room-button'
@@ -25,18 +26,40 @@ export type RoomRow = {
 
 const fmt = (n: number) => Number(n).toLocaleString('th-TH', { maximumFractionDigits: 0 })
 
+// แสดง tab เรียงตามลำดับนี้ (เฉพาะสถานะที่มีห้องอยู่จริง)
+const STATUS_ORDER = ['occupied', 'available', 'reserved', 'maintenance']
+
 export function RoomsBrowser({ rooms }: { rooms: RoomRow[] }) {
   const [query, setQuery] = useState('')
+  const [status, setStatus] = useState<string>('all')
+
+  const counts = useMemo(() => {
+    const c: Record<string, number> = {}
+    for (const r of rooms) c[r.status] = (c[r.status] ?? 0) + 1
+    return c
+  }, [rooms])
+
+  const tabs = useMemo(() => [
+    { value: 'all', label: 'ทั้งหมด', count: rooms.length },
+    ...STATUS_ORDER.filter((s) => counts[s]).map((s) => ({
+      value: s,
+      label: roomStatusVisual[s]?.label ?? s,
+      count: counts[s],
+    })),
+  ], [counts, rooms.length])
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
-    if (!q) return rooms
-    return rooms.filter((r) =>
-      r.room_number.toLowerCase().includes(q) ||
-      (r.tenantName ?? '').toLowerCase().includes(q) ||
-      (r.tenantPhone ?? '').toLowerCase().includes(q)
-    )
-  }, [rooms, query])
+    return rooms.filter((r) => {
+      if (status !== 'all' && r.status !== status) return false
+      if (!q) return true
+      return (
+        r.room_number.toLowerCase().includes(q) ||
+        (r.tenantName ?? '').toLowerCase().includes(q) ||
+        (r.tenantPhone ?? '').toLowerCase().includes(q)
+      )
+    })
+  }, [rooms, query, status])
 
   return (
     <div className="space-y-4">
@@ -46,10 +69,31 @@ export function RoomsBrowser({ rooms }: { rooms: RoomRow[] }) {
         placeholder="ค้นหาเลขห้อง ชื่อผู้เช่า หรือเบอร์โทร"
       />
 
+      {/* Filter tabs — แสดงเมื่อมีมากกว่า 1 สถานะ */}
+      {tabs.length > 1 && (
+        <div className="flex gap-2 overflow-x-auto pb-1">
+          {tabs.map(({ value, label, count }) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setStatus(value)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all whitespace-nowrap border ${
+                status === value
+                  ? 'bg-slate-950 text-white border-slate-950 shadow-sm'
+                  : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400'
+              }`}
+            >
+              {label}
+              <span className={`text-xs px-1.5 py-0.5 rounded-md font-bold ${
+                status === value ? 'bg-white/15 text-white' : 'bg-slate-100 text-slate-500'
+              }`}>{count}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
       {filtered.length === 0 ? (
-        query ? (
-          <EmptyState icon={Building2} title="ไม่พบห้องที่ค้นหา" description={`ไม่มีผลลัพธ์สำหรับ "${query}"`} />
-        ) : (
+        rooms.length === 0 ? (
           <EmptyState
             icon={Building2}
             title="ยังไม่มีห้องในระบบ"
@@ -59,6 +103,12 @@ export function RoomsBrowser({ rooms }: { rooms: RoomRow[] }) {
                 เพิ่มห้องแรก
               </Link>
             }
+          />
+        ) : (
+          <EmptyState
+            icon={Building2}
+            title="ไม่พบห้องที่ตรงเงื่อนไข"
+            description={query ? `ไม่มีผลลัพธ์สำหรับ "${query}"` : 'ลองเปลี่ยนตัวกรองสถานะ'}
           />
         )
       ) : (

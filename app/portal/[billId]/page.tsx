@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { notFound } from 'next/navigation'
 import { createServiceClient } from '@/lib/supabase/service'
-import { Droplets, Zap, Wifi, Trash2, Home, User, Phone, CheckCircle, Clock, AlertTriangle } from 'lucide-react'
+import { Droplets, Zap, Wifi, Trash2, User, Phone, CheckCircle, Clock, AlertTriangle } from 'lucide-react'
 import { roomRow } from '@/lib/room-utils'
 import { QRWrapper } from './_components/qr-wrapper'
 
