@@ -149,6 +149,8 @@
   .dark .bg-slate-50 { background-color: oklch(0.18 0.01 255); }
   .dark .bg-white { background-color: oklch(0.22 0.01 255); }
   .dark .bg-slate-100 { background-color: oklch(0.28 0.01 255); }
+  .dark .bg-slate-200 { background-color: oklch(0.32 0.01 255); }
+  .dark .bg-slate-300 { background-color: oklch(0.36 0.01 255); }
   .dark .border-slate-50,
   .dark .border-slate-100,
   .dark .border-slate-200 { border-color: oklch(1 0 0 / 12%); }
