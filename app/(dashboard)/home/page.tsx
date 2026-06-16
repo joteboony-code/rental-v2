@@ -1,7 +1,9 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
-import { FileText, Home, Wallet, AlertTriangle, Clock, ArrowRight, TrendingUp } from 'lucide-react'
+import { FileText, Home, Wallet, AlertTriangle, Clock, ArrowRight, TrendingUp, DoorOpen } from 'lucide-react'
+import { StatCard } from '@/components/ui/stat-card'
+import { EmptyState } from '@/components/ui/empty-state'
 
 const fmt = (n: number) => n.toLocaleString('th-TH', { maximumFractionDigits: 0 })
 
@@ -55,16 +57,16 @@ export default async function HomePage() {
       {/* Header */}
       <div>
         <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-1">ภาพรวม</p>
-        <h1 className="text-2xl md:text-3xl font-bold text-slate-950 tracking-tight">หน้าหลัก</h1>
+        <h1 className="text-2xl font-bold text-slate-900 tracking-tight">หน้าหลัก</h1>
         <p className="text-sm text-slate-400 mt-1">{todayThai}</p>
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <StatCard icon={Home} label="มีผู้เช่า" value={occupied} sub={`จาก ${totalRooms} ห้อง`} color="indigo" />
-        <StatCard icon={Home} label="ห้องว่าง" value={available} sub="ห้อง" color="emerald" />
-        <StatCard icon={AlertTriangle} label="รอชำระ" value={pending + overdue} sub={overdue > 0 ? `เกินกำหนด ${overdue}` : 'บิล'} color={overdue > 0 ? 'rose' : 'amber'} />
-        <StatCard icon={Wallet} label="เก็บได้เดือนนี้" value={`฿${fmt(revenue)}`} sub={`${revenuePct}%`} color="slate" />
+        <StatCard icon={Home}          tone="emerald" label="มีผู้เช่า"       value={occupied} hint={`จาก ${totalRooms} ห้อง`} />
+        <StatCard icon={DoorOpen}      tone="blue"    label="ห้องว่าง"        value={available} hint="ห้อง" />
+        <StatCard icon={AlertTriangle} tone={overdue > 0 ? 'rose' : 'amber'} label="รอชำระ" value={pending + overdue} hint={overdue > 0 ? `เกินกำหนด ${overdue}` : 'บิล'} />
+        <StatCard icon={Wallet}        tone="slate"   label="เก็บได้เดือนนี้" value={`฿${fmt(revenue)}`} hint={`${revenuePct}%`} />
       </div>
 
       {/* Revenue bar */}
@@ -116,9 +118,8 @@ export default async function HomePage() {
         </div>
 
         {!recentPayments || recentPayments.length === 0 ? (
-          <div className="py-12 text-center text-slate-400">
-            <Clock className="size-6 mx-auto mb-2 text-slate-300" />
-            <p className="text-sm">ยังไม่มีการชำระเงิน</p>
+          <div className="p-4">
+            <EmptyState icon={Clock} title="ยังไม่มีการชำระเงิน" />
           </div>
         ) : (
           <div className="divide-y divide-slate-50">
@@ -147,34 +148,6 @@ export default async function HomePage() {
           </div>
         )}
       </div>
-    </div>
-  )
-}
-
-function StatCard({
-  icon: Icon, label, value, sub, color,
-}: {
-  icon: React.ElementType
-  label: string
-  value: string | number
-  sub: string
-  color: 'indigo' | 'emerald' | 'amber' | 'rose' | 'slate'
-}) {
-  const colors = {
-    indigo:  'bg-indigo-50 text-indigo-600',
-    emerald: 'bg-emerald-50 text-emerald-600',
-    amber:   'bg-amber-50 text-amber-600',
-    rose:    'bg-rose-50 text-rose-600',
-    slate:   'bg-slate-100 text-slate-600',
-  }
-  return (
-    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
-      <div className={`size-8 rounded-xl ${colors[color]} flex items-center justify-center mb-3`}>
-        <Icon className="size-4" />
-      </div>
-      <p className="text-xs text-slate-400 mb-1">{label}</p>
-      <p className="text-xl font-bold text-slate-950">{value}</p>
-      <p className="text-xs text-slate-400 mt-0.5">{sub}</p>
     </div>
   )
 }
