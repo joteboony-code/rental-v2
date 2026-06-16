@@ -1,42 +1,13 @@
 import type { RepairStatus, RepairPriority } from '@/lib/definitions'
-
-const statusConfig: Record<RepairStatus, { label: string; dot: string; className: string }> = {
-  pending:     { label: 'รอดำเนินการ', dot: 'bg-amber-400',   className: 'bg-amber-50 text-amber-700 ring-1 ring-amber-200'      },
-  in_progress: { label: 'กำลังซ่อม',  dot: 'bg-blue-400',    className: 'bg-blue-50 text-blue-700 ring-1 ring-blue-200'         },
-  done:        { label: 'เสร็จแล้ว',  dot: 'bg-emerald-400', className: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200' },
-  cancelled:   { label: 'ยกเลิก',     dot: 'bg-slate-400',   className: 'bg-slate-100 text-slate-500'                           },
-}
-
-const priorityConfig: Record<RepairPriority, { label: string; className: string; pulse?: boolean }> = {
-  low:    { label: 'ต่ำ',      className: 'bg-slate-100 text-slate-600'                         },
-  normal: { label: 'ปกติ',    className: 'bg-sky-50 text-sky-700 ring-1 ring-sky-200'          },
-  high:   { label: 'สูง',      className: 'bg-orange-50 text-orange-700 ring-1 ring-orange-200' },
-  urgent: { label: 'ด่วนมาก', className: 'bg-rose-50 text-rose-700 ring-1 ring-rose-300', pulse: true },
-}
+import { StatusBadge } from '@/components/ui/status-badge'
+import { repairStatusVisual, repairPriorityVisual, fallbackVisual } from '@/lib/status'
 
 export function RepairStatusBadge({ status }: { status: RepairStatus }) {
-  const { label, dot, className } = statusConfig[status] ?? statusConfig.pending
-  return (
-    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${className}`}>
-      <span className={`size-1.5 rounded-full ${dot}`} />
-      {label}
-    </span>
-  )
+  const visual = repairStatusVisual[status] ?? fallbackVisual(status)
+  return <StatusBadge {...visual} />
 }
 
 export function RepairPriorityBadge({ priority }: { priority: RepairPriority }) {
-  const { label, className, pulse } = priorityConfig[priority] ?? priorityConfig.normal
-  return (
-    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${className}`}>
-      {pulse ? (
-        <span className="relative flex size-1.5">
-          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-500 opacity-60" />
-          <span className="relative inline-flex size-1.5 rounded-full bg-rose-500" />
-        </span>
-      ) : (
-        <span className="size-1.5 rounded-full bg-current opacity-60" />
-      )}
-      {label}
-    </span>
-  )
+  const visual = repairPriorityVisual[priority] ?? fallbackVisual(priority)
+  return <StatusBadge {...visual} />
 }
