@@ -21,6 +21,7 @@ export function LineAvatar({
 
   if (canShowImage) {
     return (
+      // eslint-disable-next-line @next/next/no-img-element -- LINE CDN URL; onError fallback requires <img>
       <img
         src={pictureUrl ?? undefined}
         alt={`รูป LINE ของ ${name}`}

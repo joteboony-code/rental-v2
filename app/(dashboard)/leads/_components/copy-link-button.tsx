@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Copy, Check, QrCode } from 'lucide-react'
+import { Copy, Check } from 'lucide-react'
 
 export function CopyLinkButton() {
   const [copied, setCopied] = useState(false)

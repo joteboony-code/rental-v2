@@ -135,7 +135,6 @@ export async function GET(req: NextRequest) {
   for (const [, tenantBills] of byTenant) {
     const firstBill = tenantBills[0]
     const tenant = firstBill.tenants as unknown as TJ | null
-    const room = firstBill.rooms as unknown as RJ | null
     const lineUserId = tenant?.line_user_id
 
     if (!lineUserId) { noLine++; continue }

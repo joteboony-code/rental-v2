@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { sendOverdueReminders } from '@/app/actions/reminders'
-import { Bell, Loader2, Check, AlertCircle, MessageCircle, ChevronDown, X } from 'lucide-react'
+import { Bell, Loader2, Check, AlertCircle, MessageCircle, X } from 'lucide-react'
 
 interface Props {
   billingMonth:    string

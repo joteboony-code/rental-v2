@@ -19,9 +19,9 @@ type Status = 'loading' | 'form' | 'preview' | 'submitting' | 'done' | 'error'
 export function SignAgreementClient({ contractId, liffId }: Props) {
   const [lineUserId, setLineUserId]   = useState('')
   const [scriptReady, setScriptReady] = useState(false)
-  const [status, setStatus]           = useState<Status>('loading')
+  const [status, setStatus]           = useState<Status>(contractId ? 'loading' : 'error')
   const [loadMsg, setLoadMsg]         = useState(liffId ? 'กำลังเชื่อมต่อ LINE...' : 'กำลังโหลด...')
-  const [errorMsg, setErrorMsg]       = useState('')
+  const [errorMsg, setErrorMsg]       = useState(contractId ? '' : 'ไม่พบข้อมูลสัญญา')
   const [data, setData]               = useState<AgreementData | null>(null)
   const [idCard, setIdCard]           = useState('')
   const [address, setAddress]         = useState('')
@@ -44,10 +44,11 @@ export function SignAgreementClient({ contractId, liffId }: Props) {
 
   // Load data เมื่อมี lineUserId
   useEffect(() => {
-    if (!contractId) { setStatus('error'); setErrorMsg('ไม่พบข้อมูลสัญญา'); return }
+    if (!contractId) return // error state already set from initial props
     const uid = lineUserId || (liffId ? '' : 'test')
     if (!uid) return
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time loading message before async fetch
     setLoadMsg('กำลังโหลดข้อมูลสัญญา...')
     getSignAgreementData(uid, contractId).then((res) => {
       if (!res.success) { setStatus('error'); setErrorMsg(res.message); return }
@@ -123,7 +124,6 @@ export function SignAgreementClient({ contractId, liffId }: Props) {
     const url = sigCanvasRef.current?.toDataURL('image/png') ?? null
     setSigDataUrl(url)
     setStatus('preview')
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const handleSubmit = useCallback(async () => {
@@ -173,7 +173,6 @@ export function SignAgreementClient({ contractId, liffId }: Props) {
       setStatus('error')
       setErrorMsg(e instanceof Error ? e.message : 'เกิดข้อผิดพลาด')
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, sigDataUrl, lineUserId, idCard, address])
 
   return (

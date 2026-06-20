@@ -20,7 +20,6 @@ export function CountUp({ value, duration = 900, format = 'number' }: Props) {
   const startRef = useRef<number | null>(null)
 
   useEffect(() => {
-    if (value === 0) { setDisplay(0); return }
     startRef.current = null
     const animate = (ts: number) => {
       if (startRef.current === null) startRef.current = ts

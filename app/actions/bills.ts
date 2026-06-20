@@ -131,7 +131,7 @@ export async function saveMeterAndGenerateBills(
     const start_date  = formData.get(`room_${roomId}_start_date`) as string | null
     let rent_amount   = rent
     if (start_date && start_date.slice(0, 7) === billing_month.slice(0, 7)) {
-      const [sy, sm, sdStr] = billing_month.split('-')
+      const [sy, sm] = billing_month.split('-')
       const startDay    = parseInt((start_date.split('-')[2]) ?? '1')
       const daysInMonth = new Date(parseInt(sy), parseInt(sm), 0).getDate()
       const daysOccupied = daysInMonth - startDay + 1

@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import type { RegistrationRequest } from '@/app/actions/registrations'
 import { RegistrationActions } from './_components/registration-actions'
 import { ClipboardList, UserPlus } from 'lucide-react'
+import { EmptyState } from '@/components/ui/empty-state'
 
 export default async function TenantRegistrationsPage({
   searchParams,
@@ -90,10 +91,7 @@ export default async function TenantRegistrationsPage({
       </div>
 
       {sorted.length === 0 ? (
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-12 text-center">
-          <ClipboardList className="size-10 text-slate-200 mx-auto mb-3" />
-          <p className="text-slate-400 text-sm">ไม่มีคำขอลงทะเบียน</p>
-        </div>
+        <EmptyState icon={ClipboardList} title="ไม่มีคำขอลงทะเบียน" />
       ) : (
         <div className="space-y-3">
           {sorted.map(req => (

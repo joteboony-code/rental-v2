@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { Megaphone, Clock, Image as ImageIcon, Check, X } from 'lucide-react'
 import { BroadcastForm } from './_components/broadcast-form'
+import { EmptyState } from '@/components/ui/empty-state'
 
 type BroadcastHistoryRow = {
   id: string
@@ -115,9 +116,7 @@ export default async function BroadcastPage() {
             ))}
           </div>
         ) : (
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-8 text-center text-sm text-slate-400">
-            ยังไม่มีประวัติการประกาศ
-          </div>
+          <EmptyState icon={Clock} title="ยังไม่มีประวัติการประกาศ" />
         )}
       </div>
     </div>

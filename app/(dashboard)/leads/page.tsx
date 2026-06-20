@@ -5,6 +5,7 @@ import { LeadActions } from './_components/lead-actions'
 import { Users, Eye } from 'lucide-react'
 import { CopyLinkButton } from './_components/copy-link-button'
 import { AnnouncementEditor } from './_components/announcement-editor'
+import { EmptyState } from '@/components/ui/empty-state'
 
 type Lead = {
   id: string
@@ -105,11 +106,11 @@ export default async function LeadsPage({ searchParams }: Props) {
 
       {/* List */}
       {!leads || leads.length === 0 ? (
-        <div className="rounded-2xl border border-slate-100 bg-white py-16 text-center">
-          <Users className="size-8 text-slate-200 mx-auto mb-3" />
-          <p className="text-sm text-slate-400">ยังไม่มีรายชื่อ</p>
-          <p className="text-xs text-slate-300 mt-1">แชร์ลิงก์ /portal/interest ให้คนสนใจกรอก</p>
-        </div>
+        <EmptyState
+          icon={Users}
+          title="ยังไม่มีรายชื่อ"
+          description="แชร์ลิงก์ /portal/interest ให้คนสนใจกรอก"
+        />
       ) : (
         <div className="rounded-2xl border border-slate-100 bg-white divide-y divide-slate-50 overflow-hidden">
           {(leads as Lead[]).map((lead) => (

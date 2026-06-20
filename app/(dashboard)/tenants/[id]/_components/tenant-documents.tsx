@@ -3,7 +3,7 @@
 import { useState, useRef, useTransition } from 'react'
 import { uploadTenantDocument, deleteTenantDocument } from '@/app/actions/tenant-documents'
 import { DOCUMENT_TYPE_LABELS, type TenantDocument, type DocumentType } from '@/lib/tenant-documents'
-import { Upload, X, Loader2, FileText, Image as ImageIcon, ExternalLink, Check, AlertCircle, Trash2 } from 'lucide-react'
+import { Upload, Loader2, FileText, Image as ImageIcon, ExternalLink, Check, AlertCircle, Trash2 } from 'lucide-react'
 
 interface Props {
   tenantId: string

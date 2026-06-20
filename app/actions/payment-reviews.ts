@@ -220,20 +220,23 @@ export async function approveSlipOldestFirst(
   let remaining = amount
   let appliedCount = 0
   const applied: { payment_id: string | null; bill_id: string; room_id: string | null; amount: number }[] = []
+  let firstPayment = true
 
   for (const bill of outstanding) {
     if (remaining <= 0) break
     const toPay = Math.min(remaining, bill.remaining)
-    const { data: payment } = await supabase.from('payments').insert({
+    const { data: payment, error: payErr } = await supabase.from('payments').insert({
       bill_id: bill.id,
       amount: toPay,
       payment_method: paymentMethod,
       slip_url: slip?.slip_url ?? null,
-      slip_ref: slip?.slip_ref ?? null,
+      slip_ref: firstPayment ? (slip?.slip_ref ?? null) : null,
       note,
       paid_at: paidAt,
       recorded_by: user?.id ?? null,
     }).select('id').single()
+    if (payErr) return { success: false, message: `บันทึกไม่สำเร็จ: ${payErr.message}` }
+    firstPayment = false
     await updateBillStatusAndNotify(supabase, bill.id)
     applied.push({ payment_id: payment?.id ?? null, bill_id: bill.id, room_id: bill.room_id, amount: toPay })
     remaining -= toPay

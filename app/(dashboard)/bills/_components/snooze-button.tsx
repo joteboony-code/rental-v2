@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { snoozeBill, clearSnooze } from '@/app/actions/reminders'
-import { BellOff, BellRing, Loader2, Check, X, ChevronDown } from 'lucide-react'
+import { BellOff, Loader2, Check, X } from 'lucide-react'
 
 interface Props {
   billId:      string

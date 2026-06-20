@@ -3,6 +3,7 @@ import { History } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { getAuditLogs, type AuditFilters } from '@/app/actions/audit'
 import { AuditFilterBar } from './_components/audit-filter-bar'
+import { EmptyState } from '@/components/ui/empty-state'
 
 export const ACTION_LABELS: Record<string, { label: string; color: string }> = {
   bill_update:         { label: 'แก้บิล',           color: 'bg-amber-50 text-amber-700 ring-amber-200' },
@@ -86,9 +87,8 @@ export default async function AuditLogsPage({
 
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
         {logs.length === 0 ? (
-          <div className="py-16 text-center text-slate-400">
-            <History className="size-8 mx-auto mb-3 text-slate-300" />
-            <p className="text-sm">ไม่พบประวัติการกระทำตามเงื่อนไข</p>
+          <div className="p-8">
+            <EmptyState icon={History} title="ไม่พบประวัติการกระทำตามเงื่อนไข" />
           </div>
         ) : (
           <div className="divide-y divide-slate-50">

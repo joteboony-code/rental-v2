@@ -5,6 +5,8 @@ import { RepairStatusBadge, RepairPriorityBadge } from './_components/repair-sta
 import { Wrench, Plus } from 'lucide-react'
 import { roomRow } from '@/lib/room-utils'
 import { CountUp } from '@/components/ui/count-up'
+import { StatCard } from '@/components/ui/stat-card'
+import { EmptyState } from '@/components/ui/empty-state'
 
 interface Props {
   searchParams: Promise<{ status?: string }>
@@ -60,34 +62,10 @@ export default async function RepairsPage({ searchParams }: Props) {
 
       {/* ── Stats ── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
-          <p className="text-xs font-semibold text-amber-500 uppercase tracking-widest">รอดำเนินการ</p>
-          <p className="text-4xl font-bold text-slate-950 tracking-tight leading-none">
-            <CountUp value={stats.pending} /><span className="text-sm font-normal text-slate-400 ml-1">รายการ</span>
-          </p>
-          <div className="h-0.5 rounded-full bg-amber-400 opacity-40" />
-        </div>
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
-          <p className="text-xs font-semibold text-blue-500 uppercase tracking-widest">กำลังซ่อม</p>
-          <p className="text-4xl font-bold text-slate-950 tracking-tight leading-none">
-            <CountUp value={stats.in_progress} /><span className="text-sm font-normal text-slate-400 ml-1">รายการ</span>
-          </p>
-          <div className="h-0.5 rounded-full bg-blue-500 opacity-40" />
-        </div>
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
-          <p className="text-xs font-semibold text-emerald-500 uppercase tracking-widest">เสร็จแล้ว</p>
-          <p className="text-4xl font-bold text-slate-950 tracking-tight leading-none">
-            <CountUp value={stats.done} /><span className="text-sm font-normal text-slate-400 ml-1">รายการ</span>
-          </p>
-          <div className="h-0.5 rounded-full bg-emerald-500 opacity-40" />
-        </div>
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
-          <p className={`text-xs font-semibold uppercase tracking-widest ${stats.urgent > 0 ? 'text-rose-500' : 'text-slate-400'}`}>ด่วนมาก</p>
-          <p className="text-4xl font-bold text-slate-950 tracking-tight leading-none">
-            <CountUp value={stats.urgent} /><span className="text-sm font-normal text-slate-400 ml-1">รายการ</span>
-          </p>
-          <div className={`h-0.5 rounded-full opacity-40 ${stats.urgent > 0 ? 'bg-rose-500' : 'bg-slate-400'}`} />
-        </div>
+        <StatCard tone="amber"   label="รอดำเนินการ" value={<CountUp value={stats.pending} />}     hint="รายการ" />
+        <StatCard tone="blue"    label="กำลังซ่อม"   value={<CountUp value={stats.in_progress} />} hint="รายการ" />
+        <StatCard tone="emerald" label="เสร็จแล้ว"   value={<CountUp value={stats.done} />}        hint="รายการ" />
+        <StatCard tone={stats.urgent > 0 ? 'rose' : 'slate'} label="ด่วนมาก" value={<CountUp value={stats.urgent} />} hint="รายการ" />
       </div>
 
       {/* ── Filter tabs ── */}
@@ -111,15 +89,17 @@ export default async function RepairsPage({ searchParams }: Props) {
       {/* ── List ── */}
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
         {!repairs || repairs.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-24 text-slate-400">
-            <div className="size-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-5">
-              <Wrench className="size-7 text-slate-300" />
-            </div>
-            <p className="font-semibold text-slate-600 mb-1">ไม่มีรายการแจ้งซ่อม</p>
-            <Link href="/repairs/new"
-              className={buttonVariants({ variant: 'default', size: 'sm' }) + ' mt-4 rounded-xl bg-slate-950 hover:bg-slate-800'}>
-              แจ้งซ่อมใหม่
-            </Link>
+          <div className="p-8">
+            <EmptyState
+              icon={Wrench}
+              title="ไม่มีรายการแจ้งซ่อม"
+              action={
+                <Link href="/repairs/new"
+                  className={buttonVariants({ variant: 'default', size: 'sm' }) + ' mt-1 rounded-xl bg-slate-950 hover:bg-slate-800'}>
+                  แจ้งซ่อมใหม่
+                </Link>
+              }
+            />
           </div>
         ) : (
           <>

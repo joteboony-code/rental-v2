@@ -75,7 +75,7 @@ export function AnnouncementEditor({ initial }: { initial: string | null }) {
           {text ? (
             <p className="text-sm text-violet-800 whitespace-pre-wrap leading-relaxed">{text}</p>
           ) : (
-            <p className="text-sm text-violet-400 italic">ยังไม่มีข้อความ — กด "แก้ไข" เพื่อเพิ่ม</p>
+            <p className="text-sm text-violet-400 italic">ยังไม่มีข้อความ — กด &quot;แก้ไข&quot; เพื่อเพิ่ม</p>
           )}
           {saved && (
             <p className="mt-1.5 flex items-center gap-1 text-xs text-emerald-600 font-semibold">

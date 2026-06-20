@@ -3,6 +3,8 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { RoomStatusBadge } from '../_components/room-status-badge'
 import { BillStatusBadge } from '../../bills/_components/bill-status-badge'
+import { RepairStatusBadge, RepairPriorityBadge } from '../../repairs/_components/repair-status-badge'
+import type { RepairPriority, RepairStatus } from '@/lib/definitions'
 import { ChevronLeft, Pencil, User, FileText, Wrench, Calendar } from 'lucide-react'
 import { roomRow } from '@/lib/room-utils'
 import { ReservationActions } from '../_components/reservation-actions'
@@ -45,15 +47,6 @@ export default async function RoomDetailPage({ params }: { params: Promise<{ id:
   const contracts = room.contracts as ContractRow[] | null
   const activeContract = contracts?.find((c) => c.status === 'active')
   const pastContracts = contracts?.filter((c) => c.status !== 'active') ?? []
-
-  const priorityLabel: Record<string, string> = { low: 'ต่ำ', medium: 'กลาง', high: 'สูง', urgent: 'ด่วน!' }
-  const priorityColor: Record<string, string> = {
-    low: 'bg-slate-100 text-slate-500',
-    medium: 'bg-amber-50 text-amber-600',
-    high: 'bg-orange-50 text-orange-600',
-    urgent: 'bg-rose-50 text-rose-600',
-  }
-  const repairStatusLabel: Record<string, string> = { pending: 'รอดำเนินการ', in_progress: 'กำลังซ่อม', done: 'เสร็จแล้ว' }
 
   return (
     <div className="p-5 md:p-8 space-y-6 max-w-5xl">
@@ -320,10 +313,8 @@ export default async function RoomDetailPage({ params }: { params: Promise<{ id:
                         {new Date(r.created_at).toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' })}
                       </p>
                     </div>
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${priorityColor[r.priority] ?? 'bg-slate-100 text-slate-500'}`}>
-                      {priorityLabel[r.priority] ?? r.priority}
-                    </span>
-                    <span className="text-xs text-slate-400 shrink-0">{repairStatusLabel[r.status] ?? r.status}</span>
+                    <RepairPriorityBadge priority={r.priority as RepairPriority} />
+                    <RepairStatusBadge status={r.status as RepairStatus} />
                   </Link>
                 ))}
               </div>

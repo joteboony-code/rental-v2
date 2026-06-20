@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { getPendingSlips } from '@/app/actions/payment-reviews'
-import { ChevronLeft, Inbox, CheckCircle, XCircle, Clock, AlertCircle } from 'lucide-react'
+import { ChevronLeft, Inbox, CheckCircle, Clock, AlertCircle } from 'lucide-react'
+import { EmptyState } from '@/components/ui/empty-state'
 
 const fmt = (n: number) => n.toLocaleString('th-TH', { maximumFractionDigits: 0 })
 
@@ -39,11 +40,11 @@ export default async function PaymentReviewsPage() {
       </div>
 
       {slips.length === 0 ? (
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm py-20 text-center">
-          <CheckCircle className="size-10 mx-auto mb-3 text-emerald-300" />
-          <p className="font-semibold text-slate-700">ไม่มีสลิปรอตรวจ</p>
-          <p className="text-sm text-slate-400 mt-1">ทุกสลิปได้รับการตรวจสอบแล้ว</p>
-        </div>
+        <EmptyState
+          icon={CheckCircle}
+          title="ไม่มีสลิปรอตรวจ"
+          description="ทุกสลิปได้รับการตรวจสอบแล้ว"
+        />
       ) : (
         <div className="space-y-3">
           {slips.map((slip) => {

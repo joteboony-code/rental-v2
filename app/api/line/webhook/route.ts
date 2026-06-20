@@ -135,19 +135,6 @@ async function isValidSignature(body: string, sig: string, secret: string) {
   return crypto.subtle.verify('HMAC', key, sigBytes, enc.encode(body))
 }
 
-async function getDisplayName(lineUserId: string, token: string): Promise<string> {
-  try {
-    const res = await fetch(`https://api.line.me/v2/bot/profile/${lineUserId}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-    if (!res.ok) return ''
-    const data = await res.json() as { displayName?: string }
-    return data.displayName ?? ''
-  } catch {
-    return ''
-  }
-}
-
 async function reply(replyToken: string, token: string, messages: object[]) {
   const res = await fetch('https://api.line.me/v2/bot/message/reply', {
     method: 'POST',
@@ -179,23 +166,6 @@ async function notifyOwner(cfg: LineConfig, text: string) {
     await push(cfg.ownerLineUserId, cfg.channelAccessToken, [{ type: 'text', text }])
   } catch (error) {
     console.error('[line notify owner]', error)
-  }
-}
-
-function buildPortalFlex(portalUrl: string) {
-  return {
-    type: 'flex', altText: 'ดูบิล / ชำระเงิน',
-    contents: {
-      type: 'bubble', size: 'micro',
-      footer: {
-        type: 'box', layout: 'vertical', paddingAll: '12px',
-        contents: [{
-          type: 'button',
-          action: { type: 'uri', label: '🔗 ดูบิล / ชำระเงิน', uri: portalUrl },
-          style: 'primary', color: '#0C1B4D', height: 'sm',
-        }],
-      },
-    },
   }
 }
 
@@ -278,14 +248,6 @@ async function getImageBlob(messageId: string, token: string) {
   return { blob, contentType: blob.type || 'image/jpeg' }
 }
 
-async function blobToBase64(blob: Blob): Promise<string> {
-  const buffer = await blob.arrayBuffer()
-  const bytes = new Uint8Array(buffer)
-  let binary = ''
-  for (const b of bytes) binary += String.fromCharCode(b)
-  return btoa(binary)
-}
-
 // ── SlipOK verification ──────────────────────────────────────
 async function verifySlipOk(
   imageBlob: Blob,
@@ -324,41 +286,6 @@ async function handleFollow(replyToken: string, cfg: LineConfig) {
       '🔔 แจ้งเตือนยอดค้างชำระ',
       '✅ ยืนยันการรับชำระเงินทันที',
     ].join('\n'),
-  }])
-}
-
-const BILL_KEYWORDS = ['บิล', 'ค่าเช่า', 'ยอด', 'เงิน', 'ค้าง', 'ชำระ', 'จ่าย', 'โอน', 'สลิป', 'ค่าน้ำ', 'ค่าไฟ']
-
-function matchesBillKeyword(text: string): boolean {
-  const lower = text.toLowerCase()
-  return BILL_KEYWORDS.some((kw) => lower.includes(kw))
-}
-
-async function handleText(lineUserId: string, text: string, replyToken: string, cfg: LineConfig, supabase: SupabaseClient) {
-  if (!matchesBillKeyword(text)) return
-
-  const { data: existing } = await supabase
-    .from('tenants')
-    .select('full_name')
-    .eq('line_user_id', lineUserId)
-    .maybeSingle()
-
-  await reply(replyToken, cfg.channelAccessToken, [{
-    type: 'text',
-    text: existing
-      ? [
-          `✅ บัญชีของคุณ (${existing.full_name}) เชื่อมกับห้องแล้วครับ`,
-          '',
-          '📎 ส่งรูปสลิปโอนเงิน เพื่อแจ้งชำระค่าเช่าได้เลยครับ 😊',
-        ].join('\n')
-      : [
-          '⚠️ ยังไม่ได้เชื่อมบัญชี LINE กับห้องพักครับ',
-          '',
-          'กรุณาสแกน QR Code จากห้องเช่าของท่าน',
-          'เพื่อเริ่มใช้งานระบบ',
-          '',
-          'หากมีปัญหา กรุณาติดต่อเจ้าของหอครับ',
-        ].join('\n'),
   }])
 }
 
@@ -647,40 +574,41 @@ async function handleSlipImage(
 
   type PaidEntry = { roomNumber: string; billingMonth: string; amount: number }
 
-  // Insert payments for a list of bills; budget overrides transfer amount for overpay cases
+  // Insert payments for a list of bills atomically via DB transaction (RPC).
+  // budget overrides transfer amount for overpay cases.
   const payBills = async (
     billsToPay: typeof outstandingBills,
     note: string,
     budget = amount
   ): Promise<{ ok: boolean; paidBills: PaidEntry[] }> => {
     let remainder = budget
-    const paidBills: PaidEntry[] = []
-    let firstSlipRef = true
+    const billsInput: { id: string; amount: number }[] = []
+    const billsMeta: typeof outstandingBills = []
     for (const bill of billsToPay) {
       if (remainder < 1) break
       const toPay = Math.min(bill.remainingAmount, remainder)
-      const { error } = await supabase.from('payments').insert({
-        bill_id:          bill.id,
-        amount:           toPay,
-        payment_method:   'transfer',
-        slip_url:         slipUrl,
-        slip_ref:         firstSlipRef ? slipRef : null,
-        note:             `สลิปจาก LINE${senderName ? ` (${senderName})` : ''}${note}`,
-        paid_at:          paidAt,
-        payment_group_id: paymentGroupId,
-      })
-      if (error) return { ok: false, paidBills }
-      firstSlipRef = false
-      const billFullyPaid = toPay >= bill.remainingAmount
-      const billNewStatus = billFullyPaid ? 'paid' : isPastDue(bill.due_date) ? 'overdue' : 'pending'
-      await supabase.from('bills').update({ status: billNewStatus }).eq('id', bill.id)
-      paidBills.push({
-        roomNumber:   (bill.rooms as unknown as RJ | null)?.room_number ?? '?',
-        billingMonth: bill.billing_month,
-        amount:       toPay,
-      })
+      billsInput.push({ id: bill.id, amount: toPay })
+      billsMeta.push(bill)
       remainder -= toPay
     }
+    if (billsInput.length === 0) return { ok: true, paidBills: [] }
+
+    const { error } = await supabase.rpc('apply_multi_bill_payment', {
+      p_bills:    billsInput,
+      p_method:   'transfer',
+      p_slip_url: slipUrl,
+      p_slip_ref: slipRef,
+      p_note:     `สลิปจาก LINE${senderName ? ` (${senderName})` : ''}${note}`,
+      p_paid_at:  paidAt,
+      p_group_id: paymentGroupId,
+    })
+    if (error) return { ok: false, paidBills: [] }
+
+    const paidBills: PaidEntry[] = billsInput.map((b, i) => ({
+      roomNumber:   (billsMeta[i].rooms as unknown as RJ | null)?.room_number ?? '?',
+      billingMonth: billsMeta[i].billing_month,
+      amount:       b.amount,
+    }))
     return { ok: true, paidBills }
   }
 
