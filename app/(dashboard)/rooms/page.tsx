@@ -15,7 +15,7 @@ export default async function RoomsPage() {
   const [{ data: rawRooms }, line, headerList] = await Promise.all([
     supabase
       .from('rooms')
-      .select(`*, registration_token, contracts!left ( status, monthly_rent, tenants ( id, full_name, phone ) )`),
+      .select(`*, registration_token, contracts!left ( status, monthly_rent, tenants ( id, full_name, phone, line_picture_url ) )`),
     getLineIntegrationPublic(),
     headers(),
   ])
@@ -38,7 +38,7 @@ export default async function RoomsPage() {
   }
   const occupancyRate = stats.total > 0 ? Math.round((stats.occupied / stats.total) * 100) : 0
 
-  type ContractJoin = { status: string; tenants: { id: string; full_name: string; phone: string | null } | null }
+  type ContractJoin = { status: string; tenants: { id: string; full_name: string; phone: string | null; line_picture_url: string | null } | null }
 
   const roomRows: RoomRow[] = rooms.map((room) => {
     const activeContract = (room.contracts as ContractJoin[] | null)?.find((c) => c.status === 'active')
@@ -51,6 +51,7 @@ export default async function RoomsPage() {
       tenantId:        activeContract?.tenants?.id ?? null,
       tenantName:      activeContract?.tenants?.full_name ?? null,
       tenantPhone:     activeContract?.tenants?.phone ?? null,
+      tenantPicture:   activeContract?.tenants?.line_picture_url ?? null,
       pairUrl:         buildPairUrl({ appOrigin, liffId: line?.line_liff_id_pairing, roomNumber: room.room_number }),
       registrationUrl: buildRegisterUrl({ appOrigin, registrationToken: room.registration_token, liffId: line?.line_liff_id_pairing }),
     }

@@ -16,6 +16,7 @@ type RawTenant = {
   id: string
   full_name: string
   phone: string | null
+  line_picture_url: string | null
   last_portal_open_at: string | null
   contracts: ContractRow[] | null
 }
@@ -66,6 +67,7 @@ export default async function TenantsPage() {
       id:                t.id,
       full_name:         t.full_name,
       phone:             t.phone ?? null,
+      linePictureUrl:    t.line_picture_url ?? null,
       roomId:            active?.rooms?.id ?? null,
       roomNumber:        active?.rooms?.room_number ?? null,
       hasActiveContract: !!active,
