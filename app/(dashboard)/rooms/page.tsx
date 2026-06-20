@@ -9,6 +9,7 @@ import { getLineIntegrationPublic } from '@/lib/line-integration'
 import { buildPairUrl, buildRegisterUrl, normalizeOrigin } from '@/lib/pair-url'
 import { RoomsBrowser, type RoomRow } from './_components/rooms-browser'
 
+
 export default async function RoomsPage() {
   const supabase = await createClient()
   const [{ data: rawRooms }, line, headerList] = await Promise.all([

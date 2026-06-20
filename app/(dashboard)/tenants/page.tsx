@@ -12,6 +12,14 @@ type ContractRow = {
   rooms: { id: string; room_number: string; floor: number | null } | null
 }
 
+type RawTenant = {
+  id: string
+  full_name: string
+  phone: string | null
+  last_portal_open_at: string | null
+  contracts: ContractRow[] | null
+}
+
 export default async function TenantsPage() {
   const supabase = await createClient()
 
@@ -25,15 +33,15 @@ export default async function TenantsPage() {
       )
     `)
 
-  const getActive = (t: NonNullable<typeof rawTenants>[number]) =>
-    (t.contracts as ContractRow[] | null)?.find((c) => c.status === 'active') ?? null
+  const getActive = (t: RawTenant) =>
+    (t.contracts ?? []).find((c) => c.status === 'active') ?? null
 
   const sortRoomNum = (r: string) => {
     const n = parseInt(r, 10)
     return isNaN(n) ? r.padStart(10, '0') : String(n).padStart(10, '0')
   }
 
-  const allTenants = rawTenants?.slice().sort((a, b) => {
+  const allTenants = (rawTenants as unknown as RawTenant[] | null)?.slice().sort((a, b) => {
     const ca = getActive(a)
     const cb = getActive(b)
     if (ca && cb) {
