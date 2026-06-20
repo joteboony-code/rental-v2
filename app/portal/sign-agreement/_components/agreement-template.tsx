@@ -1,4 +1,5 @@
 import type { AgreementData } from '@/app/actions/agreement'
+import { roomRow } from '@/lib/room-utils'
 
 interface Props {
   data: AgreementData
@@ -110,9 +111,9 @@ export function AgreementTemplate({ data, signatureDataUrl, idCard, address, sig
       <p style={p}>
         ผู้ให้เช่าตกลงให้เช่า และผู้เช่าตกลงเช่าห้องพัก เลขที่{' '}
         <F>{room?.room_number ?? D(6)}</F>
-        {room?.floor != null
-          ? <> ชั้นที่ <F>{room.floor}</F></>
-          : <> ชั้นที่ <F>{D(4)}</F></>
+        {room?.room_number
+          ? <> แถวที่ <F>{roomRow(room.room_number)}</F></>
+          : <> แถวที่ <F>{D(4)}</F></>
         }
         {' '}ตั้งอยู่ที่ <F>{settings.owner_address || D(30)}</F>
         {' '}เพื่อใช้เป็นที่อยู่อาศัยเท่านั้น

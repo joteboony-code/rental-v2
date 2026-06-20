@@ -15,6 +15,7 @@ const PromptPayQR = dynamic(
   { ssr: false }
 )
 import { getTenantPortalDashboard, getPortalRepairs, getPortalRooms, type TenantPortalData, type PortalRepairItem, type PortalRoom } from '@/app/actions/portal'
+import { roomRow } from '@/lib/room-utils'
 import { Badge } from '@/components/ui/badge'
 import { RepairSubmit } from './repair-submit'
 import { RepairHistory } from './repair-history'
@@ -139,7 +140,7 @@ export function TenantPortal({ liffId }: TenantPortalProps) {
                   <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">ห้องพักปัจจุบัน</p>
                   <h2 className="mt-1 text-4xl font-bold tracking-tight">{data.room?.room_number ?? '-'}</h2>
                   <p className="mt-1 text-sm text-slate-300">
-                    {data.tenant.full_name}{data.room?.floor ? ` · ชั้น ${data.room.floor}` : ''}
+                    {data.tenant.full_name}{data.room?.room_number ? ` · แถวที่ ${roomRow(data.room.room_number)}` : ''}
                   </p>
                 </div>
                 <div className="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-white">เชื่อม LINE แล้ว</div>

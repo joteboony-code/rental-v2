@@ -287,7 +287,7 @@ function buildCombinedFlexBubble(data: {
       paddingStart: '12px', paddingEnd: '12px', paddingTop: '8px', paddingBottom: '8px',
       contents: [{
         type: 'text',
-        text: `🏠 ห้อง ${r.roomNumber}${r.floor ? ` ชั้น ${r.floor}` : ''} · แถว ${roomRow(r.roomNumber)}`,
+        text: `🏠 ห้อง ${r.roomNumber} · แถวที่ ${roomRow(r.roomNumber)}`,
         weight: 'bold', size: 'sm', color: '#0F172A',
       }],
     })
@@ -472,7 +472,7 @@ export async function sendLineBillNotification(
       } else {
         const lines = [`📋 แจ้งค่าเช่า — ${tenant.full_name}  (${allRooms.length} ห้อง)`, '']
         for (const r of allRooms) {
-          lines.push(`🏠 ห้อง ${r.roomNumber}${r.floor ? ` ชั้น ${r.floor}` : ''} — ${thaiMonth(r.billingMonth)}`)
+          lines.push(`🏠 ห้อง ${r.roomNumber} แถวที่ ${roomRow(r.roomNumber)} — ${thaiMonth(r.billingMonth)}`)
           lines.push(`   ค่าเช่า ฿${fmt(r.rentAmt)} · น้ำ ฿${fmt(r.waterAmt)} · ไฟ ฿${fmt(r.elecAmt)}`)
           if (r.wifiAmt  > 0) lines.push(`   WiFi ฿${fmt(r.wifiAmt)}`)
           lines.push(`   ขยะ ฿${fmt(r.trashAmt)}`)
@@ -1107,7 +1107,7 @@ export async function sendBulkLineBillNotification(
       try {
         if (mode === 'text') {
           const lines = [
-            `📋 แจ้งค่าเช่า — ห้อง ${roomNumber}${floor ? ` ชั้น ${floor}` : ''}`,
+            `📋 แจ้งค่าเช่า — ห้อง ${roomNumber} แถวที่ ${roomRow(roomNumber)}`,
             `เดือน: ${month}`,
             ``,
             `ค่าเช่า:  ฿${fmt(Number(bill.rent_amount))}`,

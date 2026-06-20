@@ -86,12 +86,6 @@ export default async function RoomDetailPage({ params }: { params: Promise<{ id:
                 <span className="text-slate-500">ค่าเช่า</span>
                 <span className="font-semibold text-slate-800">฿{Number(room.monthly_rent).toLocaleString()}/เดือน</span>
               </div>
-              {room.floor && (
-                <div className="flex justify-between">
-                  <span className="text-slate-500">ชั้น</span>
-                  <span className="font-semibold text-slate-800">{room.floor}</span>
-                </div>
-              )}
               {room.size_sqm && (
                 <div className="flex justify-between">
                   <span className="text-slate-500">ขนาด</span>
