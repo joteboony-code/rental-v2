@@ -147,16 +147,16 @@ export default async function MeterReadingPage({ searchParams }: Props) {
         </div>
 
         {/* Month switcher */}
-        <form method="get" className="flex items-center gap-2">
+        <form method="get" className="flex w-full items-center gap-2 sm:w-auto">
           <input
             type="month"
             name="month"
             defaultValue={currentMonth}
-            className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-slate-900 shadow-sm"
+            className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-slate-900 shadow-sm sm:flex-none"
           />
           <button
             type="submit"
-            className="px-4 py-2 text-sm font-medium bg-white border border-slate-200 hover:bg-slate-50 rounded-xl shadow-sm transition-colors text-slate-600"
+            className="shrink-0 px-4 py-2 text-sm font-medium bg-white border border-slate-200 hover:bg-slate-50 rounded-xl shadow-sm transition-colors text-slate-600"
           >
             ดู
           </button>
