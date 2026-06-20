@@ -574,40 +574,41 @@ async function handleSlipImage(
 
   type PaidEntry = { roomNumber: string; billingMonth: string; amount: number }
 
-  // Insert payments for a list of bills; budget overrides transfer amount for overpay cases
+  // Insert payments for a list of bills atomically via DB transaction (RPC).
+  // budget overrides transfer amount for overpay cases.
   const payBills = async (
     billsToPay: typeof outstandingBills,
     note: string,
     budget = amount
   ): Promise<{ ok: boolean; paidBills: PaidEntry[] }> => {
     let remainder = budget
-    const paidBills: PaidEntry[] = []
-    let firstSlipRef = true
+    const billsInput: { id: string; amount: number }[] = []
+    const billsMeta: typeof outstandingBills = []
     for (const bill of billsToPay) {
       if (remainder < 1) break
       const toPay = Math.min(bill.remainingAmount, remainder)
-      const { error } = await supabase.from('payments').insert({
-        bill_id:          bill.id,
-        amount:           toPay,
-        payment_method:   'transfer',
-        slip_url:         slipUrl,
-        slip_ref:         firstSlipRef ? slipRef : null,
-        note:             `สลิปจาก LINE${senderName ? ` (${senderName})` : ''}${note}`,
-        paid_at:          paidAt,
-        payment_group_id: paymentGroupId,
-      })
-      if (error) return { ok: false, paidBills }
-      firstSlipRef = false
-      const billFullyPaid = toPay >= bill.remainingAmount
-      const billNewStatus = billFullyPaid ? 'paid' : isPastDue(bill.due_date) ? 'overdue' : 'pending'
-      await supabase.from('bills').update({ status: billNewStatus }).eq('id', bill.id)
-      paidBills.push({
-        roomNumber:   (bill.rooms as unknown as RJ | null)?.room_number ?? '?',
-        billingMonth: bill.billing_month,
-        amount:       toPay,
-      })
+      billsInput.push({ id: bill.id, amount: toPay })
+      billsMeta.push(bill)
       remainder -= toPay
     }
+    if (billsInput.length === 0) return { ok: true, paidBills: [] }
+
+    const { error } = await supabase.rpc('apply_multi_bill_payment', {
+      p_bills:    billsInput,
+      p_method:   'transfer',
+      p_slip_url: slipUrl,
+      p_slip_ref: slipRef,
+      p_note:     `สลิปจาก LINE${senderName ? ` (${senderName})` : ''}${note}`,
+      p_paid_at:  paidAt,
+      p_group_id: paymentGroupId,
+    })
+    if (error) return { ok: false, paidBills: [] }
+
+    const paidBills: PaidEntry[] = billsInput.map((b, i) => ({
+      roomNumber:   (billsMeta[i].rooms as unknown as RJ | null)?.room_number ?? '?',
+      billingMonth: billsMeta[i].billing_month,
+      amount:       b.amount,
+    }))
     return { ok: true, paidBills }
   }
 
