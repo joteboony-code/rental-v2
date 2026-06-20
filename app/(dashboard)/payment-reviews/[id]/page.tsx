@@ -50,7 +50,7 @@ export default async function ReviewDetailPage({
   const room   = slip.rooms   as unknown as RoomJoin
 
   const [outstandingBills, allTenants] = await Promise.all([
-    tenant?.id ? getTenantOutstandingBills(tenant.id) : Promise.resolve([]),
+    getTenantOutstandingBills(slip.line_user_id, tenant?.id ?? null),
     getAllTenantsForSelect(),
   ])
 
@@ -195,6 +195,7 @@ export default async function ReviewDetailPage({
             tenantName={tenant?.full_name ?? null}
             roomId={room?.id ?? null}
             roomNumber={room?.room_number ?? null}
+            lineUserId={slip.line_user_id}
             defaultAmount={slip.amount ?? undefined}
             slipPaidAt={slipPaidAt}
             outstandingBills={outstandingBills}

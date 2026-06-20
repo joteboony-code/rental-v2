@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { roomRow } from '@/lib/room-utils'
 
 export async function GET(request: NextRequest) {
   const supabase = await createClient()
@@ -71,7 +72,7 @@ export async function GET(request: NextRequest) {
 
   const csvHeaders = [
     ...(year ? ['เดือน'] : []),
-    'ห้อง', 'ชั้น', 'ผู้เช่า', 'เบอร์โทร',
+    'ห้อง', 'แถว', 'ผู้เช่า', 'เบอร์โทร',
     'ค่าเช่า', 'ค่าน้ำ', 'ค่าไฟ', 'อื่นๆ', 'รวม',
     'ชำระแล้ว', 'ยอดค้าง', 'วิธีชำระ', 'วันที่ชำระ',
     'สถานะ', 'ครบกำหนด',
@@ -96,7 +97,7 @@ export async function GET(request: NextRequest) {
     return [
       ...(year ? [b.billing_month?.toString().substring(0, 7) ?? ''] : []),
       room?.room_number  ?? '',
-      room?.floor?.toString() ?? '',
+      room?.room_number ? roomRow(room.room_number).toString() : '',
       tenant?.full_name  ?? '',
       tenant?.phone      ?? '',
       b.rent_amount,
