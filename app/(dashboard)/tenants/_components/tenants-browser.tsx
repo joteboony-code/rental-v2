@@ -7,11 +7,13 @@ import { roomRow } from '@/lib/room-utils'
 import { SearchInput } from '@/components/ui/search-input'
 import { EmptyState } from '@/components/ui/empty-state'
 import { StatusBadge } from '@/components/ui/status-badge'
+import { LineAvatar } from '@/components/line-avatar'
 
 export type TenantRow = {
   id: string
   full_name: string
   phone: string | null
+  linePictureUrl: string | null
   roomId: string | null
   roomNumber: string | null
   hasActiveContract: boolean
@@ -94,9 +96,7 @@ export function TenantsBrowser({ tenants }: { tenants: TenantRow[] }) {
               className="flex flex-col gap-3 rounded-2xl bg-white p-4 ring-1 ring-slate-100 shadow-sm transition-shadow hover:shadow-md"
             >
               <div className="flex items-start gap-3">
-                <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-sm font-bold text-slate-600">
-                  {t.full_name.slice(0, 2).toUpperCase()}
-                </div>
+                <LineAvatar name={t.full_name} pictureUrl={t.linePictureUrl} className="size-11 rounded-xl text-sm" />
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold text-slate-900 truncate">{t.full_name}</p>
                   <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-slate-400">

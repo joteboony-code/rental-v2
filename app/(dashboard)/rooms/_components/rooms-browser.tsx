@@ -6,6 +6,7 @@ import { Pencil, BarChart2, Building2 } from 'lucide-react'
 import { roomRow } from '@/lib/room-utils'
 import { SearchInput } from '@/components/ui/search-input'
 import { EmptyState } from '@/components/ui/empty-state'
+import { LineAvatar } from '@/components/line-avatar'
 import { roomStatusVisual } from '@/lib/status'
 import { RoomStatusBadge } from './room-status-badge'
 import { RoomPairQrButton } from './room-pair-qr-button'
@@ -20,6 +21,7 @@ export type RoomRow = {
   tenantId: string | null
   tenantName: string | null
   tenantPhone: string | null
+  tenantPicture: string | null
   pairUrl: string
   registrationUrl: string
 }
@@ -141,8 +143,9 @@ export function RoomsBrowser({ rooms }: { rooms: RoomRow[] }) {
                 <div className="min-w-0">
                   <p className="text-xs text-slate-400">ผู้เช่า</p>
                   {room.tenantId && room.tenantName ? (
-                    <Link href={`/tenants/${room.tenantId}`} className="text-sm font-medium text-slate-700 hover:text-indigo-600 hover:underline truncate block">
-                      {room.tenantName}
+                    <Link href={`/tenants/${room.tenantId}`} className="mt-0.5 flex items-center gap-1.5 text-sm font-medium text-slate-700 hover:text-indigo-600 hover:underline">
+                      <LineAvatar name={room.tenantName} pictureUrl={room.tenantPicture} className="size-5 rounded-md text-[9px]" />
+                      <span className="truncate">{room.tenantName}</span>
                     </Link>
                   ) : (
                     <p className="text-sm text-slate-400">— ว่าง —</p>
