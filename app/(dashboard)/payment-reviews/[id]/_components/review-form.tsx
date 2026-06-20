@@ -21,6 +21,7 @@ interface Props {
   tenantName: string | null
   roomId: string | null
   roomNumber: string | null
+  lineUserId: string | null
   defaultAmount?: number
   slipPaidAt: string | null
   outstandingBills: OutstandingBill[]
@@ -41,7 +42,7 @@ const methodLabels: Record<string, string> = {
 }
 
 export function ReviewForm({
-  slipId, tenantId, tenantName, roomId, roomNumber,
+  slipId, tenantId, tenantName, roomId, roomNumber, lineUserId,
   defaultAmount, slipPaidAt, outstandingBills, allTenants, accountMismatch,
 }: Props) {
   const router = useRouter()
@@ -72,7 +73,7 @@ export function ReviewForm({
     setResult(null)
     startTransition(async () => {
       if (oldestFirst && tenantId) {
-        const res = await approveSlipOldestFirst(slipId, tenantId, Number(amount), paidAt, paymentMethod, note || null)
+        const res = await approveSlipOldestFirst(slipId, tenantId, Number(amount), paidAt, paymentMethod, note || null, lineUserId)
         setResult(res)
         if (res.success) router.push('/payment-reviews')
       } else {

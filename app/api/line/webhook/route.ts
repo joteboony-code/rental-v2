@@ -515,12 +515,12 @@ async function handleSlipImage(
         if (parts.length === 3) {
           const [dd, mm, yyyy] = parts
           const year = Number(yyyy) > 2500 ? Number(yyyy) - 543 : Number(yyyy)
-          const candidate = new Date(`${year}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}T${transTime}`)
+          const candidate = new Date(`${year}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}T${transTime}+07:00`)
           if (!isNaN(candidate.getTime())) paidDate = candidate
         }
       } else {
         // ISO or other format — try direct parse
-        const candidate = new Date(`${transDate}T${transTime}`)
+        const candidate = new Date(`${transDate}T${transTime}+07:00`)
         if (!isNaN(candidate.getTime())) paidDate = candidate
         else {
           const candidate2 = new Date(transDate)

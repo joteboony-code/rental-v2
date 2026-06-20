@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import {
   Loader2, Upload, X,
-  CheckCircle, AlertCircle, ShieldCheck,
+  CheckCircle, AlertCircle, ShieldCheck, AlertTriangle,
 } from 'lucide-react'
 
 interface Props {
@@ -90,6 +90,14 @@ export function PaymentForm({ billId, remainingAmount }: Props) {
   // ── Submit ─────────────────────────────────────────────────
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
+    const entered = parseFloat(amount) || 0
+    if (remainingAmount > 0 && entered > remainingAmount) {
+      const over = (entered - remainingAmount).toLocaleString('th-TH', { maximumFractionDigits: 2 })
+      const ok = window.confirm(
+        `ยอดที่กรอก (฿${entered.toLocaleString('th-TH')}) มากกว่ายอดค้าง (฿${remainingAmount.toLocaleString('th-TH')}) อยู่ ฿${over}\n\nยืนยันบันทึกยอดนี้หรือไม่?`
+      )
+      if (!ok) return
+    }
     const formData = new FormData(e.currentTarget)
     if (slipFile) {
       formData.set('slip', slipFile)
@@ -200,6 +208,12 @@ export function PaymentForm({ billId, remainingAmount }: Props) {
           required
           className={verifyStatus === 'verified' ? 'border-emerald-300 bg-emerald-50/40' : ''}
         />
+        {remainingAmount > 0 && (parseFloat(amount) || 0) > remainingAmount && (
+          <div className="flex items-center gap-2 text-xs px-3 py-2.5 rounded-xl bg-amber-50 border border-amber-100 text-amber-700">
+            <AlertTriangle className="size-3.5 shrink-0" />
+            <span>ยอดเกินกว่าค้าง ฿{((parseFloat(amount) || 0) - remainingAmount).toLocaleString('th-TH', { maximumFractionDigits: 2 })} — ระบบจะขอยืนยันก่อนบันทึก</span>
+          </div>
+        )}
       </div>
 
       {/* ── Payment method ── */}
