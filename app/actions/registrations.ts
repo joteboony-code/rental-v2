@@ -164,7 +164,7 @@ export async function submitRegistration(formData: FormData): Promise<SubmitRegi
   const idCard          = String(formData.get('id_card')           ?? '').trim() || null
   const moveInDate      = String(formData.get('move_in_date')      ?? '').trim() || null
   const note            = String(formData.get('note')              ?? '').trim() || null
-  const depositPaid     = Number(formData.get('deposit_paid')      ?? 0) || 0
+  const depositPaid     = Math.max(0, Math.min(Number(formData.get('deposit_paid') ?? 0) || 0, 1_000_000))
 
   // ใช้ registration_token เป็นหลักเท่านั้น — ห้ามเชื่อ room_id/room_number จาก client
   if (!registrationToken) return { success: false, message: 'ลิงก์ไม่ถูกต้อง กรุณาสแกน QR ใหม่' }

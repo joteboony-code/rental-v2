@@ -40,19 +40,33 @@ export async function submitLead(
   _: unknown,
   formData: FormData
 ): Promise<{ success: boolean; message: string }> {
-  const name  = String(formData.get('name')  ?? '').trim()
-  const phone = String(formData.get('phone') ?? '').trim()
-  const note  = String(formData.get('note')  ?? '').trim()
+  const name  = String(formData.get('name')  ?? '').trim().slice(0, 100)
+  const phone = String(formData.get('phone') ?? '').trim().slice(0, 20)
+  const note  = String(formData.get('note')  ?? '').trim().slice(0, 500)
 
   if (!name)  return { success: false, message: 'กรุณากรอกชื่อ' }
   if (!phone) return { success: false, message: 'กรุณากรอกเบอร์โทร' }
+  if (!/^0[6-9]\d{8}$/.test(phone.replace(/[-\s]/g, '')))
+    return { success: false, message: 'กรุณากรอกเบอร์มือถือให้ถูกต้อง (ตัวอย่าง: 0812345678)' }
 
   const supabase = createServiceClient()
-  const { error } = await supabase.from('leads').insert({ name, phone, note: note || null })
+
+  // Dedup: reject if same phone submitted within last 10 minutes
+  const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString()
+  const { data: recent } = await supabase
+    .from('leads')
+    .select('id')
+    .eq('phone', phone.replace(/[-\s]/g, ''))
+    .gte('created_at', tenMinAgo)
+    .maybeSingle()
+  if (recent) return { success: true, message: 'ฝากข้อมูลไว้เรียบร้อยแล้ว เจ้าของหอจะติดต่อกลับโดยเร็ว' }
+
+  const cleanPhone = phone.replace(/[-\s]/g, '')
+  const { error } = await supabase.from('leads').insert({ name, phone: cleanPhone, note: note || null })
 
   if (error) return { success: false, message: `เกิดข้อผิดพลาด: ${error.message}` }
 
-  notifyOwnerNewLead(name, phone, note || null).catch(() => {})
+  notifyOwnerNewLead(name, cleanPhone, note || null).catch(() => {})
 
   return { success: true, message: 'ฝากข้อมูลไว้เรียบร้อยแล้ว เจ้าของหอจะติดต่อกลับโดยเร็ว' }
 }
