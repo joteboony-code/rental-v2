@@ -201,6 +201,7 @@ export function AgreementTemplate({ data, signatureDataUrl, idCard, address, sig
                   position: 'absolute', bottom: '0', left: '50%',
                   transform: 'translateX(-50%)',
                   maxHeight: '60px', maxWidth: '180px', objectFit: 'contain',
+                  mixBlendMode: 'multiply',
                 }}
               />
             ) : null}
