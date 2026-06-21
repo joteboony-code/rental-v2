@@ -3,6 +3,7 @@
 import { createServiceClient } from '@/lib/supabase/service'
 import { DEFAULT_DORM_ID } from '@/lib/line-integration'
 import { decryptSecret } from '@/lib/crypto-secrets'
+import { getAuthedUser } from '@/lib/require-admin'
 
 export type AgreementData = {
   tenant: {
@@ -229,6 +230,9 @@ export async function sendAgreementLinkToTenant(
   tenantId: string,
   contractId: string
 ): Promise<{ success: boolean; message: string }> {
+  // ตรวจสิทธิ์เอง — ใช้ service client + ยิง LINE push หาผู้เช่า
+  if (!(await getAuthedUser())) return { success: false, message: 'ไม่มีสิทธิ์ใช้งาน' }
+
   const supabase = createServiceClient()
 
   const [tenantRes, cfgRes, contractRes] = await Promise.all([
@@ -290,6 +294,9 @@ export async function sendAgreementLinkToTenant(
 export async function uploadOwnerSignature(
   formData: FormData
 ): Promise<{ success: boolean; message: string; url?: string }> {
+  // ตรวจสิทธิ์เอง — ลายเซ็นนี้ถูกฝังในทุก PDF สัญญา ห้ามให้ anon เขียนทับ
+  if (!(await getAuthedUser())) return { success: false, message: 'ไม่มีสิทธิ์ใช้งาน' }
+
   const supabase = createServiceClient()
   const file = formData.get('signature') as File | null
   if (!file || file.size === 0) return { success: false, message: 'ไม่พบไฟล์' }

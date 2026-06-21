@@ -6,15 +6,23 @@ import { roomRow } from '@/lib/room-utils'
 export default async function MoveOutHistoryPage() {
   const supabase = await createClient()
 
-  const { data: contracts } = await supabase
-    .from('contracts')
-    .select(`
-      id, start_date, end_date, monthly_rent, deposit_paid, status, created_at,
-      rooms   ( room_number, floor ),
-      tenants ( id, full_name, phone )
-    `)
-    .eq('status', 'terminated')
-    .order('end_date', { ascending: false })
+  // จำกัด 100 รายการล่าสุด — กันดึงทั้งตารางเมื่อข้อมูลสะสมหลายปี
+  const [{ data: contracts }, { count: terminatedCount }] = await Promise.all([
+    supabase
+      .from('contracts')
+      .select(`
+        id, start_date, end_date, monthly_rent, deposit_paid, status, created_at,
+        rooms   ( room_number, floor ),
+        tenants ( id, full_name, phone )
+      `)
+      .eq('status', 'terminated')
+      .order('end_date', { ascending: false })
+      .limit(100),
+    supabase
+      .from('contracts')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'terminated'),
+  ])
 
   type RJ = { room_number: string; floor: number | null }
   type TJ = { id: string; full_name: string; phone: string | null }
@@ -42,7 +50,7 @@ export default async function MoveOutHistoryPage() {
       {/* Stats */}
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm px-5 py-4">
         <p className="text-xs text-slate-400 mb-1">ผู้เช่าที่ย้ายออกทั้งหมด</p>
-        <p className="text-3xl font-bold text-slate-950">{contracts?.length ?? 0} <span className="text-sm font-normal text-slate-400">ราย</span></p>
+        <p className="text-3xl font-bold text-slate-950">{terminatedCount ?? contracts?.length ?? 0} <span className="text-sm font-normal text-slate-400">ราย</span></p>
       </div>
 
       {/* List */}

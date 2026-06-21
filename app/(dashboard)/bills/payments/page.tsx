@@ -34,6 +34,10 @@ export default async function PaymentHistoryPage({
   const { month, tenant: tenantFilter } = await searchParams
   const supabase = await createClient()
 
+  // จำกัดช่วง 24 เดือนล่าสุด — กัน limit(500) ตัดข้อมูลเก่าทิ้งจนยอดรวม "ทุกเดือน" ผิด
+  const since = new Date()
+  since.setMonth(since.getMonth() - 24)
+
   const query = supabase
     .from('payments')
     .select(`
@@ -44,8 +48,9 @@ export default async function PaymentHistoryPage({
         rooms   ( room_number )
       )
     `)
+    .gte('paid_at', since.toISOString())
     .order('paid_at', { ascending: false })
-    .limit(500)
+    .limit(2000)
 
   const { data: rawPayments } = await query
 
@@ -126,7 +131,7 @@ export default async function PaymentHistoryPage({
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm px-4 py-4">
           <p className="text-xs text-slate-400 mb-1">ยอดรวม</p>
           <p className="text-lg font-bold text-emerald-600 break-all leading-tight">฿{fmt(totalAmount)}</p>
-          <p className="text-xs text-slate-400">{month ? monthFmt(month + '-01') : 'ทุกเดือน'}</p>
+          <p className="text-xs text-slate-400">{month ? monthFmt(month + '-01') : 'ย้อนหลัง 24 เดือน'}</p>
         </div>
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm px-4 py-4">
           <p className="text-xs text-slate-400 mb-1">เดือนนี้</p>

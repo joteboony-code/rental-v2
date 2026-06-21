@@ -27,10 +27,15 @@ export default async function HomePage() {
     ? (settingsRow.current_billing_month as string).slice(0, 10)
     : fallbackMonth
 
-  const [{ data: rooms }, { data: unpaidBills }, { data: thisMonthBills }, { data: recentPayments }, { data: utilityBills }] = await Promise.all([
+  const [{ data: rooms }, { data: unpaidBills }, { data: thisMonthBills }, { data: thisMonthPayments }, { data: recentPayments }, { data: utilityBills }] = await Promise.all([
     supabase.from('rooms').select('id, status'),
     supabase.from('bills').select('status, total_amount').in('status', ['pending', 'overdue']),
     supabase.from('bills').select('status, total_amount').eq('billing_month', thisMonth),
+    // เงินที่เก็บได้จริงเดือนนี้ = ผลรวม payments ของบิลเดือนนี้ (ไม่นับบิลที่ยกเลิก)
+    supabase
+      .from('payments')
+      .select('amount, bills!inner(billing_month, status)')
+      .eq('bills.billing_month', thisMonth),
     supabase
       .from('payments')
       .select('id, amount, payment_method, paid_at, bills(billing_month, rooms(room_number), tenants(full_name))')
@@ -47,8 +52,12 @@ export default async function HomePage() {
   const available   = (rooms ?? []).filter((r) => r.status === 'available').length
   const totalRooms  = (rooms ?? []).length
 
-  const revenue     = (thisMonthBills ?? []).filter((b) => b.status === 'paid').reduce((s, b) => s + Number(b.total_amount), 0)
-  const expected    = (thisMonthBills ?? []).reduce((s, b) => s + Number(b.total_amount), 0)
+  // revenue = เงินที่เก็บได้จริง (รวมบิลที่จ่ายบางส่วน) ไม่นับ payment ของบิลที่ยกเลิก
+  const revenue     = (thisMonthPayments ?? [])
+    .filter((p) => (p.bills as unknown as { status: string } | null)?.status !== 'cancelled')
+    .reduce((s, p) => s + Number(p.amount), 0)
+  // expected = ยอดที่ต้องเก็บทั้งหมด ไม่นับบิลที่ยกเลิก
+  const expected    = (thisMonthBills ?? []).filter((b) => b.status !== 'cancelled').reduce((s, b) => s + Number(b.total_amount), 0)
   const pending     = (unpaidBills ?? []).filter((b) => b.status === 'pending').length
   const overdue     = (unpaidBills ?? []).filter((b) => b.status === 'overdue').length
   const revenuePct  = expected > 0 ? Math.round((revenue / expected) * 100) : 0

@@ -81,11 +81,24 @@ export async function saveMeterAndGenerateBills(
     const electricity_prev   = Number(formData.get(`room_${roomId}_electricity_prev`)  ?? 0)
     const electricity_curr   = Number(formData.get(`room_${roomId}_electricity_curr`)  ?? 0)
 
+    // กันค่าที่ไม่ใช่ตัวเลข (พิมพ์ตัวอักษร/OCR เพี้ยน → NaN) ลอดด่านเช็คติดลบไปทำให้ total เป็น NaN
+    if (![rent, water_prev, water_curr, electricity_prev, electricity_curr].every(Number.isFinite)) {
+      errors.push(`ห้อง ${roomId}: ค่ามิเตอร์หรือค่าเช่าไม่ใช่ตัวเลขที่ถูกต้อง`)
+      continue
+    }
+
     const water_units       = water_curr - water_prev
     const electricity_units = electricity_curr - electricity_prev
 
     if (water_units < 0 || electricity_units < 0) {
       errors.push(`ห้อง ${roomId}: ค่ามิเตอร์ปัจจุบันน้อยกว่าค่าก่อนหน้า`)
+      continue
+    }
+
+    // 0 หน่วยเป็นค่าปกติ (ห้องไม่ได้ใช้น้ำ/ไฟเดือนนั้น) — ดักเฉพาะค่ามหาศาลที่เป็นการพิมพ์ผิด
+    const MAX_UNITS = 100_000
+    if (water_units > MAX_UNITS || electricity_units > MAX_UNITS) {
+      errors.push(`ห้อง ${roomId}: ค่าหน่วยที่ใช้สูงผิดปกติ (น้ำ ${water_units}, ไฟ ${electricity_units}) — โปรดตรวจสอบ`)
       continue
     }
 
@@ -211,6 +224,11 @@ export async function updateBill(
   const electricity_units = electricity_curr - electricity_prev
   if (water_units < 0 || electricity_units < 0) {
     return { success: false, message: 'ค่ามิเตอร์ปัจจุบันน้อยกว่าค่าก่อนหน้า' }
+  }
+  // 0 หน่วยเป็นค่าปกติ — ดักเฉพาะค่ามหาศาลที่เป็นการพิมพ์ผิด
+  const MAX_UNITS = 100_000
+  if (water_units > MAX_UNITS || electricity_units > MAX_UNITS) {
+    return { success: false, message: `ค่าหน่วยที่ใช้สูงผิดปกติ (น้ำ ${water_units}, ไฟ ${electricity_units}) — โปรดตรวจสอบ` }
   }
 
   // ดึงเรตค่าน้ำ/ไฟ + ข้อมูลบิลเดิม

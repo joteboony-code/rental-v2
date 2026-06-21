@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/service'
 import { decryptSecret } from '@/lib/crypto-secrets'
 
 export const DEFAULT_DORM_ID = '00000000-0000-0000-0000-000000000001'
@@ -27,7 +27,9 @@ export type LineMessagingConfig = {
 export async function getLineIntegrationPublic(
   dormId = DEFAULT_DORM_ID
 ): Promise<LineIntegrationPublic | null> {
-  const supabase = await createClient()
+  // ใช้ service client (อ่านเฉพาะคอลัมน์ที่ไม่ sensitive) เพราะหน้านี้เรียกใน
+  // context ของ anon (tenant ที่ยังไม่ล็อกอิน) — RLS ของ line_integrations ปิด anon แล้ว
+  const supabase = createServiceClient()
   const { data } = await supabase
     .from('line_integrations')
     .select(
@@ -73,7 +75,9 @@ export async function getLineIntegrationPublic(
 export async function getLineMessagingConfig(
   dormId = DEFAULT_DORM_ID
 ): Promise<LineMessagingConfig | null> {
-  const supabase = await createClient()
+  // ใช้ service client เพราะต้องอ่าน encrypted token เพื่อถอดรหัสส่งข้อความ
+  // (เป็น operation ฝั่ง server เท่านั้น) และถูกเรียกจาก context anon ด้วย (pair/registration/cron)
+  const supabase = createServiceClient()
   const { data } = await supabase
     .from('line_integrations')
     .select(

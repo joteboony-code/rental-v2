@@ -68,6 +68,14 @@ export async function decryptSecret(encrypted: string): Promise<string> {
   return new TextDecoder().decode(plain)
 }
 
+/** ถอดรหัสค่าที่อาจเป็น v1:... (เข้ารหัส) หรือ plaintext เดิม
+ *  คืน plaintext ตามเดิมถ้ายังไม่ถูกเข้ารหัส — เพื่อให้ค่าเก่าใช้ได้จนกว่าจะถูกบันทึกใหม่ */
+export async function maybeDecryptSecret(value: string | null | undefined): Promise<string> {
+  if (!value) return ''
+  if (!value.startsWith('v1:')) return value
+  return decryptSecret(value)
+}
+
 export function secretLast4(value: string): string {
   return value.slice(-4)
 }
