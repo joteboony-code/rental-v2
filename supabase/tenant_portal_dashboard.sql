@@ -107,7 +107,7 @@ begin
     ) payments on true
     where b.tenant_id = v_tenant.id
     order by b.billing_month desc
-    limit 24
+    limit 60
   ) rows;
 
   return jsonb_build_object(
