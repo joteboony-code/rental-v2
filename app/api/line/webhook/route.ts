@@ -76,6 +76,18 @@ async function savePendingSlip(
   }
 ): Promise<void> {
   try {
+    // Dedup: if no slip_ref, guard against webhook retries creating duplicate pending slips
+    if (!data.slipRef) {
+      const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString()
+      const { data: existing } = await supabase
+        .from('pending_slips')
+        .select('id')
+        .eq('tenant_id', data.tenantId)
+        .eq('slipok_status', data.slipokStatus)
+        .gte('created_at', fiveMinAgo)
+        .maybeSingle()
+      if (existing) return
+    }
     await supabase.from('pending_slips').insert({
       tenant_id:        data.tenantId,
       line_user_id:     data.lineUserId,
