@@ -4,7 +4,7 @@ import { getLineMessagingConfig } from '@/lib/line-integration'
 
 function isAuthorized(req: NextRequest) {
   const secret = process.env.CRON_SECRET
-  if (!secret) return true
+  if (!secret) return false
   return req.headers.get('x-cron-secret') === secret || req.nextUrl.searchParams.get('secret') === secret
 }
 

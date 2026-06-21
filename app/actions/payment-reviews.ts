@@ -509,7 +509,8 @@ async function updateBillStatusAndNotify(supabase: any, billId: string) {
   const newStatus = fullyPaid ? 'paid' : (bill.status === 'overdue' ? 'overdue' : 'pending')
 
   if (newStatus !== bill.status) {
-    await supabase.from('bills').update({ status: newStatus }).eq('id', billId)
+    // Optimistic lock: only update if status hasn't changed since we read it
+    await supabase.from('bills').update({ status: newStatus }).eq('id', billId).eq('status', bill.status)
   }
 
   await sendPaymentReceiptNotification(billId, totalPaid, totalAmount).catch((err) => {
