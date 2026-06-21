@@ -503,6 +503,22 @@ async function handleSlipImage(
       await notifyOwner(cfg, `⚠️ พบสลิปซ้ำครับ\n🏠 ผู้ส่งปัจจุบัน: ห้อง ${roomNumber} — ${tenant.full_name}\nเคยใช้ที่ห้อง: ${usedRoom}\n💰 ${fmt(amount)} บาท\n🔢 Ref: ${slipRef}`)
       return
     }
+
+    // H4: Also check pending_slips — same ref may already be queued for review
+    const { data: existingPending } = await supabase
+      .from('pending_slips')
+      .select('id')
+      .eq('slip_ref', slipRef)
+      .neq('status', 'rejected')
+      .maybeSingle()
+    if (existingPending) {
+      await reply(replyToken, token, [{
+        type: 'text',
+        text: ['⚠️ สลิปนี้กำลังอยู่ระหว่างการตรวจสอบครับ', '', 'กรุณารอสักครู่ หรือติดต่อเจ้าของหอครับ'].join('\n'),
+      }])
+      await notifyOwner(cfg, `⚠️ พบสลิปซ้ำ (รอตรวจ) ครับ\n🏠 ห้อง ${roomNumber} — ${tenant.full_name}\n💰 ${fmt(amount)} บาท\n🔢 Ref: ${slipRef}`)
+      return
+    }
   }
 
   // Format slip date/time
@@ -652,11 +668,15 @@ async function handleSlipImage(
   if (singleMatches.length === 1) {
     const bill     = singleMatches[0]
     const billRoom = (bill.rooms as unknown as RJ | null)?.room_number ?? '—'
-    const { error: payErr } = await supabase.from('payments').insert({
-      bill_id: bill.id, amount, payment_method: 'transfer',
-      slip_url: slipUrl, slip_ref: slipRef,
-      note: `สลิปจาก LINE${senderName ? ` (${senderName})` : ''}`,
-      paid_at: paidAt, payment_group_id: paymentGroupId,
+    // H3: Use RPC for atomic insert + retry safety (prevents duplicate on webhook retry)
+    const { error: payErr } = await supabase.rpc('apply_multi_bill_payment', {
+      p_bills:    [{ id: bill.id, amount }],
+      p_method:   'transfer',
+      p_slip_url: slipUrl,
+      p_slip_ref: slipRef,
+      p_note:     `สลิปจาก LINE${senderName ? ` (${senderName})` : ''}`,
+      p_paid_at:  paidAt,
+      p_group_id: paymentGroupId,
     })
     if (payErr) {
       await reply(replyToken, token, [{ type: 'text', text: '⚠️ ระบบบันทึกการชำระไม่สำเร็จ กรุณาติดต่อเจ้าของหอครับ' }])
@@ -693,11 +713,15 @@ async function handleSlipImage(
       const bill      = overpayMatches[0]
       const billRoom  = (bill.rooms as unknown as RJ | null)?.room_number ?? '—'
       const creditAmt = amount - bill.remainingAmount
-      const { error: payErr } = await supabase.from('payments').insert({
-        bill_id: bill.id, amount: bill.remainingAmount, payment_method: 'transfer',
-        slip_url: slipUrl, slip_ref: slipRef,
-        note: `สลิปจาก LINE${senderName ? ` (${senderName})` : ''} (โอนเกิน ฿${fmt(creditAmt)})`,
-        paid_at: paidAt, payment_group_id: paymentGroupId,
+      // H3: Use RPC for atomic insert + retry safety
+      const { error: payErr } = await supabase.rpc('apply_multi_bill_payment', {
+        p_bills:    [{ id: bill.id, amount: bill.remainingAmount }],
+        p_method:   'transfer',
+        p_slip_url: slipUrl,
+        p_slip_ref: slipRef,
+        p_note:     `สลิปจาก LINE${senderName ? ` (${senderName})` : ''} (โอนเกิน ฿${fmt(creditAmt)})`,
+        p_paid_at:  paidAt,
+        p_group_id: paymentGroupId,
       })
       if (!payErr) {
         await supabase.from('bills').update({ status: 'paid' }).eq('id', bill.id)

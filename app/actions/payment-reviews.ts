@@ -122,12 +122,20 @@ export async function approveSlip(
   if (!billId) return { success: false, message: 'กรุณาเลือกบิล' }
   if (!amount || amount <= 0) return { success: false, message: 'กรุณาระบุจำนวนเงิน' }
 
+  // H1: Atomically claim slip — only succeeds if still pending (race guard)
   const { data: slip } = await supabase
     .from('pending_slips')
-    .select('slip_url, slip_ref')
+    .update({
+      status: 'approved',
+      reviewed_at: new Date().toISOString(),
+      reviewed_by: user?.id ?? null,
+      admin_note: note,
+    })
     .eq('id', slipId)
+    .eq('status', 'pending')
+    .select('slip_url, slip_ref')
     .single()
-  if (!slip) return { success: false, message: 'ไม่พบสลิปนี้' }
+  if (!slip) return { success: false, message: 'ไม่พบสลิปนี้หรือถูกดำเนินการไปแล้ว' }
 
   const { data: billMeta } = await supabase
     .from('bills')
@@ -151,16 +159,15 @@ export async function approveSlip(
     .insert(paymentPayload)
     .select('id')
     .single()
-  if (payErr) return { success: false, message: `บันทึกไม่สำเร็จ: ${payErr.message}` }
+  if (payErr) {
+    // Revert slip on payment failure
+    await supabase.from('pending_slips')
+      .update({ status: 'pending', reviewed_at: null, reviewed_by: null, admin_note: null })
+      .eq('id', slipId)
+    return { success: false, message: `บันทึกไม่สำเร็จ: ${payErr.message}` }
+  }
 
   await updateBillStatusAndNotify(supabase, billId)
-
-  await supabase.from('pending_slips').update({
-    status: 'approved',
-    reviewed_at: new Date().toISOString(),
-    reviewed_by: user?.id ?? null,
-    admin_note: note,
-  }).eq('id', slipId)
 
   logAudit({
     action: 'slip_approve',
@@ -174,7 +181,7 @@ export async function approveSlip(
       bill_id: billId,
       tenant_id: billMeta?.tenant_id ?? null,
       room_id: billMeta?.room_id ?? null,
-      slip_ref: slip.slip_ref,
+      slip_ref: slip?.slip_ref ?? null,
     },
     description: `อนุมัติสลิป ฿${amount.toLocaleString('th-TH')} → บิล ${billId}`,
   }).catch(() => {})
@@ -200,11 +207,19 @@ export async function approveSlipOldestFirst(
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
+  // H1: Atomically claim slip — only succeeds if still pending (race guard)
   const { data: slip } = await supabase
     .from('pending_slips')
-    .select('slip_url, slip_ref')
+    .update({
+      status: 'approved',
+      reviewed_at: new Date().toISOString(),
+      reviewed_by: user?.id ?? null,
+    })
     .eq('id', slipId)
+    .eq('status', 'pending')
+    .select('slip_url, slip_ref')
     .single()
+  if (!slip) return { success: false, message: 'สลิปนี้ถูกดำเนินการไปแล้วหรือไม่พบ' }
 
   // Collect all tenant_ids sharing the same LINE user
   let tenantIds: string[] = [tenantId]
@@ -232,12 +247,18 @@ export async function approveSlipOldestFirst(
     remaining: Math.max(0, Number(b.total_amount) - (b.payments ?? []).reduce((s, p) => s + Number(p.amount), 0)),
   })).filter((b) => b.remaining >= 1)
 
-  if (outstanding.length === 0) return { success: false, message: 'ไม่พบบิลค้างชำระ' }
+  if (outstanding.length === 0) {
+    await supabase.from('pending_slips')
+      .update({ status: 'pending', reviewed_at: null, reviewed_by: null })
+      .eq('id', slipId)
+    return { success: false, message: 'ไม่พบบิลค้างชำระ' }
+  }
 
   let remaining = amount
-  let appliedCount = 0
-  const applied: { payment_id: string | null; bill_id: string; room_id: string | null; amount: number }[] = []
   let firstPayment = true
+  const insertedIds: string[] = []
+  const applied: { payment_id: string | null; bill_id: string; room_id: string | null; amount: number }[] = []
+  let insertError: string | null = null
 
   for (const bill of outstanding) {
     if (remaining <= 0) break
@@ -246,27 +267,38 @@ export async function approveSlipOldestFirst(
       bill_id: bill.id,
       amount: toPay,
       payment_method: paymentMethod,
-      slip_url: slip?.slip_url ?? null,
-      slip_ref: firstPayment ? (slip?.slip_ref ?? null) : null,
+      slip_url: slip.slip_url ?? null,
+      slip_ref: firstPayment ? (slip.slip_ref ?? null) : null,
       note,
       paid_at: paidAt,
       recorded_by: user?.id ?? null,
     }).select('id').single()
-    if (payErr) return { success: false, message: `บันทึกไม่สำเร็จ: ${payErr.message}` }
+    if (payErr) { insertError = payErr.message; break }
     firstPayment = false
-    await updateBillStatusAndNotify(supabase, bill.id)
-    applied.push({ payment_id: payment?.id ?? null, bill_id: bill.id, room_id: bill.room_id, amount: toPay })
+    insertedIds.push(payment!.id)
+    applied.push({ payment_id: payment!.id, bill_id: bill.id, room_id: bill.room_id, amount: toPay })
     remaining -= toPay
-    appliedCount++
   }
 
-  await supabase.from('pending_slips').update({
-    status: 'approved',
-    reviewed_at: new Date().toISOString(),
-    reviewed_by: user?.id ?? null,
-    admin_note: note,
-  }).eq('id', slipId)
+  // H2: Rollback all inserted payments if any failed
+  if (insertError) {
+    if (insertedIds.length > 0) {
+      await supabase.from('payments').delete().in('id', insertedIds)
+    }
+    await supabase.from('pending_slips')
+      .update({ status: 'pending', reviewed_at: null, reviewed_by: null })
+      .eq('id', slipId)
+    return { success: false, message: `บันทึกไม่สำเร็จ: ${insertError}` }
+  }
 
+  // All payments succeeded — update bill statuses and send notifications
+  for (const item of applied) {
+    await updateBillStatusAndNotify(supabase, item.bill_id)
+  }
+
+  await supabase.from('pending_slips').update({ admin_note: note }).eq('id', slipId)
+
+  const appliedCount = applied.length
   const appliedAmount = applied.reduce((sum, item) => sum + item.amount, 0)
   const roomIds = Array.from(new Set(applied.map((item) => item.room_id).filter((id): id is string => Boolean(id))))
   logAudit({
@@ -307,15 +339,28 @@ export async function saveSlipAsAdvance(
 
   if (!amount || amount <= 0) return { success: false, message: 'กรุณาระบุจำนวนเงิน' }
 
+  // H1: Atomically claim slip — only succeeds if still pending
+  const adminNote = note ? `เงินรับล่วงหน้า: ${note}` : 'เงินรับล่วงหน้า'
   const { data: slip } = await supabase
-    .from('pending_slips').select('slip_url, slip_ref').eq('id', slipId).single()
+    .from('pending_slips')
+    .update({
+      status: 'approved',
+      reviewed_at: new Date().toISOString(),
+      reviewed_by: user?.id ?? null,
+      admin_note: adminNote,
+    })
+    .eq('id', slipId)
+    .eq('status', 'pending')
+    .select('slip_url, slip_ref')
+    .single()
+  if (!slip) return { success: false, message: 'ไม่พบสลิปนี้หรือถูกดำเนินการไปแล้ว' }
 
   const creditPayload = {
     tenant_id: tenantId,
     room_id: roomId,
     amount,
-    slip_url: slip?.slip_url ?? null,
-    slip_ref: slip?.slip_ref ?? null,
+    slip_url: slip.slip_url,
+    slip_ref: slip.slip_ref,
     note,
     status: 'available',
     created_by: user?.id ?? null,
@@ -326,14 +371,13 @@ export async function saveSlipAsAdvance(
     .insert(creditPayload)
     .select('id')
     .single()
-  if (error) return { success: false, message: `บันทึกไม่สำเร็จ: ${error.message}` }
-
-  await supabase.from('pending_slips').update({
-    status: 'approved',
-    reviewed_at: new Date().toISOString(),
-    reviewed_by: user?.id ?? null,
-    admin_note: note ? `เงินรับล่วงหน้า: ${note}` : 'เงินรับล่วงหน้า',
-  }).eq('id', slipId)
+  if (error) {
+    // Revert slip on credit failure
+    await supabase.from('pending_slips')
+      .update({ status: 'pending', reviewed_at: null, reviewed_by: null, admin_note: null })
+      .eq('id', slipId)
+    return { success: false, message: `บันทึกไม่สำเร็จ: ${error.message}` }
+  }
 
   logAudit({
     action: 'tenant_credit_create',
@@ -461,7 +505,8 @@ async function updateBillStatusAndNotify(supabase: any, billId: string) {
   const totalPaid = (allPayments ?? []).reduce((s: number, p: { amount: unknown }) => s + Number(p.amount), 0)
   const totalAmount = Number(bill.total_amount)
   const fullyPaid = totalPaid >= totalAmount
-  const newStatus = fullyPaid ? 'paid' : 'pending'
+  // H6: Preserve 'overdue' on partial payment — don't reset to 'pending'
+  const newStatus = fullyPaid ? 'paid' : (bill.status === 'overdue' ? 'overdue' : 'pending')
 
   if (newStatus !== bill.status) {
     await supabase.from('bills').update({ status: newStatus }).eq('id', billId)
