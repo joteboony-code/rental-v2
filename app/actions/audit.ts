@@ -86,8 +86,8 @@ export async function logAudit(input: LogInput): Promise<void> {
       description: input.description ?? null,
       created_by:  user?.id ?? null,
     })
-  } catch {
-    // กลืน error ทุกชนิด — log ต้องไม่ทำให้ action หลักพัง
+  } catch (err) {
+    console.error('[audit] logAudit failed:', err)
   }
 }
 

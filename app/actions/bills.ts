@@ -357,6 +357,16 @@ export async function markOverdueBills(): Promise<{ success: boolean; message: s
     .lt('due_date', today)
 
   if (error) return { success: false, message: error.message }
+
+  if ((count ?? 0) > 0) {
+    void logAudit({
+      action: 'bills_mark_overdue',
+      entityType: 'bill',
+      description: `ทำเครื่องหมาย ${count} บิลเป็นเกินกำหนด (${today})`,
+      newValue: { count, date: today },
+    })
+  }
+
   revalidatePath('/bills')
   return { success: true, message: `อัปเดต ${count ?? 0} บิลเป็นเกินกำหนด` }
 }
