@@ -827,10 +827,12 @@ export async function POST(req: NextRequest) {
   try { cfg = await getLineConfig() } catch { return NextResponse.json({ ok: true }) }
   if (!cfg) return NextResponse.json({ ok: true })
 
-  if (cfg.channelSecret) {
-    const valid = await isValidSignature(bodyText, signature, cfg.channelSecret)
-    if (!valid) return NextResponse.json({ ok: true })
+  if (!cfg.channelSecret) {
+    console.warn('[webhook] channelSecret not configured — dropping all events')
+    return NextResponse.json({ ok: true })
   }
+  const valid = await isValidSignature(bodyText, signature, cfg.channelSecret)
+  if (!valid) return NextResponse.json({ ok: true })
 
   let payload: { events: LineEvent[] }
   try { payload = JSON.parse(bodyText) as { events: LineEvent[] } }

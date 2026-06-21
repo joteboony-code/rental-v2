@@ -1,6 +1,5 @@
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import { revalidatePath } from 'next/cache'
 import { DEFAULT_DORM_ID } from '@/lib/line-integration'
@@ -105,7 +104,7 @@ export async function getTenantPortalDashboard(lineUserId: string, roomId?: stri
     return { success: false, message: 'ไม่พบ LINE User ID' }
   }
 
-  const supabase = await createClient()
+  const supabase = createServiceClient()
   const { data, error } = await supabase.rpc('get_tenant_portal_by_line_user', {
     p_line_user_id: trimmed,
     p_room_id: roomId ?? null,
