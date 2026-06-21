@@ -75,6 +75,19 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: true, skipped: `not a reminder day (today=${todayDay}, days=${reminderDays.join(',')})` })
   }
 
+  // Guard: ป้องกันส่งซ้ำในวันเดิม (ตรวจ audit_logs ก่อน)
+  const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' }) // YYYY-MM-DD
+  const { data: alreadySent } = await supabase
+    .from('audit_logs')
+    .select('id')
+    .eq('action', 'cron_reminders_sent')
+    .gte('created_at', `${todayStr}T00:00:00+07:00`)
+    .lte('created_at', `${todayStr}T23:59:59+07:00`)
+    .maybeSingle()
+  if (alreadySent) {
+    return NextResponse.json({ ok: true, skipped: 'already sent today' })
+  }
+
   const lineConfig = await getLineMessagingConfig()
   if (!lineConfig) return NextResponse.json({ ok: false, error: 'LINE not configured' })
 
@@ -252,6 +265,14 @@ export async function GET(req: NextRequest) {
       ])
     } catch { /* silent */ }
   }
+
+  // Audit log — ใช้ service client โดยตรง (cron ไม่มี user session)
+  void supabase.from('audit_logs').insert({
+    action:      'cron_reminders_sent',
+    entity_type: 'cron',
+    description: `ส่งแจ้งเตือนอัตโนมัติ: สำเร็จ ${sent} ห้อง, ล้มเหลว ${failed}, งดแจ้ง ${snoozed}, ไม่มี LINE ${noLine}`,
+    new_value:   { sent, failed, snoozed, noLine, date: todayStr },
+  })
 
   return NextResponse.json({ ok: true, sent, failed, snoozed, noLine })
 }

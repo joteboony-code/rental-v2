@@ -39,7 +39,21 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: true, skipped: 'no owner LINE configured' })
   }
 
-  const today = new Date().toISOString().split('T')[0]
+  const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' }) // YYYY-MM-DD
+
+  // Guard: ป้องกันส่งซ้ำในวันเดิม
+  const { data: alreadySent } = await supabase
+    .from('audit_logs')
+    .select('id')
+    .eq('action', 'cron_daily_summary_sent')
+    .gte('created_at', `${todayStr}T00:00:00+07:00`)
+    .lte('created_at', `${todayStr}T23:59:59+07:00`)
+    .maybeSingle()
+  if (alreadySent) {
+    return NextResponse.json({ ok: true, skipped: 'already sent today' })
+  }
+
+  const today = todayStr
   const in30 = new Date(); in30.setDate(in30.getDate() + 30)
   const in30Str = in30.toISOString().split('T')[0]
 
@@ -145,6 +159,14 @@ export async function GET(req: NextRequest) {
   } catch (err) {
     return NextResponse.json({ ok: false, error: String(err) })
   }
+
+  // Audit log — ใช้ service client โดยตรง (cron ไม่มี user session)
+  void supabase.from('audit_logs').insert({
+    action:      'cron_daily_summary_sent',
+    entity_type: 'cron',
+    description: `ส่งสรุปประจำวัน: ค้าง ${unpaidCount} บิล ฿${totalOwed}`,
+    new_value:   { unpaidCount, totalOwed, date: todayStr },
+  })
 
   return NextResponse.json({
     ok: true,

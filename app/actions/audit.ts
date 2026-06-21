@@ -37,6 +37,8 @@ export type AuditAction =
   | 'registration_approved'
   | 'registration_rejected'
   | 'room_pairing_token_regenerated'
+  | 'cron_reminders_sent'
+  | 'cron_daily_summary_sent'
 
 export type AuditLog = {
   id: string
