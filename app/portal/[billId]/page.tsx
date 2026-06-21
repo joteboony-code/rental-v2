@@ -47,6 +47,13 @@ export default async function PortalPage({
 
   const fmt = (n: number) => n.toLocaleString('th-TH', { minimumFractionDigits: 2 })
 
+  // ปกปิดเบอร์โทร — หน้านี้เปิดผ่านลิงก์ที่ส่งทาง LINE หากลิงก์รั่วจะไม่เผยเบอร์เต็ม
+  const maskPhone = (phone: string) => {
+    const digits = phone.replace(/\D/g, '')
+    if (digits.length < 3) return phone
+    return `${digits.slice(0, 2)}x-xxx-xxxx`
+  }
+
   type StatusKey = 'paid' | 'pending' | 'overdue' | 'cancelled'
   const statusMap: Record<StatusKey, { bg: string; text: string; icon: React.ElementType }> = {
     paid:      { bg: 'bg-emerald-500', text: 'ชำระแล้ว',   icon: CheckCircle   },
@@ -72,7 +79,7 @@ export default async function PortalPage({
           )}
           {tenant?.phone && (
             <div className="flex items-center gap-1.5 text-sm text-slate-300">
-              <Phone className="size-3.5" /> {tenant.phone}
+              <Phone className="size-3.5" /> {maskPhone(tenant.phone)}
             </div>
           )}
         </div>
