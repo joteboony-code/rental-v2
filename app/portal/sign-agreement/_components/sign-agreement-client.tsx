@@ -137,7 +137,14 @@ export function SignAgreementClient({ contractId, liffId }: Props) {
       const el = document.getElementById('agreement-template')
       if (!el) throw new Error('template element not found')
 
-      const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: '#ffffff', logging: false })
+      const canvas = await html2canvas(el, {
+        scale: 2, useCORS: true, backgroundColor: '#ffffff', logging: false,
+        // html2canvas 1.x doesn't support oklch/lab (Tailwind v4 default) — strip
+        // all external stylesheets from the clone; template is 100% inline-styled.
+        onclone: (clonedDoc) => {
+          clonedDoc.querySelectorAll('link[rel="stylesheet"], style').forEach((s) => s.remove())
+        },
+      })
       const imgData = canvas.toDataURL('image/jpeg', 0.92)
       const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
       const pageW = pdf.internal.pageSize.getWidth()

@@ -47,8 +47,8 @@ export function AgreementTemplate({ data, signatureDataUrl, idCard, address, sig
   const { tenant, contract, settings } = data
   const room = contract.room
 
-  const p: React.CSSProperties = { margin: '0 0 10px 0' }
-  const h: React.CSSProperties = { margin: '0 0 4px 0', fontWeight: 'bold' }
+  const p: React.CSSProperties = { margin: '0 0 8px 0', textIndent: '2em' }
+  const h: React.CSSProperties = { margin: '14px 0 4px 0', fontWeight: 'bold' }
 
   return (
     <div
@@ -107,7 +107,7 @@ export function AgreementTemplate({ data, signatureDataUrl, idCard, address, sig
       <p style={p}>ทั้งสองฝ่ายตกลงทำสัญญากันมีข้อตกลงดังต่อไปนี้</p>
 
       {/* ── ข้อ 1 ── */}
-      <p style={h}>ข้อ 1. วัตถุประสงค์แห่งสัญญา</p>
+      <p style={{ ...h, marginTop: '6px' }}>ข้อ 1. วัตถุประสงค์แห่งสัญญา</p>
       <p style={p}>
         ผู้ให้เช่าตกลงให้เช่า และผู้เช่าตกลงเช่าห้องพัก เลขที่{' '}
         <F>{room?.room_number ?? D(6)}</F>
@@ -137,11 +137,11 @@ export function AgreementTemplate({ data, signatureDataUrl, idCard, address, sig
       <p style={{ ...p, marginBottom: '2px' }}>
         ในวันทำสัญญานี้ ผู้เช่าได้ชำระเงินประกันให้แก่ผู้ให้เช่า ดังนี้
       </p>
-      <p style={{ ...p, marginBottom: '2px', paddingLeft: '1em' }}>
+      <p style={{ ...p, marginBottom: '2px', paddingLeft: '2em', textIndent: 0 }}>
         1) เงินประกันความเสียหายและประกันการเช่า เป็นจำนวนเงิน{' '}
         <F>{numTH(contract.deposit_paid)}</F> บาท
       </p>
-      <p style={{ ...p, marginBottom: '4px', paddingLeft: '1em' }}>
+      <p style={{ ...p, marginBottom: '4px', paddingLeft: '2em', textIndent: 0 }}>
         2) ค่าล่วงหน้า {D(6)} เดือน เป็นจำนวนเงิน {D(12)} บาท
       </p>
       <p style={p}>
