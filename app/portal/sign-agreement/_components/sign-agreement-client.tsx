@@ -156,7 +156,7 @@ export function SignAgreementClient({ contractId, liffId }: Props) {
       let heightLeft = imgH
       pdf.addImage(imgData, 'JPEG', 0, position, pageW, imgH)
       heightLeft -= pageH
-      while (heightLeft > 0) {
+      while (heightLeft > 2) {
         position -= pageH
         pdf.addPage()
         pdf.addImage(imgData, 'JPEG', 0, position, pageW, imgH)
