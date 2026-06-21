@@ -39,7 +39,21 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: true, skipped: 'no owner LINE configured' })
   }
 
-  const today = new Date().toISOString().split('T')[0]
+  const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' }) // YYYY-MM-DD
+
+  // Guard: ป้องกันส่งซ้ำในวันเดิม
+  const { data: alreadySent } = await supabase
+    .from('audit_logs')
+    .select('id')
+    .eq('action', 'cron_daily_summary_sent')
+    .gte('created_at', `${todayStr}T00:00:00+07:00`)
+    .lte('created_at', `${todayStr}T23:59:59+07:00`)
+    .maybeSingle()
+  if (alreadySent) {
+    return NextResponse.json({ ok: true, skipped: 'already sent today' })
+  }
+
+  const today = todayStr
   const in30 = new Date(); in30.setDate(in30.getDate() + 30)
   const in30Str = in30.toISOString().split('T')[0]
 
@@ -133,9 +147,27 @@ export async function GET(req: NextRequest) {
     lines.push(`🤝 นัดจ่ายวันนี้: ${(promisesToday ?? []).length} ห้อง (${rooms})`)
   }
 
+  // แจ้งเตือนต่ออายุ SlipOK ทุกวันที่ 20
+  if (parseInt(todayStr.split('-')[2]) === 20) {
+    lines.push(SEP)
+    lines.push('⚠️ วันนี้ครบกำหนดต่ออายุ SlipOK')
+    lines.push('กรุณาต่อสมาชิกที่ SlipOK Bot ด้วยครับ')
+  }
+
   if (lineConfig.appUrl) {
     lines.push(SEP)
     if ((pendingSlipCount ?? 0) > 0) lines.push(`🔗 ตรวจสลิป: ${lineConfig.appUrl}/payment-reviews`)
+  }
+
+  // Claim via audit log BEFORE sending — unique index on (date, action) rejects concurrent duplicates
+  const { error: auditErr } = await supabase.from('audit_logs').insert({
+    action:      'cron_daily_summary_sent',
+    entity_type: 'cron',
+    description: `ส่งสรุปประจำวัน: ค้าง ${unpaidCount} บิล ฿${totalOwed}`,
+    new_value:   { unpaidCount, totalOwed, date: todayStr },
+  })
+  if (auditErr) {
+    return NextResponse.json({ ok: true, skipped: 'already sent today' })
   }
 
   try {

@@ -75,6 +75,19 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: true, skipped: `not a reminder day (today=${todayDay}, days=${reminderDays.join(',')})` })
   }
 
+  // Guard: ป้องกันส่งซ้ำในวันเดิม (ตรวจ audit_logs ก่อน)
+  const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' }) // YYYY-MM-DD
+  const { data: alreadySent } = await supabase
+    .from('audit_logs')
+    .select('id')
+    .eq('action', 'cron_reminders_sent')
+    .gte('created_at', `${todayStr}T00:00:00+07:00`)
+    .lte('created_at', `${todayStr}T23:59:59+07:00`)
+    .maybeSingle()
+  if (alreadySent) {
+    return NextResponse.json({ ok: true, skipped: 'already sent today' })
+  }
+
   const lineConfig = await getLineMessagingConfig()
   if (!lineConfig) return NextResponse.json({ ok: false, error: 'LINE not configured' })
 
@@ -127,6 +140,17 @@ export async function GET(req: NextRequest) {
     const tid = bill.tenant_id as string
     if (!byTenant.has(tid)) byTenant.set(tid, [])
     byTenant.get(tid)!.push(bill)
+  }
+
+  // Claim via audit log BEFORE sending — unique index on (date, action) rejects concurrent duplicates
+  const { error: auditErr } = await supabase.from('audit_logs').insert({
+    action:      'cron_reminders_sent',
+    entity_type: 'cron',
+    description: `ส่งแจ้งเตือนอัตโนมัติ (เริ่มส่ง)`,
+    new_value:   { date: todayStr },
+  })
+  if (auditErr) {
+    return NextResponse.json({ ok: true, skipped: 'already sent today' })
   }
 
   let sent = 0, failed = 0, snoozed = 0, noLine = 0, totalReminded = 0

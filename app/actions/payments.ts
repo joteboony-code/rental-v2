@@ -142,7 +142,9 @@ export async function deletePayment(paymentId: string, billId: string): Promise<
     .eq('id', paymentId)
     .single()
 
-  await supabase.from('payments').delete().eq('id', paymentId)
+  const { error: deleteError } = await supabase.from('payments').delete().eq('id', paymentId)
+  if (deleteError) return  // ถ้า DB delete ไม่สำเร็จ → ไม่แตะ storage หรือ bill status
+
   type PaymentBillJoin = { tenant_id: string | null; room_id: string | null }
   const billJoin = payment?.bills as unknown as PaymentBillJoin | null
   logAudit({
