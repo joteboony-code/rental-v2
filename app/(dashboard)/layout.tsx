@@ -72,7 +72,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           <GlobalSearch />
         </div>
         <MobileBottomNav displayName={displayName} initials={initials} notifications={notifications} />
-        <main className="flex-1 overflow-auto">
+        <main className="flex-1 overflow-auto pb-20 md:pb-0">
           <PageTransition>{children}</PageTransition>
         </main>
       </div>
