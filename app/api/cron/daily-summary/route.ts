@@ -147,6 +147,13 @@ export async function GET(req: NextRequest) {
     lines.push(`🤝 นัดจ่ายวันนี้: ${(promisesToday ?? []).length} ห้อง (${rooms})`)
   }
 
+  // แจ้งเตือนต่ออายุ SlipOK ทุกวันที่ 20
+  if (parseInt(todayStr.split('-')[2]) === 20) {
+    lines.push(SEP)
+    lines.push('⚠️ วันนี้ครบกำหนดต่ออายุ SlipOK')
+    lines.push('กรุณาต่อสมาชิกที่ SlipOK Bot ด้วยครับ')
+  }
+
   if (lineConfig.appUrl) {
     lines.push(SEP)
     if ((pendingSlipCount ?? 0) > 0) lines.push(`🔗 ตรวจสลิป: ${lineConfig.appUrl}/payment-reviews`)
