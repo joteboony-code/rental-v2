@@ -271,10 +271,17 @@ async function verifySlipOk(
   fd.append('files', new File([imageBlob], 'slip.jpg', { type: contentType }))
   fd.append('log', 'true')
 
-  const res = await fetch(
-    `https://api.slipok.com/api/line/apikey/${encodeURIComponent(branchId)}`,
-    { method: 'POST', headers: { 'x-authorization': apiKey }, body: fd }
-  )
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 10_000)
+  let res: Response
+  try {
+    res = await fetch(
+      `https://api.slipok.com/api/line/apikey/${encodeURIComponent(branchId)}`,
+      { method: 'POST', headers: { 'x-authorization': apiKey }, body: fd, signal: controller.signal }
+    )
+  } finally {
+    clearTimeout(timeout)
+  }
 
   try {
     return await res.json() as SlipOkResponse
