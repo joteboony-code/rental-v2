@@ -151,10 +151,22 @@ export async function uploadContractImages(
 ): Promise<{ success: boolean; message: string; urls?: string[] }> {
   const supabase = await createClient()
 
+  const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10 MB
+  const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf']
+
   const files = formData.getAll('contract_images') as File[]
   const validFiles = files.filter((f) => f && f.size > 0)
   if (validFiles.length === 0) {
     return { success: false, message: 'ไม่พบไฟล์ที่อัพโหลด' }
+  }
+
+  for (const file of validFiles) {
+    if (file.size > MAX_FILE_SIZE) {
+      return { success: false, message: `ไฟล์ "${file.name}" ขนาดเกิน 10 MB` }
+    }
+    if (!ALLOWED_TYPES.includes(file.type)) {
+      return { success: false, message: `ไฟล์ "${file.name}" ไม่รองรับ (รองรับ JPG, PNG, WebP, PDF เท่านั้น)` }
+    }
   }
 
   const newUrls: string[] = []

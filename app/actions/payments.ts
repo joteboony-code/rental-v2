@@ -20,6 +20,19 @@ export async function recordPayment(
     return { success: false, message: 'กรุณากรอกจำนวนเงิน' }
   }
 
+  // Guard against double-submit: reject if same amount was recorded for this bill within 60 seconds
+  const oneMinAgo = new Date(Date.now() - 60_000).toISOString()
+  const { data: recentDup } = await supabase
+    .from('payments')
+    .select('id')
+    .eq('bill_id', billId)
+    .eq('amount', amount)
+    .gte('created_at', oneMinAgo)
+    .maybeSingle()
+  if (recentDup) {
+    return { success: false, message: 'การชำระนี้อาจถูกบันทึกไปแล้ว กรุณาตรวจสอบก่อนบันทึกซ้ำ' }
+  }
+
   const { data: { user } } = await supabase.auth.getUser()
   const { data: billMeta } = await supabase
     .from('bills')

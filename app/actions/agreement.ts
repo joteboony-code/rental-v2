@@ -140,12 +140,12 @@ export async function submitSignedAgreement(
     await supabase.from('tenants').update(tenantUpdate).eq('id', tenant.id)
   }
 
-  // Upload PDF ไป Supabase Storage
+  // Upload PDF ไป Supabase Storage — ใช้ UUID เพื่อป้องกันการทับไฟล์เดิม
   const buffer = await pdfFile.arrayBuffer()
-  const path = `agreements/${contractId}/${Date.now()}.pdf`
+  const path = `agreements/${contractId}/${crypto.randomUUID()}.pdf`
   const { data: upload, error: uploadError } = await supabase.storage
     .from('tenant-documents')
-    .upload(path, buffer, { contentType: 'application/pdf', upsert: true })
+    .upload(path, buffer, { contentType: 'application/pdf', upsert: false })
 
   if (uploadError || !upload) {
     return { success: false, message: `อัพโหลด PDF ไม่สำเร็จ: ${uploadError?.message ?? 'unknown'}` }
