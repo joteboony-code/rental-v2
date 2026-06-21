@@ -39,6 +39,7 @@ export type AuditAction =
   | 'room_pairing_token_regenerated'
   | 'cron_reminders_sent'
   | 'cron_daily_summary_sent'
+  | 'bills_mark_overdue'
 
 export type AuditLog = {
   id: string
