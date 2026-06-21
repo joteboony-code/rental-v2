@@ -152,6 +152,17 @@ export async function GET(req: NextRequest) {
     if ((pendingSlipCount ?? 0) > 0) lines.push(`🔗 ตรวจสลิป: ${lineConfig.appUrl}/payment-reviews`)
   }
 
+  // Claim via audit log BEFORE sending — unique index on (date, action) rejects concurrent duplicates
+  const { error: auditErr } = await supabase.from('audit_logs').insert({
+    action:      'cron_daily_summary_sent',
+    entity_type: 'cron',
+    description: `ส่งสรุปประจำวัน: ค้าง ${unpaidCount} บิล ฿${totalOwed}`,
+    new_value:   { unpaidCount, totalOwed, date: todayStr },
+  })
+  if (auditErr) {
+    return NextResponse.json({ ok: true, skipped: 'already sent today' })
+  }
+
   try {
     await pushMessage(lineConfig.ownerLineUserId, lineConfig.channelAccessToken, [
       { type: 'text', text: lines.join('\n') },
@@ -159,14 +170,6 @@ export async function GET(req: NextRequest) {
   } catch (err) {
     return NextResponse.json({ ok: false, error: String(err) })
   }
-
-  // Audit log — ใช้ service client โดยตรง (cron ไม่มี user session)
-  void supabase.from('audit_logs').insert({
-    action:      'cron_daily_summary_sent',
-    entity_type: 'cron',
-    description: `ส่งสรุปประจำวัน: ค้าง ${unpaidCount} บิล ฿${totalOwed}`,
-    new_value:   { unpaidCount, totalOwed, date: todayStr },
-  })
 
   return NextResponse.json({
     ok: true,

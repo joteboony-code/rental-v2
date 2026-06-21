@@ -142,6 +142,17 @@ export async function GET(req: NextRequest) {
     byTenant.get(tid)!.push(bill)
   }
 
+  // Claim via audit log BEFORE sending — unique index on (date, action) rejects concurrent duplicates
+  const { error: auditErr } = await supabase.from('audit_logs').insert({
+    action:      'cron_reminders_sent',
+    entity_type: 'cron',
+    description: `ส่งแจ้งเตือนอัตโนมัติ (เริ่มส่ง)`,
+    new_value:   { date: todayStr },
+  })
+  if (auditErr) {
+    return NextResponse.json({ ok: true, skipped: 'already sent today' })
+  }
+
   let sent = 0, failed = 0, snoozed = 0, noLine = 0, totalReminded = 0
   const sentRooms: string[] = []
 
@@ -265,14 +276,6 @@ export async function GET(req: NextRequest) {
       ])
     } catch { /* silent */ }
   }
-
-  // Audit log — ใช้ service client โดยตรง (cron ไม่มี user session)
-  void supabase.from('audit_logs').insert({
-    action:      'cron_reminders_sent',
-    entity_type: 'cron',
-    description: `ส่งแจ้งเตือนอัตโนมัติ: สำเร็จ ${sent} ห้อง, ล้มเหลว ${failed}, งดแจ้ง ${snoozed}, ไม่มี LINE ${noLine}`,
-    new_value:   { sent, failed, snoozed, noLine, date: todayStr },
-  })
 
   return NextResponse.json({ ok: true, sent, failed, snoozed, noLine })
 }
