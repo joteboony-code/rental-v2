@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/service'
-import { decryptSecret } from '@/lib/crypto-secrets'
+import { decryptSecret, maybeDecryptSecret } from '@/lib/crypto-secrets'
 import { DEFAULT_DORM_ID } from '@/lib/line-integration'
 import { buildBillPortalUrl } from '@/lib/portal-url'
 
@@ -451,10 +451,11 @@ async function handleSlipImage(
     return
   }
 
-  // Verify with SlipOK
+  // Verify with SlipOK — ถอดรหัส api key (รองรับค่าเก่าที่ยังเป็น plaintext)
+  const slipokApiKey = await maybeDecryptSecret(settings.slipok_api_key)
   let slipResult: SlipOkResponse
   try {
-    slipResult = await verifySlipOk(image.blob, image.contentType, settings.slipok_branch_id, settings.slipok_api_key)
+    slipResult = await verifySlipOk(image.blob, image.contentType, settings.slipok_branch_id, slipokApiKey)
   } catch (error) {
     await reply(replyToken, token, [{ type: 'text', text: RECEIVED_REPLY }])
     const reviewLink = cfg.appUrl ? `${cfg.appUrl}/payment-reviews` : ''

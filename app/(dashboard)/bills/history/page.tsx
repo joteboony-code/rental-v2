@@ -5,10 +5,18 @@ import { ChevronLeft, TrendingUp, CheckCircle, Clock, AlertTriangle } from 'luci
 export default async function BillingHistoryPage() {
   const supabase = await createClient()
 
+  // จำกัดช่วง 24 เดือนล่าสุด — กันการดึงทั้งตาราง (ชน cap 1000 แถวแล้วเดือนเก่าหายเงียบ ๆ)
+  const since = new Date()
+  since.setMonth(since.getMonth() - 24)
+  since.setDate(1)
+  const sinceStr = `${since.getFullYear()}-${String(since.getMonth() + 1).padStart(2, '0')}-01`
+
   // Group bills by month
   const { data: bills } = await supabase
     .from('bills')
     .select('billing_month, total_amount, status')
+    .neq('status', 'cancelled')
+    .gte('billing_month', sinceStr)
     .order('billing_month', { ascending: false })
 
   // Aggregate by month client-side (Supabase doesn't support GROUP BY easily)

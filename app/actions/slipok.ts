@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { maybeDecryptSecret } from '@/lib/crypto-secrets'
 
 export interface SlipVerifyResult {
   success:     boolean
@@ -54,7 +55,7 @@ export async function verifySlip(formData: FormData): Promise<SlipVerifyResult> 
   }
 
   const branchId = String(settings?.slipok_branch_id ?? '').trim()
-  const apiKey = String(settings?.slipok_api_key ?? '').trim()
+  const apiKey = (await maybeDecryptSecret(settings?.slipok_api_key)).trim()
 
   if (!branchId || !apiKey) {
     return { success: false, error: 'ยังไม่ได้ตั้งค่า SlipOK Branch ID และ API Key ในหน้าตั้งค่า' }

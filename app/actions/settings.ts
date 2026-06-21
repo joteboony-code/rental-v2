@@ -55,7 +55,8 @@ export async function updateSettings(
   const supabase = await createClient()
   const settingsUpdate: Record<string, unknown> = { ...parsed.data }
   if (slipokApiKey) {
-    settingsUpdate.slipok_api_key = slipokApiKey
+    // เข้ารหัสก่อนเก็บ — เดิมเก็บ plaintext ในตาราง settings
+    settingsUpdate.slipok_api_key = await encryptSecret(slipokApiKey)
   }
 
   const { error } = await supabase

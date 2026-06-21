@@ -6,6 +6,7 @@ import { createServiceClient } from '@/lib/supabase/service'
 import { roomRow } from '@/lib/room-utils'
 import { getLineMessagingConfig } from '@/lib/line-integration'
 import { buildBillPortalUrl, buildTenantPortalUrl } from '@/lib/portal-url'
+import { getAuthedUser } from '@/lib/require-admin'
 import { logAudit } from './audit'
 
 // ── helpers ──────────────────────────────────────────────────────────
@@ -882,6 +883,9 @@ export async function sendBroadcast(
   message: string,
   imageUrl: string | null
 ): Promise<{ success: boolean; sent: number; failed: number; message: string }> {
+  // ตรวจสิทธิ์ชัดเจน (defense-in-depth) — broadcast ยิงหาผู้เช่าทุกคน เปลืองโควต้า LINE
+  if (!(await getAuthedUser())) return { success: false, sent: 0, failed: 0, message: 'ไม่มีสิทธิ์ใช้งาน' }
+
   const supabase = await createClient()
 
   const lineConfig = await getLineMessagingConfig()

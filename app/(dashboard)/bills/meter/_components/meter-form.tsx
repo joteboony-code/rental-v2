@@ -37,13 +37,14 @@ interface Props {
   anomalyThreshold:   number   // % increase to flag
 }
 
-/** Pro-rated rent calculation: rent/30 × days occupied */
+/** Pro-rated rent — ต้องตรงกับฝั่ง server (app/actions/bills.ts):
+ *  หารด้วยจำนวนวันจริงของเดือน และคิดตามวันเฉพาะเมื่อเข้าอยู่หลังวันที่ 1 */
 function calcProRated(rent: number, startDate: string, billingMonth: string): { days: number; amount: number } {
   const [year, month] = billingMonth.split('-').map(Number)
   const startDay      = parseInt(startDate.split('-')[2])
   const daysInMonth   = new Date(year, month, 0).getDate()
   const days          = daysInMonth - startDay + 1
-  const amount        = Math.round(rent * days / 30)
+  const amount        = startDay > 1 ? Math.round(rent * days / daysInMonth) : rent
   return { days, amount }
 }
 

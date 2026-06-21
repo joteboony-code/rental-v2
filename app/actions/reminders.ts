@@ -6,6 +6,7 @@ import { createServiceClient } from '@/lib/supabase/service'
 import { parseReminderDays } from '@/lib/reminder-utils'
 import { getLineMessagingConfig } from '@/lib/line-integration'
 import { buildBillPortalUrl } from '@/lib/portal-url'
+import { getAuthedUser } from '@/lib/require-admin'
 
 function fmt(n: number) {
   return n.toLocaleString('th-TH', { maximumFractionDigits: 0 })
@@ -224,6 +225,11 @@ export async function sendOverdueReminders(
   message: string
   ownerSummary?: string
 }> {
+  // ตรวจสิทธิ์เอง — action นี้ใช้ service client (bypass RLS) และยิง LINE push (เปลืองโควต้า)
+  if (!(await getAuthedUser())) {
+    return { success: false, sent: 0, snoozed: 0, noLine: 0, failed: 0, message: 'ไม่มีสิทธิ์ใช้งาน' }
+  }
+
   const supabase = createServiceClient()
   const today    = new Date().toISOString().split('T')[0]
   const todayThai = thaiDate(today)

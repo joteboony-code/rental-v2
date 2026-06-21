@@ -39,15 +39,18 @@ export async function GET(request: NextRequest) {
     filename   = `bills-${billingMonth.substring(0, 7)}.csv`
   }
 
-  const [{ data: bills }, { data: payments }] = await Promise.all([
-    billsQuery.order('billing_month').order('created_at'),
-    supabase
-      .from('payments')
-      .select('bill_id, amount, paid_at, payment_method')
-      .order('paid_at', { ascending: false }),
-  ])
-
+  const { data: bills } = await billsQuery.order('billing_month').order('created_at')
   if (!bills) return NextResponse.json({ error: 'No data' }, { status: 404 })
+
+  // ดึงเฉพาะ payments ของบิลที่อยู่ในช่วงที่ export — กันดึงทั้งตาราง (ชน cap 1000 แถว)
+  const billIds = bills.map((b) => b.id)
+  const { data: payments } = billIds.length > 0
+    ? await supabase
+        .from('payments')
+        .select('bill_id, amount, paid_at, payment_method')
+        .in('bill_id', billIds)
+        .order('paid_at', { ascending: false })
+    : { data: [] as { bill_id: string; amount: number; paid_at: string; payment_method: string }[] }
 
   const statusLabel: Record<string, string> = {
     pending: 'รอชำระ', paid: 'ชำระแล้ว', overdue: 'เกินกำหนด', cancelled: 'ยกเลิก',
