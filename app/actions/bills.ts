@@ -127,7 +127,7 @@ export async function saveMeterAndGenerateBills(
     const wifi_amount        = Number(wifiMap[roomId] ?? 0)
     const trash_amount       = trash_fee
 
-    // Pro-rated rent: if first billing month, divide by 30 × days occupied
+    // Pro-rated rent: if first billing month, charge by days occupied / actual days in month
     const start_date  = formData.get(`room_${roomId}_start_date`) as string | null
     let rent_amount   = rent
     if (start_date && start_date.slice(0, 7) === billing_month.slice(0, 7)) {
@@ -136,7 +136,7 @@ export async function saveMeterAndGenerateBills(
       const daysInMonth = new Date(parseInt(sy), parseInt(sm), 0).getDate()
       const daysOccupied = daysInMonth - startDay + 1
       if (startDay > 1) {
-        rent_amount = Math.round(rent * daysOccupied / 30)
+        rent_amount = Math.round(rent * daysOccupied / daysInMonth)
       }
     }
 
