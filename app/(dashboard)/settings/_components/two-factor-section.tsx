@@ -112,8 +112,14 @@ export function TwoFactorSection() {
               2. กด "+" แล้วสแกน QR นี้<br />
               3. กรอกรหัส 6 หลักจากแอปด้านล่าง
             </p>
-            <div className="flex justify-center bg-white p-3 rounded-xl border border-slate-100"
-              dangerouslySetInnerHTML={{ __html: qrSvg }} />
+            <div className="flex justify-center bg-white p-3 rounded-xl border border-slate-100">
+              {qrSvg.startsWith('data:') ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={qrSvg} alt="QR code สำหรับ 2FA" className="size-48" />
+              ) : (
+                <div dangerouslySetInnerHTML={{ __html: qrSvg }} />
+              )}
+            </div>
             <div className="space-y-1.5">
               <Label className="text-sm font-medium text-slate-700">รหัส OTP จากแอป</Label>
               <Input
