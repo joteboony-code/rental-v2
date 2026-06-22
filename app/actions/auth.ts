@@ -7,7 +7,6 @@ import { decryptSecret } from '@/lib/crypto-secrets'
 
 export type LoginState =
   | { error: string }
-  | { passwordOk: true }
   | undefined
 
 async function sendLoginNotification() {
@@ -43,9 +42,12 @@ export async function login(_: unknown, formData: FormData): Promise<LoginState>
   const { error } = await supabase.auth.signInWithPassword({ email, password })
   if (error) return { error: 'อีเมลหรือรหัสผ่านไม่ถูกต้อง' }
 
-  // Return passwordOk — browser client checks AAL and handles MFA or redirect.
-  // Server cannot reliably check AAL/challenge in same request (cookie timing issue).
-  return { passwordOk: true }
+  const { data: assurance } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+  if (assurance?.nextLevel === 'aal2' && assurance.currentLevel !== 'aal2') {
+    redirect('/mfa')
+  }
+
+  await finalizeLogin()
 }
 
 export async function finalizeLogin(): Promise<void> {
@@ -58,10 +60,12 @@ export async function verifyMfa(_: unknown, formData: FormData): Promise<{ error
   const challengeId = String(formData.get('challenge_id') ?? '')
   const code       = String(formData.get('code')        ?? '').replace(/\s/g, '')
 
-  if (!code || code.length !== 6) return { error: 'กรุณากรอกรหัส 6 หลัก' }
+  if (!factorId || !/^\d{6}$/.test(code)) return { error: 'กรุณากรอกรหัส 6 หลักจากแอป Authenticator' }
 
   const supabase = await createClient()
-  const { error } = await supabase.auth.mfa.verify({ factorId, challengeId, code })
+  const { error } = challengeId
+    ? await supabase.auth.mfa.verify({ factorId, challengeId, code })
+    : await supabase.auth.mfa.challengeAndVerify({ factorId, code })
   if (error) return { error: 'รหัส OTP ไม่ถูกต้องหรือหมดอายุ' }
 
   sendLoginNotification().catch(() => {})

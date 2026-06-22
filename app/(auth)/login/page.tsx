@@ -5,7 +5,10 @@ import { LoginForm } from './_components/login-form'
 export default async function LoginPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (user) redirect('/rooms')
+  if (user) {
+    const { data: assurance } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+    redirect(assurance?.nextLevel === 'aal2' && assurance.currentLevel !== 'aal2' ? '/mfa' : '/rooms')
+  }
 
   return (
     <main className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
