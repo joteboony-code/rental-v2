@@ -25,33 +25,30 @@ export function LoginForm() {
     if (!(state && 'passwordOk' in state)) return
 
     // Password is verified — session cookies are now set in the browser.
-    // Use browser Supabase client to check if MFA upgrade is needed
-    // (server client cannot see the newly-set session in the same request).
+    // Query the enrolled factors directly; AAL can remain stale immediately
+    // after a server-action sign-in even when a verified TOTP factor exists.
     ;(async () => {
       try {
-        const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
-
-        if (aal?.nextLevel === 'aal2' && aal?.currentLevel !== 'aal2') {
-          const { data: factors } = await supabase.auth.mfa.listFactors()
-          const totp = factors?.totp?.[0]
-
-          if (!totp) {
-            // Has AAL2 requirement but no factor found — just proceed
-            await finalizeLogin()
-            return
-          }
-
-          const { data: challenge, error: challengeErr } = await supabase.auth.mfa.challenge({ factorId: totp.id })
-          if (challengeErr || !challenge) {
-            setMfaErr('ไม่สามารถสร้าง OTP challenge: ' + (challengeErr?.message ?? 'ไม่ทราบสาเหตุ'))
-            return
-          }
-
-          setFactorId(totp.id)
-          setChallengeId(challenge.id)
-        } else {
-          await finalizeLogin()
+        const { data: factors, error: factorsError } = await supabase.auth.mfa.listFactors()
+        if (factorsError) {
+          setMfaErr('ไม่สามารถตรวจสอบการยืนยันตัวตน 2 ชั้น: ' + factorsError.message)
+          return
         }
+
+        const totp = factors?.totp?.find((factor) => factor.status === 'verified')
+        if (!totp) {
+          await finalizeLogin()
+          return
+        }
+
+        const { data: challenge, error: challengeErr } = await supabase.auth.mfa.challenge({ factorId: totp.id })
+        if (challengeErr || !challenge) {
+          setMfaErr('ไม่สามารถสร้าง OTP challenge: ' + (challengeErr?.message ?? 'ไม่ทราบสาเหตุ'))
+          return
+        }
+
+        setFactorId(totp.id)
+        setChallengeId(challenge.id)
       } catch {
         setMfaErr('เกิดข้อผิดพลาดในการตรวจสอบ 2FA')
       }
