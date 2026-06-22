@@ -4,6 +4,7 @@ import { createServiceClient } from '@/lib/supabase/service'
 import { createClient } from '@/lib/supabase/server'
 import { getLineMessagingConfig } from '@/lib/line-integration'
 import { revalidatePath } from 'next/cache'
+import { isRateLimited, getClientIp } from '@/lib/rate-limit'
 
 export type SubmitRegistrationResult = {
   success: boolean
@@ -168,6 +169,12 @@ export async function submitRegistration(formData: FormData): Promise<SubmitRegi
 
   // ใช้ registration_token เป็นหลักเท่านั้น — ห้ามเชื่อ room_id/room_number จาก client
   if (!registrationToken) return { success: false, message: 'ลิงก์ไม่ถูกต้อง กรุณาสแกน QR ใหม่' }
+
+  // Rate limit: 3 submissions per IP per 10 minutes
+  const ip = await getClientIp()
+  if (await isRateLimited(`registration:${ip}`, 3, 600))
+    return { success: false, message: 'ส่งคำขอบ่อยเกินไป กรุณารอสักครู่แล้วลองใหม่' }
+
   if (!fullName)          return { success: false, message: 'กรุณากรอกชื่อ-นามสกุล' }
   if (fullName.length < 2 || fullName.length > 200) return { success: false, message: 'ชื่อต้องยาว 2-200 ตัวอักษร' }
   if (!phone)             return { success: false, message: 'กรุณากรอกเบอร์โทรศัพท์' }

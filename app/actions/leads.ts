@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import { decryptSecret } from '@/lib/crypto-secrets'
 import { getAuthedUser } from '@/lib/require-admin'
+import { isRateLimited, getClientIp } from '@/lib/rate-limit'
 
 async function notifyOwnerNewLead(name: string, phone: string, note: string | null) {
   const supabase = createServiceClient()
@@ -49,6 +50,11 @@ export async function submitLead(
   if (!phone) return { success: false, message: 'กรุณากรอกเบอร์โทร' }
   if (!/^0[6-9]\d{8}$/.test(phone.replace(/[-\s]/g, '')))
     return { success: false, message: 'กรุณากรอกเบอร์มือถือให้ถูกต้อง (ตัวอย่าง: 0812345678)' }
+
+  // Rate limit: 5 submissions per IP per hour
+  const ip = await getClientIp()
+  if (await isRateLimited(`lead:${ip}`, 5, 3600))
+    return { success: true, message: 'ฝากข้อมูลไว้เรียบร้อยแล้ว เจ้าของหอจะติดต่อกลับโดยเร็ว' }
 
   const supabase = createServiceClient()
 
