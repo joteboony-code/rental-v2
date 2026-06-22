@@ -1,24 +1,61 @@
 'use client'
 
+import { useState, useEffect, useMemo } from 'react'
 import { useActionState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Loader2, ShieldCheck } from 'lucide-react'
+import { createClient } from '@/lib/supabase/client'
 import { login, verifyMfa } from '@/app/actions/auth'
-import type { LoginState } from '@/app/actions/auth'
 
 export function LoginForm() {
-  const [state, action, pending] = useActionState(login, undefined)
+  const [state, action, pending]          = useActionState(login, undefined)
   const [mfaState, mfaAction, mfaPending] = useActionState(verifyMfa, undefined)
+  const [challengeId, setChallengeId]     = useState<string | null>(null)
+  const [challengeErr, setChallengeErr]   = useState<string | null>(null)
+
+  const supabase = useMemo(() => createClient(), [])
+
+  // When login returns mfaRequired, create a challenge using the browser Supabase client.
+  // The browser client reads session cookies set by the server action's signInWithPassword,
+  // which the server client cannot see (same-request cookie write/read timing issue).
+  useEffect(() => {
+    if (!(state && 'mfaRequired' in state && state.mfaRequired)) return
+    setChallengeId(null)
+    setChallengeErr(null)
+    supabase.auth.mfa.challenge({ factorId: state.factorId }).then(({ data, error }) => {
+      if (error || !data) {
+        setChallengeErr('ไม่สามารถสร้าง OTP challenge: ' + (error?.message ?? 'ไม่ทราบสาเหตุ'))
+        return
+      }
+      setChallengeId(data.id)
+    })
+  }, [state, supabase])
 
   // Step 2: OTP verification
   if (state && 'mfaRequired' in state && state.mfaRequired) {
+    if (challengeErr) {
+      return (
+        <Alert variant="destructive">
+          <AlertDescription>{challengeErr}</AlertDescription>
+        </Alert>
+      )
+    }
+
+    if (!challengeId) {
+      return (
+        <div className="flex justify-center py-6">
+          <Loader2 className="size-5 animate-spin text-slate-400" />
+        </div>
+      )
+    }
+
     return (
       <form action={mfaAction} className="space-y-4">
-        <input type="hidden" name="factor_id"   value={state.factorId} />
-        <input type="hidden" name="challenge_id" value={state.challengeId} />
+        <input type="hidden" name="factor_id"    value={state.factorId} />
+        <input type="hidden" name="challenge_id" value={challengeId} />
 
         <div className="flex flex-col items-center gap-2 pb-2">
           <div className="size-12 rounded-full bg-indigo-50 flex items-center justify-center">
