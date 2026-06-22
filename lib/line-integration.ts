@@ -14,6 +14,7 @@ export type LineIntegrationPublic = {
   channel_secret_last4: string | null
   connected_at: string | null
   updated_at: string | null
+  login_notify_enabled: boolean
 }
 
 export type LineMessagingConfig = {
@@ -33,7 +34,7 @@ export async function getLineIntegrationPublic(
   const { data } = await supabase
     .from('line_integrations')
     .select(
-      'dorm_id, line_oa_basic_id, line_liff_id, line_liff_id_pairing, app_url, owner_line_user_id, token_last4, channel_secret_last4, connected_at, updated_at'
+      'dorm_id, line_oa_basic_id, line_liff_id, line_liff_id_pairing, app_url, owner_line_user_id, token_last4, channel_secret_last4, connected_at, updated_at, login_notify_enabled'
     )
     .eq('dorm_id', dormId)
     .maybeSingle()
@@ -69,6 +70,7 @@ export async function getLineIntegrationPublic(
     channel_secret_last4: null,
     connected_at: null,
     updated_at: null,
+    login_notify_enabled: true,
   }
 }
 

@@ -14,8 +14,9 @@ async function sendLoginNotification() {
   const supabase = createServiceClient()
   const { data } = await supabase
     .from('line_integrations')
-    .select('encrypted_channel_access_token, owner_line_user_id')
+    .select('encrypted_channel_access_token, owner_line_user_id, login_notify_enabled')
     .maybeSingle()
+  if (!data?.login_notify_enabled) return
   if (!data?.encrypted_channel_access_token || !data?.owner_line_user_id) return
 
   const token = await decryptSecret(data.encrypted_channel_access_token)

@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { type SettingsFormState, type Settings } from '@/lib/definitions'
 import { type LineIntegrationPublic } from '@/lib/line-integration'
-import { Loader2, MessageCircle, Globe, UserCheck, Download, FileText } from 'lucide-react'
+import { Loader2, MessageCircle, Globe, UserCheck, Download, FileText, Bell } from 'lucide-react'
 
 interface Props {
   action: (state: SettingsFormState, formData: FormData) => Promise<SettingsFormState>
@@ -135,6 +135,25 @@ export function LineSettingsForm({ action, settings, lineIntegration }: Props) {
             defaultValue={settings?.owner_address ?? ''}
             placeholder="เช่น 58/10 ม.9 ถ.บางนโยม อ.พานทอง จ.ชลบุรี" />
         </Field>
+      </Section>
+
+      {/* ── แจ้งเตือน Login ── */}
+      <Section title="แจ้งเตือนการ Login" icon={<Bell className="size-4 text-rose-500" />}>
+        <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
+          <input
+            type="checkbox"
+            id="login_notify_enabled"
+            name="login_notify_enabled"
+            defaultChecked={lineIntegration?.login_notify_enabled !== false}
+            className="size-4 accent-rose-600 rounded"
+          />
+          <label htmlFor="login_notify_enabled" className="text-sm font-medium text-slate-700 cursor-pointer flex-1">
+            ส่งแจ้งเตือน LINE เมื่อมีการ login เข้าระบบ
+          </label>
+        </div>
+        <p className="text-xs text-slate-400">
+          ต้องเชื่อมต่อ LINE และตั้งค่า Owner LINE User ID ก่อน
+        </p>
       </Section>
 
       {/* ── เอกสาร ── */}
