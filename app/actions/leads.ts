@@ -73,6 +73,8 @@ export async function submitLead(
 
 export async function updateLeadAnnouncement(text: string): Promise<{ error?: string }> {
   const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'ไม่มีสิทธิ์ใช้งาน' }
   const { error } = await supabase
     .from('settings')
     .update({ lead_announcement: text.trim() || null })

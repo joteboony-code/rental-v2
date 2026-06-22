@@ -551,6 +551,7 @@ export async function sendLineBillNotification(
 export async function sendPaymentConfirmedNotification(
   billId: string
 ): Promise<{ success: boolean; message: string }> {
+  if (!(await getAuthedUser())) return { success: false, message: 'ไม่มีสิทธิ์ใช้งาน' }
   const supabase = createServiceClient()
 
   const { data: bill } = await supabase
