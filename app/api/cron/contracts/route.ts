@@ -6,7 +6,7 @@ import { DEFAULT_DORM_ID } from '@/lib/line-integration'
 function isAuthorized(req: NextRequest) {
   const secret = process.env.CRON_SECRET
   if (!secret) return false
-  return req.headers.get('x-cron-secret') === secret || req.nextUrl.searchParams.get('secret') === secret
+  return req.headers.get('x-cron-secret') === secret
 }
 
 const SEP = '━━━━━━━━━━━━━━'
@@ -38,6 +38,7 @@ export async function GET(req: NextRequest) {
     .gte('end_date', todayStr)
     .lte('end_date', in30Str)
     .order('end_date')
+    .limit(500)
 
   if (!contracts || contracts.length === 0) {
     return NextResponse.json({ ok: true, expiring: 0 })

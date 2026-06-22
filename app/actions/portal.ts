@@ -3,6 +3,13 @@
 import { createServiceClient } from '@/lib/supabase/service'
 import { revalidatePath } from 'next/cache'
 import { DEFAULT_DORM_ID } from '@/lib/line-integration'
+
+const MAX_REPAIR_PHOTO_SIZE = 10 * 1024 * 1024
+const ALLOWED_REPAIR_PHOTO_TYPES: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+}
 import { decryptSecret } from '@/lib/crypto-secrets'
 
 export type TenantPortalData = {
@@ -198,8 +205,14 @@ export async function submitPortalRepair(
   let photo_url: string | null = null
   const photoFile = formData.get('photo') as File | null
   if (photoFile && photoFile.size > 0) {
+    if (photoFile.size > MAX_REPAIR_PHOTO_SIZE) {
+      return { success: false, message: 'ไฟล์รูปภาพต้องไม่เกิน 10 MB' }
+    }
+    const ext = ALLOWED_REPAIR_PHOTO_TYPES[photoFile.type]
+    if (!ext) {
+      return { success: false, message: 'รองรับเฉพาะไฟล์ JPEG, PNG, WebP' }
+    }
     const buffer = await photoFile.arrayBuffer()
-    const ext = photoFile.name.split('.').pop() ?? 'jpg'
     const path = `portal/${tenant.id}/${Date.now()}.${ext}`
     const { data: upload } = await supabase.storage
       .from('repair-photos')
