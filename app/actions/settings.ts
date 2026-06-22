@@ -59,16 +59,8 @@ export async function updateSettings(
 
   const supabase = await createClient()
 
-  // Snapshot sensitive payment fields before update for audit trail
-  const { data: before } = await supabase
-    .from('settings')
-    .select('promptpay_id, bank_accounts_text')
-    .eq('id', 1)
-    .single()
-
   const settingsUpdate: Record<string, unknown> = { ...parsed.data }
   if (slipokApiKey) {
-    // เข้ารหัสก่อนเก็บ — เดิมเก็บ plaintext ในตาราง settings
     settingsUpdate.slipok_api_key = await encryptSecret(slipokApiKey)
   }
 
@@ -78,22 +70,6 @@ export async function updateSettings(
     .eq('id', 1)
 
   if (error) return { message: `เกิดข้อผิดพลาด: ${error.message}` }
-
-  // Log audit if payment-sensitive fields changed
-  const newPromptpay = parsed.data.promptpay_id ?? ''
-  const newBankText  = parsed.data.bank_accounts_text ?? ''
-  const oldPromptpay = before?.promptpay_id ?? ''
-  const oldBankText  = before?.bank_accounts_text ?? ''
-  if (newPromptpay !== oldPromptpay || newBankText !== oldBankText) {
-    logAudit({
-      action: 'settings_update',
-      entityType: 'settings',
-      entityId: '1',
-      oldValue: { promptpay_id: oldPromptpay, bank_accounts_text: oldBankText },
-      newValue: { promptpay_id: newPromptpay, bank_accounts_text: newBankText },
-      description: 'เปลี่ยนข้อมูลบัญชี/PromptPay',
-    }).catch(() => {})
-  }
 
   const lineData = parsedLine.data
   const lineUpdate: Record<string, string | null> = {
@@ -128,6 +104,52 @@ export async function updateSettings(
 
   revalidatePath('/settings')
   return { success: true, message: 'บันทึกการตั้งค่าเรียบร้อยแล้ว' }
+}
+
+// ─── Update payment info (requires password confirmation) ────
+export async function updatePaymentSettings(
+  _: unknown,
+  formData: FormData
+): Promise<{ success?: boolean; message: string }> {
+  const currentPassword  = String(formData.get('current_password') ?? '').trim()
+  const promptpayId      = String(formData.get('promptpay_id') ?? '').trim()
+  const promptpayName    = String(formData.get('promptpay_name') ?? '').trim() || 'ห้องเช่า'
+  const bankAccountsText = String(formData.get('bank_accounts_text') ?? '').trim()
+
+  if (!currentPassword) return { message: 'กรุณายืนยันรหัสผ่านก่อนบันทึก' }
+
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user?.email) return { message: 'ไม่มีสิทธิ์ใช้งาน' }
+
+  const { error: verifyError } = await supabase.auth.signInWithPassword({
+    email: user.email, password: currentPassword,
+  })
+  if (verifyError) return { message: 'รหัสผ่านไม่ถูกต้อง' }
+
+  const { data: before } = await supabase
+    .from('settings').select('promptpay_id, bank_accounts_text').eq('id', 1).single()
+
+  const { error } = await supabase
+    .from('settings')
+    .update({ promptpay_id: promptpayId, promptpay_name: promptpayName, bank_accounts_text: bankAccountsText || null })
+    .eq('id', 1)
+
+  if (error) return { message: `เกิดข้อผิดพลาด: ${error.message}` }
+
+  if (promptpayId !== (before?.promptpay_id ?? '') || bankAccountsText !== (before?.bank_accounts_text ?? '')) {
+    logAudit({
+      action: 'settings_update',
+      entityType: 'settings',
+      entityId: '1',
+      oldValue: { promptpay_id: before?.promptpay_id, bank_accounts_text: before?.bank_accounts_text },
+      newValue: { promptpay_id: promptpayId, bank_accounts_text: bankAccountsText },
+      description: 'เปลี่ยนข้อมูลบัญชี/PromptPay (ยืนยันรหัสผ่านแล้ว)',
+    }).catch(() => {})
+  }
+
+  revalidatePath('/settings')
+  return { success: true, message: 'บันทึกข้อมูลการชำระเงินแล้ว' }
 }
 
 // ─── Change password + sign out all devices ─────────────────
