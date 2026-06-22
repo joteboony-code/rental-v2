@@ -74,6 +74,20 @@ export async function verifyMfa(_: unknown, formData: FormData): Promise<{ error
   redirect('/rooms')
 }
 
+export async function cleanupStaleMfaFactors(): Promise<void> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return
+
+  const service = createServiceClient()
+  const { data } = await service.auth.admin.mfa.listFactors({ userId: user.id })
+  await Promise.all(
+    (data?.factors ?? [])
+      .filter((f) => f.status === 'unverified')
+      .map((f) => service.auth.admin.mfa.deleteFactor({ userId: user.id, id: f.id }))
+  )
+}
+
 export async function logout() {
   const supabase = await createClient()
   await supabase.auth.signOut()
