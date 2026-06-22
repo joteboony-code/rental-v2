@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { ShieldCheck, ShieldOff, Loader2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -10,30 +10,34 @@ import { createClient } from '@/lib/supabase/client'
 type Status = 'loading' | 'enabled' | 'disabled'
 
 export function TwoFactorSection() {
-  const [status, setStatus]   = useState<Status>('loading')
+  const [status, setStatus]     = useState<Status>('loading')
   const [factorId, setFactorId] = useState<string | null>(null)
-  const [step, setStep]       = useState<'idle' | 'enroll' | 'unenroll'>('idle')
-  const [qrSvg, setQrSvg]    = useState<string | null>(null)
+  const [step, setStep]         = useState<'idle' | 'enroll' | 'unenroll'>('idle')
+  const [qrSvg, setQrSvg]       = useState<string | null>(null)
   const [enrollId, setEnrollId] = useState<string | null>(null)
-  const [code, setCode]       = useState('')
-  const [error, setError]     = useState<string | null>(null)
-  const [busy, setBusy]       = useState(false)
+  const [code, setCode]         = useState('')
+  const [error, setError]       = useState<string | null>(null)
+  const [busy, setBusy]         = useState(false)
 
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
 
   useEffect(() => {
-    supabase.auth.mfa.listFactors().then(({ data }) => {
+    supabase.auth.mfa.listFactors().then(({ data, error: err }) => {
+      if (err) { setStatus('disabled'); return }
       const totp = data?.totp?.[0]
       if (totp) { setStatus('enabled'); setFactorId(totp.id) }
       else setStatus('disabled')
     })
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [supabase])
 
   async function startEnroll() {
     setBusy(true); setError(null)
     const { data, error: err } = await supabase.auth.mfa.enroll({ factorType: 'totp' })
     setBusy(false)
-    if (err || !data) { setError('เกิดข้อผิดพลาด: ' + err?.message); return }
+    if (err || !data) {
+      setError('เกิดข้อผิดพลาด: ' + (err?.message ?? 'ไม่ทราบสาเหตุ'))
+      return
+    }
     setQrSvg(data.totp.qr_code)
     setEnrollId(data.id)
     setStep('enroll')
@@ -72,9 +76,7 @@ export function TwoFactorSection() {
         <ShieldCheck className="size-4 text-indigo-500" />
         <h2 className="text-sm font-semibold text-slate-800">การยืนยันตัวตน 2 ชั้น (2FA)</h2>
         <span className={`ml-auto rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-          status === 'enabled'
-            ? 'bg-emerald-50 text-emerald-700'
-            : 'bg-slate-100 text-slate-500'
+          status === 'enabled' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'
         }`}>
           {status === 'enabled' ? '✅ เปิดใช้งาน' : 'ปิดอยู่'}
         </span>
@@ -88,6 +90,7 @@ export function TwoFactorSection() {
                 ? 'เปิดใช้ 2FA แล้ว — ทุกครั้งที่ login ต้องกรอก OTP จาก Authenticator app ด้วย'
                 : 'ป้องกันบัญชีด้วย Google Authenticator / Authy — แม้รหัสผ่านหลุด ก็ login ไม่ได้'}
             </p>
+            {error && <p className="text-xs text-red-600 font-medium">{error}</p>}
             {status === 'disabled' ? (
               <Button onClick={startEnroll} disabled={busy} className="w-full h-10">
                 {busy ? <Loader2 className="size-4 animate-spin mr-2" /> : <ShieldCheck className="size-4 mr-2" />}
@@ -121,7 +124,8 @@ export function TwoFactorSection() {
             </div>
             {error && <p className="text-xs text-red-600 font-medium">{error}</p>}
             <div className="flex gap-2">
-              <Button variant="outline" className="flex-1" onClick={() => { setStep('idle'); setQrSvg(null) }}>
+              <Button variant="outline" className="flex-1"
+                onClick={() => { setStep('idle'); setQrSvg(null); setError(null) }}>
                 <X className="size-4 mr-1" />ยกเลิก
               </Button>
               <Button className="flex-1" onClick={confirmEnroll} disabled={busy || code.length !== 6}>
@@ -138,7 +142,8 @@ export function TwoFactorSection() {
             </p>
             {error && <p className="text-xs text-red-600">{error}</p>}
             <div className="flex gap-2">
-              <Button variant="outline" className="flex-1" onClick={() => setStep('idle')}>
+              <Button variant="outline" className="flex-1"
+                onClick={() => { setStep('idle'); setError(null) }}>
                 ยกเลิก
               </Button>
               <Button variant="destructive" className="flex-1" onClick={confirmUnenroll} disabled={busy}>
