@@ -37,6 +37,7 @@ const statusLabel: Record<string, string> = {
 export function TenantPortal({ liffId }: TenantPortalProps) {
   const [scriptReady, setScriptReady]       = useState(false)
   const [portalToken, setPortalToken]       = useState('')
+  const [lineProfile, setLineProfile]       = useState<{ displayName: string; pictureUrl: string } | null>(null)
   const [status, setStatus]                 = useState(liffId ? 'กำลังเชื่อมต่อ LINE' : 'กำลังเตรียมข้อมูลห้อง')
   const [data, setData]                     = useState<TenantPortalData | null>(null)
   const [error, setError]                   = useState('')
@@ -87,6 +88,7 @@ export function TenantPortal({ liffId }: TenantPortalProps) {
 
         const token = sessionResult.token
         setPortalToken(token)
+        setLineProfile({ displayName: profile.displayName ?? '', pictureUrl: profile.pictureUrl ?? '' })
         setStatus('เชื่อมต่อ LINE แล้ว')
 
         const { rooms: activeRooms } = await getPortalRooms(token)
@@ -151,7 +153,19 @@ export function TenantPortal({ liffId }: TenantPortalProps) {
                     {data.tenant.full_name}{data.room?.room_number ? ` · แถวที่ ${roomRow(data.room.room_number)}` : ''}
                   </p>
                 </div>
-                <div className="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-white">เชื่อม LINE แล้ว</div>
+                {lineProfile?.pictureUrl ? (
+                  <div className="relative shrink-0">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={lineProfile.pictureUrl}
+                      alt={lineProfile.displayName}
+                      className="size-14 rounded-full object-cover ring-2 ring-[#06C755] ring-offset-2 ring-offset-slate-950"
+                    />
+                    <span className="absolute -bottom-0.5 -right-0.5 flex size-5 items-center justify-center rounded-full bg-[#06C755] text-[10px] font-black text-white shadow-md">L</span>
+                  </div>
+                ) : (
+                  <div className="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-white">เชื่อม LINE แล้ว</div>
+                )}
               </div>
               <div className="mt-5 grid grid-cols-2 gap-3">
                 <Metric label="ค่าเช่าต่อเดือน" value={`฿${money.format(monthlyRent)}`} />
