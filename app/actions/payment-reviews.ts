@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { sendPaymentReceiptNotification } from '@/lib/line-notify'
 import { logAudit } from './audit'
+import { getAuthedUser } from '@/lib/require-admin'
 
 const VALID_PAYMENT_METHODS = ['cash', 'transfer', 'promptpay'] as const
 type PaymentMethod = typeof VALID_PAYMENT_METHODS[number]
@@ -115,8 +116,9 @@ export async function approveSlip(
   slipId: string,
   formData: FormData
 ): Promise<{ success: boolean; message: string }> {
+  const user = await getAuthedUser()
+  if (!user) return { success: false, message: 'ไม่มีสิทธิ์ใช้งาน' }
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
 
   const billId = String(formData.get('bill_id') ?? '').trim()
   const amount = Number(formData.get('amount'))
@@ -231,8 +233,13 @@ export async function approveSlipOldestFirst(
   note: string | null,
   lineUserId?: string | null
 ): Promise<{ success: boolean; message: string }> {
+  const user = await getAuthedUser()
+  if (!user) return { success: false, message: 'ไม่มีสิทธิ์ใช้งาน' }
+
+  if (!Number.isFinite(amount) || amount <= 0) return { success: false, message: 'จำนวนเงินไม่ถูกต้อง' }
+  if (amount > 1_000_000) return { success: false, message: 'จำนวนเงินสูงเกินไป กรุณาตรวจสอบ' }
+
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
   const safePaymentMethod = sanitizePaymentMethod(paymentMethod)
 
   // H1: Atomically claim slip — only succeeds if still pending (race guard)
@@ -374,8 +381,9 @@ export async function saveSlipAsAdvance(
   amount: number,
   note: string | null
 ): Promise<{ success: boolean; message: string }> {
+  const user = await getAuthedUser()
+  if (!user) return { success: false, message: 'ไม่มีสิทธิ์ใช้งาน' }
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
 
   if (!amount || amount <= 0) return { success: false, message: 'กรุณาระบุจำนวนเงิน' }
 
@@ -510,15 +518,21 @@ export async function rejectSlip(
   slipId: string,
   note: string
 ): Promise<{ success: boolean; message: string }> {
+  const user = await getAuthedUser()
+  if (!user) return { success: false, message: 'ไม่มีสิทธิ์ใช้งาน' }
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
 
-  await supabase.from('pending_slips').update({
+  // Atomic claim — only reject if still pending (race guard)
+  const { data: updated } = await supabase.from('pending_slips').update({
     status: 'rejected',
     reviewed_at: new Date().toISOString(),
-    reviewed_by: user?.id ?? null,
+    reviewed_by: user.id,
     admin_note: note || 'ปฏิเสธโดยเจ้าของหอ',
-  }).eq('id', slipId)
+  }).eq('id', slipId).eq('status', 'pending').select('id')
+
+  if (!updated || updated.length === 0) {
+    return { success: false, message: 'สลิปนี้ถูกดำเนินการไปแล้วหรือไม่พบ' }
+  }
 
   logAudit({ action: 'slip_reject', entityType: 'pending_slip', entityId: slipId, description: `ปฏิเสธสลิป — ${note || 'ปฏิเสธโดยเจ้าของหอ'}` }).catch(() => {})
 

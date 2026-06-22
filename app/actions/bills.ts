@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { logAudit } from './audit'
+import { getAuthedUser } from '@/lib/require-admin'
 
 async function uploadMeterPhoto(
   supabase: SupabaseClient,
@@ -34,6 +35,8 @@ function getDueDateForBillingMonth(billingMonth: string, dueDay: number) {
 export async function saveMeterAndGenerateBills(
   formData: FormData
 ): Promise<{ success: boolean; message: string }> {
+  const authedUser = await getAuthedUser()
+  if (!authedUser) return { success: false, message: 'ไม่มีสิทธิ์ใช้งาน' }
   const supabase = await createClient()
 
   const billing_month = formData.get('billing_month') as string
@@ -66,7 +69,6 @@ export async function saveMeterAndGenerateBills(
     (roomsData ?? []).map((r) => [r.id, r.wifi_fee])
   )
 
-  const { data: { user } } = await supabase.auth.getUser()
   const errors: string[] = []
   let successCount = 0
 
@@ -116,7 +118,7 @@ export async function saveMeterAndGenerateBills(
       water_curr,
       electricity_prev,
       electricity_curr,
-      recorded_by: user?.id ?? null,
+      recorded_by: authedUser.id,
       reading_date: new Date().toISOString().split('T')[0],
     }
     if (water_image_url)       meterPayload.water_image_url       = water_image_url
@@ -202,12 +204,13 @@ export async function updateBill(
   _state: UpdateBillState,
   formData: FormData
 ): Promise<UpdateBillState> {
+  if (!(await getAuthedUser())) return { success: false, message: 'ไม่มีสิทธิ์ใช้งาน' }
   const supabase = await createClient()
 
   const billId = String(formData.get('bill_id') ?? '').trim()
   if (!billId) return { success: false, message: 'ไม่พบบิล' }
 
-  const num = (k: string) => Number(formData.get(k) ?? 0) || 0
+  const num = (k: string) => Math.max(0, Number(formData.get(k) ?? 0) || 0)
   const rent_amount      = num('rent_amount')
   const water_prev       = num('water_prev')
   const water_curr       = num('water_curr')
@@ -304,6 +307,7 @@ export async function updateBill(
 
 // ─── Delete Bill ─────────────────────────────────────────────
 export async function deleteBill(billId: string): Promise<{ success: boolean; message?: string }> {
+  if (!(await getAuthedUser())) return { success: false, message: 'ไม่มีสิทธิ์ใช้งาน' }
   const supabase = await createClient()
 
   const { data: bill } = await supabase
@@ -335,6 +339,7 @@ export async function deleteBill(billId: string): Promise<{ success: boolean; me
 
 // ─── Mark Bill Paid ──────────────────────────────────────────
 export async function markBillPaid(billId: string): Promise<{ success: boolean; message: string }> {
+  if (!(await getAuthedUser())) return { success: false, message: 'ไม่มีสิทธิ์ใช้งาน' }
   const supabase = await createClient()
   const { data: bill } = await supabase
     .from('bills')
@@ -363,6 +368,7 @@ export async function markBillPaid(billId: string): Promise<{ success: boolean; 
 
 // ─── Mark Bill Overdue (batch) ────────────────────────────────
 export async function markOverdueBills(): Promise<{ success: boolean; message: string }> {
+  if (!(await getAuthedUser())) return { success: false, message: 'ไม่มีสิทธิ์ใช้งาน' }
   const supabase = await createClient()
   const today = new Date().toISOString().split('T')[0]
 

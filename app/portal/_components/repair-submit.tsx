@@ -11,9 +11,9 @@ const PRIORITY_OPTIONS = [
   { value: 'urgent', label: 'ด่วนมาก' },
 ]
 
-type Props = { lineUserId: string; roomId?: string; onSuccess: () => void }
+type Props = { portalToken: string; roomId?: string; onSuccess: () => void }
 
-export function RepairSubmit({ lineUserId, roomId, onSuccess }: Props) {
+export function RepairSubmit({ portalToken, roomId, onSuccess }: Props) {
   const [isPending, startTransition] = useTransition()
   const [preview, setPreview] = useState<string | null>(null)
   const [photoFile, setPhotoFile] = useState<File | null>(null)
@@ -40,7 +40,7 @@ export function RepairSubmit({ lineUserId, roomId, onSuccess }: Props) {
     if (photoFile) fd.set('photo', photoFile)
     setResult(null)
     startTransition(async () => {
-      const res = await submitPortalRepair(lineUserId, fd, roomId)
+      const res = await submitPortalRepair(portalToken, fd, roomId)
       setResult(res)
       if (res.success) {
         formRef.current?.reset()

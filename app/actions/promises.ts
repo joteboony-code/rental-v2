@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { getAuthedUser } from '@/lib/require-admin'
 
 export type PaymentPromise = {
   id: string
@@ -19,8 +20,9 @@ export type PaymentPromise = {
 export async function createPromise(
   data: { tenantId: string | null; roomId: string | null; billId: string | null; promiseDate: string; amount: number | null; note: string | null }
 ): Promise<{ success: boolean; message: string }> {
+  const user = await getAuthedUser()
+  if (!user) return { success: false, message: 'ไม่มีสิทธิ์ใช้งาน' }
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
 
   if (!data.promiseDate) return { success: false, message: 'กรุณาระบุวันที่นัดจ่าย' }
 
@@ -39,7 +41,7 @@ export async function createPromise(
     amount: data.amount,
     note: data.note,
     status: 'active',
-    created_by: user?.id ?? null,
+    created_by: user.id,
   })
 
   if (error) return { success: false, message: `บันทึกไม่สำเร็จ: ${error.message}` }
@@ -50,6 +52,7 @@ export async function createPromise(
 }
 
 export async function cancelPromise(promiseId: string, billId?: string): Promise<{ success: boolean }> {
+  if (!(await getAuthedUser())) return { success: false }
   const supabase = await createClient()
   await supabase.from('payment_promises')
     .update({ status: 'cancelled', resolved_at: new Date().toISOString() })

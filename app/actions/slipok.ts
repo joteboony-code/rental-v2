@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { maybeDecryptSecret } from '@/lib/crypto-secrets'
+import { getAuthedUser } from '@/lib/require-admin'
 
 export interface SlipVerifyResult {
   success:     boolean
@@ -39,6 +40,7 @@ function slipToDatetimeLocal(transDate: string, transTime: string): string | und
 }
 
 export async function verifySlip(formData: FormData): Promise<SlipVerifyResult> {
+  if (!(await getAuthedUser())) return { success: false, error: 'ไม่มีสิทธิ์ใช้งาน' }
   const supabase = await createClient()
 
   const { data: settings, error: settingsError } = await supabase

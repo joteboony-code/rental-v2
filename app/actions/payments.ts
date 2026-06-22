@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { sendPaymentReceiptNotification } from '@/lib/line-notify'
 import { logAudit } from './audit'
+import { getAuthedUser } from '@/lib/require-admin'
 
 const MAX_SLIP_SIZE = 10 * 1024 * 1024
 const ALLOWED_SLIP_TYPES: Record<string, string> = {
@@ -19,9 +20,13 @@ export async function recordPayment(
   billId: string,
   formData: FormData
 ): Promise<{ success: boolean; message: string }> {
+  const user = await getAuthedUser()
+  if (!user) return { success: false, message: 'ไม่มีสิทธิ์ใช้งาน' }
+
   const supabase = await createClient()
 
-  const amount = Number(formData.get('amount'))
+  const rawAmount = Number(formData.get('amount'))
+  const amount = Math.round(rawAmount * 100) / 100 // round to 2 decimal places
   const rawMethod = (formData.get('payment_method') as string) || 'transfer'
   const payment_method: PaymentMethod = (VALID_PAYMENT_METHODS as readonly string[]).includes(rawMethod)
     ? (rawMethod as PaymentMethod)
@@ -29,8 +34,11 @@ export async function recordPayment(
   const note = (formData.get('note') as string) || null
   const paid_at = (formData.get('paid_at') as string) || new Date().toISOString()
 
-  if (!amount || amount <= 0) {
-    return { success: false, message: 'กรุณากรอกจำนวนเงิน' }
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return { success: false, message: 'กรุณากรอกจำนวนเงินให้ถูกต้อง' }
+  }
+  if (amount > 1_000_000) {
+    return { success: false, message: 'จำนวนเงินสูงเกินไป กรุณาตรวจสอบ' }
   }
 
   // Guard against double-submit: reject if same amount was recorded for this bill within 60 seconds
@@ -45,9 +53,6 @@ export async function recordPayment(
   if (recentDup) {
     return { success: false, message: 'การชำระนี้อาจถูกบันทึกไปแล้ว กรุณาตรวจสอบก่อนบันทึกซ้ำ' }
   }
-
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { success: false, message: 'ไม่มีสิทธิ์ใช้งาน' }
 
   const { data: billMeta } = await supabase
     .from('bills')
@@ -91,7 +96,7 @@ export async function recordPayment(
     slip_url,
     note,
     paid_at,
-    recorded_by: user?.id ?? null,
+    recorded_by: user.id,
   }
 
   const { data: payment, error } = await supabase
@@ -167,10 +172,9 @@ export async function recordPayment(
   }
 }
 
-export async function deletePayment(paymentId: string, billId: string): Promise<void> {
+export async function deletePayment(paymentId: string, billId: string): Promise<{ success: boolean; message: string }> {
+  if (!(await getAuthedUser())) return { success: false, message: 'ไม่มีสิทธิ์ใช้งาน' }
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return
 
   const { data: payment } = await supabase
     .from('payments')
@@ -179,7 +183,7 @@ export async function deletePayment(paymentId: string, billId: string): Promise<
     .single()
 
   const { error: deleteError } = await supabase.from('payments').delete().eq('id', paymentId)
-  if (deleteError) return  // ถ้า DB delete ไม่สำเร็จ → ไม่แตะ storage หรือ bill status
+  if (deleteError) return { success: false, message: `ลบไม่สำเร็จ: ${deleteError.message}` }
 
   type PaymentBillJoin = { tenant_id: string | null; room_id: string | null }
   const billJoin = payment?.bills as unknown as PaymentBillJoin | null
@@ -236,6 +240,7 @@ export async function deletePayment(paymentId: string, billId: string): Promise<
   revalidatePath('/bills/payments')
   revalidatePath('/bills/history')
   revalidatePath('/portal')
+  return { success: true, message: 'ลบการชำระเงินแล้ว' }
 }
 
 

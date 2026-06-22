@@ -14,7 +14,7 @@ const PromptPayQR = dynamic(
   () => import('@/app/(dashboard)/bills/[id]/_components/promptpay-qr').then((m) => m.PromptPayQR),
   { ssr: false }
 )
-import { getTenantPortalDashboard, getPortalRepairs, getPortalRooms, type TenantPortalData, type PortalRepairItem, type PortalRoom } from '@/app/actions/portal'
+import { getTenantPortalDashboard, getPortalRepairs, getPortalRooms, createPortalSession, type TenantPortalData, type PortalRepairItem, type PortalRoom } from '@/app/actions/portal'
 import { roomRow } from '@/lib/room-utils'
 import { Badge } from '@/components/ui/badge'
 import { RepairSubmit } from './repair-submit'
@@ -36,7 +36,7 @@ const statusLabel: Record<string, string> = {
 
 export function TenantPortal({ liffId }: TenantPortalProps) {
   const [scriptReady, setScriptReady]       = useState(false)
-  const [lineUserId, setLineUserId]         = useState('')
+  const [portalToken, setPortalToken]       = useState('')
   const [status, setStatus]                 = useState(liffId ? 'กำลังเชื่อมต่อ LINE' : 'กำลังเตรียมข้อมูลห้อง')
   const [data, setData]                     = useState<TenantPortalData | null>(null)
   const [error, setError]                   = useState('')
@@ -47,25 +47,23 @@ export function TenantPortal({ liffId }: TenantPortalProps) {
   const [selectedRoomId, setSelectedRoomId] = useState<string | undefined>(undefined)
   const [, startTransition]                 = useTransition()
 
-  const loadDashboard = useCallback((userId = lineUserId, roomId?: string) => {
-    const trimmed = userId.trim()
-    if (!trimmed) return
+  const loadDashboard = useCallback((token = portalToken, roomId?: string) => {
+    if (!token) return
     setError('')
     startTransition(async () => {
-      const result = await getTenantPortalDashboard(trimmed, roomId)
+      const result = await getTenantPortalDashboard(token, roomId)
       if (!result.success) { setData(null); setError(result.message); return }
       setData(result.data)
     })
-  }, [lineUserId])
+  }, [portalToken])
 
-  const loadRepairs = useCallback(async (userId = lineUserId) => {
-    const trimmed = userId.trim()
-    if (!trimmed) return
+  const loadRepairs = useCallback(async (token = portalToken) => {
+    if (!token) return
     setRepairsLoading(true)
-    const result = await getPortalRepairs(trimmed)
+    const result = await getPortalRepairs(token)
     setRepairsLoading(false)
     if (result.success) setRepairs(result.repairs ?? [])
-  }, [lineUserId])
+  }, [portalToken])
 
   useEffect(() => {
     if (!liffId || !scriptReady) return
@@ -77,16 +75,26 @@ export function TenantPortal({ liffId }: TenantPortalProps) {
         await liff.init({ liffId: liffId! })
         if (cancelled) return
         if (!liff.isLoggedIn()) { setStatus('กำลังเข้าสู่ระบบ LINE'); liff.login({ redirectUri: window.location.href }); return }
-        const profile = await liff.getProfile()
+
+        // Verify LINE identity server-side — get ID Token from LIFF
+        const idToken = liff.getIDToken()
+        if (!idToken) { setStatus('ไม่สามารถดึง LINE ID Token ได้ กรุณาลองใหม่'); return }
+
+        setStatus('กำลังยืนยันตัวตน...')
+        const sessionResult = await createPortalSession(idToken)
         if (cancelled) return
-        setLineUserId(profile.userId)
+        if ('error' in sessionResult) { setStatus(sessionResult.error); return }
+
+        const token = sessionResult.token
+        setPortalToken(token)
         setStatus('เชื่อมต่อ LINE แล้ว')
-        // Load rooms first to check if multiple
-        const { rooms: activeRooms } = await getPortalRooms(profile.userId)
+
+        const { rooms: activeRooms } = await getPortalRooms(token)
+        if (cancelled) return
         setRooms(activeRooms)
         const firstRoomId = activeRooms[0]?.room_id
         setSelectedRoomId(firstRoomId)
-        loadDashboard(profile.userId, firstRoomId)
+        loadDashboard(token, firstRoomId)
       } catch (err) {
         console.error(err)
         if (!cancelled) setStatus('ยังดึงข้อมูลจาก LINE ไม่ได้')
@@ -98,12 +106,12 @@ export function TenantPortal({ liffId }: TenantPortalProps) {
 
   // Load repairs when switching to repair tab
   useEffect(() => {
-    if (tab === 'repairs' && repairs === null && lineUserId) {
+    if (tab === 'repairs' && repairs === null && portalToken) {
       setTimeout(() => {
-        void loadRepairs(lineUserId)
+        void loadRepairs(portalToken)
       }, 0)
     }
-  }, [tab, repairs, lineUserId, loadRepairs])
+  }, [tab, repairs, portalToken, loadRepairs])
 
   const currentBill    = data?.bills[0] ?? null
   const monthlyRent    = data?.contract?.monthly_rent ?? 0
@@ -161,7 +169,7 @@ export function TenantPortal({ liffId }: TenantPortalProps) {
                     onClick={() => {
                       setSelectedRoomId(r.room_id)
                       setRepairs(null)
-                      loadDashboard(lineUserId, r.room_id)
+                      loadDashboard(portalToken, r.room_id)
                     }}
                     className={`shrink-0 rounded-xl border px-4 py-2 text-sm font-semibold transition-colors ${
                       selectedRoomId === r.room_id
@@ -218,7 +226,7 @@ export function TenantPortal({ liffId }: TenantPortalProps) {
                     <Wrench className="size-4 text-slate-400" />
                     <h2 className="text-sm font-semibold text-slate-800">แจ้งซ่อม / แจ้งปัญหา</h2>
                   </div>
-                  <RepairSubmit lineUserId={lineUserId} roomId={selectedRoomId} onSuccess={() => loadRepairs(lineUserId)} />
+                  <RepairSubmit portalToken={portalToken} roomId={selectedRoomId} onSuccess={() => loadRepairs(portalToken)} />
                 </section>
 
                 <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">

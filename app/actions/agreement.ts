@@ -4,6 +4,7 @@ import { createServiceClient } from '@/lib/supabase/service'
 import { DEFAULT_DORM_ID } from '@/lib/line-integration'
 import { decryptSecret } from '@/lib/crypto-secrets'
 import { getAuthedUser } from '@/lib/require-admin'
+import { verifyPortalToken } from '@/lib/portal-session'
 
 export type AgreementData = {
   tenant: {
@@ -35,11 +36,11 @@ export type AgreementData = {
 }
 
 export async function getSignAgreementData(
-  lineUserId: string,
+  portalToken: string,
   contractId: string
 ): Promise<{ success: true; data: AgreementData } | { success: false; message: string }> {
-  const trimmed = lineUserId.trim()
-  if (!trimmed || !contractId) return { success: false, message: 'ข้อมูลไม่ครบ' }
+  const trimmed = verifyPortalToken(portalToken)
+  if (!trimmed || !contractId) return { success: false, message: 'ไม่พบข้อมูลการยืนยันตัวตน กรุณาโหลดหน้าใหม่' }
 
   const supabase = createServiceClient()
 
@@ -114,13 +115,14 @@ export async function getSignAgreementData(
 export async function submitSignedAgreement(
   formData: FormData
 ): Promise<{ success: boolean; message: string; pdfUrl?: string }> {
-  const lineUserId = String(formData.get('lineUserId') ?? '').trim()
-  const contractId = String(formData.get('contractId') ?? '').trim()
-  const idCard     = String(formData.get('id_card') ?? '').trim() || null
-  const address    = String(formData.get('address') ?? '').trim() || null
-  const pdfFile    = formData.get('pdf') as File | null
+  const portalToken = String(formData.get('portalToken') ?? '').trim()
+  const lineUserId  = verifyPortalToken(portalToken)
+  const contractId  = String(formData.get('contractId') ?? '').trim()
+  const idCard      = String(formData.get('id_card') ?? '').trim() || null
+  const address     = String(formData.get('address') ?? '').trim() || null
+  const pdfFile     = formData.get('pdf') as File | null
 
-  if (!lineUserId || !contractId) return { success: false, message: 'ข้อมูลไม่ครบ' }
+  if (!lineUserId || !contractId) return { success: false, message: 'ไม่พบข้อมูลการยืนยันตัวตน กรุณาโหลดหน้าใหม่' }
   if (!pdfFile || pdfFile.size === 0) return { success: false, message: 'ไม่พบไฟล์ PDF' }
 
   const supabase = createServiceClient()
