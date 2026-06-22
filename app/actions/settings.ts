@@ -186,6 +186,107 @@ export async function changePasswordAndSignOutAll(
   return { success: true, message: 'เปลี่ยนรหัสผ่านและออกจากระบบทุกเครื่องแล้ว' }
 }
 
+// ─── General settings (utilities / billing / reminders / SlipOK) ────
+const GeneralSettingsSchema = SettingsSchema.omit({
+  owner_name: true,
+  owner_id_card: true,
+  owner_address: true,
+})
+
+export async function updateGeneralSettings(
+  state: SettingsFormState,
+  formData: FormData
+): Promise<SettingsFormState> {
+  if (!(await getAuthedUser())) return { message: 'ไม่มีสิทธิ์ใช้งาน' }
+
+  const raw = {
+    water_unit_price:       formData.get('water_unit_price'),
+    electricity_unit_price: formData.get('electricity_unit_price'),
+    late_fee_per_day:       formData.get('late_fee_per_day'),
+    billing_day:            formData.get('billing_day'),
+    due_day:                formData.get('due_day'),
+    trash_fee:              formData.get('trash_fee'),
+    reminder_days:          formData.get('reminder_days'),
+    reminder_enabled:       formData.get('reminder_enabled') === 'on',
+    anomaly_threshold_pct:  formData.get('anomaly_threshold_pct'),
+    slipok_branch_id:       formData.get('slipok_branch_id'),
+  }
+  const slipokApiKey = String(formData.get('slipok_api_key') ?? '').trim()
+
+  const parsed = GeneralSettingsSchema.safeParse(raw)
+  if (!parsed.success) return { errors: parsed.error.flatten().fieldErrors }
+
+  const supabase = await createClient()
+  const settingsUpdate: Record<string, unknown> = { ...parsed.data }
+  if (slipokApiKey) settingsUpdate.slipok_api_key = await encryptSecret(slipokApiKey)
+
+  const { error } = await supabase.from('settings').update(settingsUpdate).eq('id', 1)
+  if (error) return { message: `เกิดข้อผิดพลาด: ${error.message}` }
+
+  revalidatePath('/settings/general')
+  return { success: true, message: 'บันทึกการตั้งค่าเรียบร้อยแล้ว' }
+}
+
+// ─── LINE integration + owner info ──────────────────────────
+export async function updateLineAndOwnerSettings(
+  state: SettingsFormState,
+  formData: FormData
+): Promise<SettingsFormState> {
+  if (!(await getAuthedUser())) return { message: 'ไม่มีสิทธิ์ใช้งาน' }
+
+  const lineRaw = {
+    line_channel_access_token: formData.get('line_channel_access_token'),
+    line_channel_secret:       formData.get('line_channel_secret'),
+    line_oa_basic_id:          formData.get('line_oa_basic_id'),
+    line_liff_id:              formData.get('line_liff_id'),
+    line_liff_id_pairing:      formData.get('line_liff_id_pairing'),
+    app_url:                   formData.get('app_url'),
+    owner_line_user_id:        formData.get('owner_line_user_id'),
+  }
+
+  const parsedLine = LineIntegrationSchema.safeParse(lineRaw)
+  if (!parsedLine.success) return { errors: parsedLine.error.flatten().fieldErrors }
+
+  const ownerName    = String(formData.get('owner_name') ?? '').trim()
+  const ownerIdCard  = String(formData.get('owner_id_card') ?? '').trim()
+  const ownerAddress = String(formData.get('owner_address') ?? '').trim()
+
+  const supabase = await createClient()
+
+  const { error: ownerError } = await supabase
+    .from('settings')
+    .update({ owner_name: ownerName, owner_id_card: ownerIdCard, owner_address: ownerAddress })
+    .eq('id', 1)
+  if (ownerError) return { message: `เกิดข้อผิดพลาด: ${ownerError.message}` }
+
+  const lineData = parsedLine.data
+  const lineUpdate: Record<string, string | null> = {
+    dorm_id:              DEFAULT_DORM_ID,
+    line_oa_basic_id:     lineData.line_oa_basic_id || null,
+    line_liff_id:         lineData.line_liff_id || null,
+    line_liff_id_pairing: lineData.line_liff_id_pairing || null,
+    app_url:              lineData.app_url || null,
+    owner_line_user_id:   lineData.owner_line_user_id || null,
+  }
+  if (lineData.line_channel_access_token) {
+    lineUpdate.encrypted_channel_access_token = await encryptSecret(lineData.line_channel_access_token)
+    lineUpdate.token_last4    = secretLast4(lineData.line_channel_access_token)
+    lineUpdate.connected_at   = new Date().toISOString()
+  }
+  if (lineData.line_channel_secret) {
+    lineUpdate.encrypted_channel_secret  = await encryptSecret(lineData.line_channel_secret)
+    lineUpdate.channel_secret_last4      = secretLast4(lineData.line_channel_secret)
+  }
+
+  const { error: lineError } = await supabase
+    .from('line_integrations')
+    .upsert(lineUpdate, { onConflict: 'dorm_id' })
+  if (lineError) return { message: `เกิดข้อผิดพลาด: ${lineError.message}` }
+
+  revalidatePath('/settings/line')
+  return { success: true, message: 'บันทึกการตั้งค่า LINE และข้อมูลผู้ให้เช่าเรียบร้อยแล้ว' }
+}
+
 // ─── Shift current billing month ────────────────────────────
 export async function shiftBillingMonth(
   direction: 'prev' | 'next'
