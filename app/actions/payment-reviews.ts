@@ -521,7 +521,7 @@ export async function rejectSlip(
 }
 
 export async function getPendingSlipCount(): Promise<number> {
-  const supabase = createServiceClient()
+  const supabase = await createClient()
   const { count } = await supabase
     .from('pending_slips')
     .select('id', { count: 'exact', head: true })

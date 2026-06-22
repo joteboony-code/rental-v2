@@ -401,6 +401,7 @@ export async function sendLineBillNotification(
 ): Promise<{ success: boolean; message: string }> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { success: false, message: 'ไม่มีสิทธิ์ใช้งาน' }
 
   // Re-fetch the latest bill state before every send; stale bill pages can stay open for days.
   const { data: bill } = await supabase
@@ -862,6 +863,7 @@ export async function sendBulkLineBillNotification(
 ): Promise<{ success: boolean; sent: number; failed: number; message: string }> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { success: false, sent: 0, failed: 0, message: 'ไม่มีสิทธิ์ใช้งาน' }
 
   // Get all pending/overdue bills for this month with tenant LINE IDs
   const { data: bills } = await supabase
@@ -1053,6 +1055,8 @@ export async function sendCheckoutLineNotification(
   data: CheckoutLineData,
   mode: 'text' | 'flex'
 ): Promise<{ success: boolean; message: string }> {
+  if (!(await getAuthedUser())) return { success: false, message: 'ไม่มีสิทธิ์ใช้งาน' }
+
   const supabase = await createClient()
 
   // Get tenant's LINE user ID

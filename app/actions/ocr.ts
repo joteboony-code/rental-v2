@@ -92,6 +92,18 @@ export async function readMeterOCR(formData: FormData): Promise<MeterOcrResult> 
     return { value: null, rawText: '', error: 'ไม่พบรูปภาพ' }
   }
 
+  const ALLOWED_OCR_TYPES: Record<string, true> = {
+    'image/jpeg': true, 'image/png': true, 'image/webp': true,
+  }
+  if (!ALLOWED_OCR_TYPES[file.type]) {
+    return { value: null, rawText: '', error: 'รองรับเฉพาะ JPEG, PNG, WebP เท่านั้น' }
+  }
+
+  const MAX_OCR_SIZE = 10 * 1024 * 1024
+  if (file.size > MAX_OCR_SIZE) {
+    return { value: null, rawText: '', error: 'ไฟล์ใหญ่เกิน 10 MB' }
+  }
+
   try {
     const accessToken = await getGoogleAccessToken(saJson)
 
