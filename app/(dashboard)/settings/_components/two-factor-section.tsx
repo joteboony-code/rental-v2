@@ -35,6 +35,12 @@ export function TwoFactorSection() {
 
   async function startEnroll() {
     setBusy(true); setError(null)
+
+    // Remove any leftover unverified factor from a previous incomplete enrollment
+    const { data: existing } = await supabase.auth.mfa.listFactors()
+    const pending = existing?.totp?.find((f) => f.factor_type === 'totp' && (f.status as string) === 'unverified')
+    if (pending) await supabase.auth.mfa.unenroll({ factorId: pending.id })
+
     const { data, error: err } = await supabase.auth.mfa.enroll({ factorType: 'totp' })
     setBusy(false)
     if (err || !data) {
