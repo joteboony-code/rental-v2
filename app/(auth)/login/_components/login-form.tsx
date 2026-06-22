@@ -8,53 +8,77 @@ import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Loader2, ShieldCheck } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
-import { login, verifyMfa } from '@/app/actions/auth'
+import { login, verifyMfa, finalizeLogin } from '@/app/actions/auth'
 
 export function LoginForm() {
   const [state, action, pending]          = useActionState(login, undefined)
   const [mfaState, mfaAction, mfaPending] = useActionState(verifyMfa, undefined)
-  const [challengeId, setChallengeId]     = useState<string | null>(null)
-  const [challengeErr, setChallengeErr]   = useState<string | null>(null)
+
+  // Set after browser confirms MFA is required
+  const [factorId, setFactorId]       = useState<string | null>(null)
+  const [challengeId, setChallengeId] = useState<string | null>(null)
+  const [mfaErr, setMfaErr]           = useState<string | null>(null)
+  const [checking, setChecking]       = useState(false)
 
   const supabase = useMemo(() => createClient(), [])
 
-  // When login returns mfaRequired, create a challenge using the browser Supabase client.
-  // The browser client reads session cookies set by the server action's signInWithPassword,
-  // which the server client cannot see (same-request cookie write/read timing issue).
   useEffect(() => {
-    if (!(state && 'mfaRequired' in state && state.mfaRequired)) return
-    setChallengeId(null)
-    setChallengeErr(null)
-    supabase.auth.mfa.challenge({ factorId: state.factorId }).then(({ data, error }) => {
-      if (error || !data) {
-        setChallengeErr('ไม่สามารถสร้าง OTP challenge: ' + (error?.message ?? 'ไม่ทราบสาเหตุ'))
-        return
+    if (!(state && 'passwordOk' in state)) return
+
+    // Password is verified — session cookies are now set in the browser.
+    // Use browser Supabase client to check if MFA upgrade is needed
+    // (server client cannot see the newly-set session in the same request).
+    setChecking(true)
+    setMfaErr(null)
+
+    ;(async () => {
+      try {
+        const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+
+        if (aal?.nextLevel === 'aal2' && aal?.currentLevel !== 'aal2') {
+          const { data: factors } = await supabase.auth.mfa.listFactors()
+          const totp = factors?.totp?.[0]
+
+          if (!totp) {
+            // Has AAL2 requirement but no factor found — just proceed
+            await finalizeLogin()
+            return
+          }
+
+          const { data: challenge, error: challengeErr } = await supabase.auth.mfa.challenge({ factorId: totp.id })
+          if (challengeErr || !challenge) {
+            setMfaErr('ไม่สามารถสร้าง OTP challenge: ' + (challengeErr?.message ?? 'ไม่ทราบสาเหตุ'))
+            setChecking(false)
+            return
+          }
+
+          setFactorId(totp.id)
+          setChallengeId(challenge.id)
+        } else {
+          await finalizeLogin()
+        }
+      } catch {
+        setMfaErr('เกิดข้อผิดพลาดในการตรวจสอบ 2FA')
+      } finally {
+        setChecking(false)
       }
-      setChallengeId(data.id)
-    })
+    })()
   }, [state, supabase])
 
-  // Step 2: OTP verification
-  if (state && 'mfaRequired' in state && state.mfaRequired) {
-    if (challengeErr) {
-      return (
-        <Alert variant="destructive">
-          <AlertDescription>{challengeErr}</AlertDescription>
-        </Alert>
-      )
-    }
+  // Loading while checking AAL
+  if (checking || (state && 'passwordOk' in state && !factorId && !mfaErr)) {
+    return (
+      <div className="flex justify-center py-8">
+        <Loader2 className="size-5 animate-spin text-slate-400" />
+      </div>
+    )
+  }
 
-    if (!challengeId) {
-      return (
-        <div className="flex justify-center py-6">
-          <Loader2 className="size-5 animate-spin text-slate-400" />
-        </div>
-      )
-    }
-
+  // Step 2: OTP form
+  if (factorId && challengeId) {
     return (
       <form action={mfaAction} className="space-y-4">
-        <input type="hidden" name="factor_id"    value={state.factorId} />
+        <input type="hidden" name="factor_id"    value={factorId} />
         <input type="hidden" name="challenge_id" value={challengeId} />
 
         <div className="flex flex-col items-center gap-2 pb-2">
@@ -70,23 +94,17 @@ export function LoginForm() {
         <div className="space-y-1.5">
           <Label htmlFor="code">รหัส OTP</Label>
           <Input
-            id="code"
-            name="code"
-            type="text"
-            inputMode="numeric"
-            pattern="[0-9]*"
-            maxLength={6}
-            placeholder="000000"
-            autoComplete="one-time-code"
+            id="code" name="code" type="text"
+            inputMode="numeric" pattern="[0-9]*" maxLength={6}
+            placeholder="000000" autoComplete="one-time-code"
             className="text-center font-mono text-lg tracking-widest"
-            autoFocus
-            required
+            autoFocus required
           />
         </div>
 
-        {mfaState?.error && (
+        {(mfaErr || mfaState?.error) && (
           <Alert variant="destructive">
-            <AlertDescription>{mfaState.error}</AlertDescription>
+            <AlertDescription>{mfaErr ?? mfaState?.error}</AlertDescription>
           </Alert>
         )}
 
@@ -108,11 +126,18 @@ export function LoginForm() {
         <Label htmlFor="password">รหัสผ่าน</Label>
         <Input id="password" name="password" type="password" autoComplete="current-password" required />
       </div>
+
+      {mfaErr && (
+        <Alert variant="destructive">
+          <AlertDescription>{mfaErr}</AlertDescription>
+        </Alert>
+      )}
       {state && 'error' in state && state.error && (
         <Alert variant="destructive">
           <AlertDescription>{state.error}</AlertDescription>
         </Alert>
       )}
+
       <Button type="submit" className="w-full" disabled={pending}>
         {pending ? <Loader2 className="size-4 animate-spin" /> : 'เข้าสู่ระบบ'}
       </Button>

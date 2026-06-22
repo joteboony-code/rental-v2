@@ -7,7 +7,7 @@ import { decryptSecret } from '@/lib/crypto-secrets'
 
 export type LoginState =
   | { error: string }
-  | { mfaRequired: true; factorId: string }
+  | { passwordOk: true }
   | undefined
 
 async function sendLoginNotification() {
@@ -40,26 +40,15 @@ export async function login(_: unknown, formData: FormData): Promise<LoginState>
   const password = String(formData.get('password') ?? '')
 
   const supabase = await createClient()
-  const { data: authData, error } = await supabase.auth.signInWithPassword({ email, password })
+  const { error } = await supabase.auth.signInWithPassword({ email, password })
   if (error) return { error: 'อีเมลหรือรหัสผ่านไม่ถูกต้อง' }
 
-  // Use admin API to reliably check verified MFA factors —
-  // getAuthenticatorAssuranceLevel() reads request cookies which don't yet
-  // contain the new session written by signInWithPassword in this same request.
-  const userId = authData.user?.id
-  if (userId) {
-    const service = createServiceClient()
-    const { data: mfaData } = await service.auth.admin.mfa.listFactors({ userId })
-    const verifiedTotp = mfaData?.factors?.find(
-      (f) => f.factor_type === 'totp' && f.status === 'verified'
-    )
-    if (verifiedTotp) {
-      // Return factorId only — client creates the challenge using browser Supabase client
-      // which reads the session from response cookies (server can't do this in same request)
-      return { mfaRequired: true, factorId: verifiedTotp.id }
-    }
-  }
+  // Return passwordOk — browser client checks AAL and handles MFA or redirect.
+  // Server cannot reliably check AAL/challenge in same request (cookie timing issue).
+  return { passwordOk: true }
+}
 
+export async function finalizeLogin(): Promise<void> {
   sendLoginNotification().catch(() => {})
   redirect('/rooms')
 }
