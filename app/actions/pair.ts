@@ -34,24 +34,48 @@ export async function pairTenantLine(
   state: PairLineState,
   formData: FormData
 ): Promise<PairLineState> {
-  const roomNumber   = String(formData.get('room_number')    ?? '').trim()
-  const lineUserId   = String(formData.get('line_user_id')   ?? '').trim()
-  const displayName  = String(formData.get('line_display_name') ?? '').trim() || null
-  const pictureUrl   = String(formData.get('line_picture_url')  ?? '').trim() || null
+  const roomNumber  = String(formData.get('room_number') ?? '').trim()
+  const idToken     = String(formData.get('id_token')    ?? '').trim()
+  const displayName = String(formData.get('line_display_name') ?? '').trim() || null
+  const pictureUrl  = String(formData.get('line_picture_url')  ?? '').trim() || null
 
-  if (!roomNumber || !lineUserId) {
+  if (!roomNumber || !idToken) {
     return {
       success: false,
       message: 'กรุณาเปิดหน้านี้ผ่าน LINE เพื่อดึง LINE User ID อัตโนมัติ',
     }
   }
 
+  // Verify idToken กับ LINE API เพื่อป้องกัน client ส่ง line_user_id ปลอม
+  const loginChannelId = process.env.LINE_LOGIN_CHANNEL_ID
+  if (!loginChannelId) {
+    return { success: false, message: 'ระบบยังไม่ได้ตั้งค่า LINE Login Channel' }
+  }
+
+  const verifyRes = await fetch('https://api.line.me/oauth2/v2.1/verify', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ id_token: idToken, client_id: loginChannelId }),
+  })
+  if (!verifyRes.ok) {
+    return { success: false, message: 'ยืนยันตัวตน LINE ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง' }
+  }
+  const lineProfile = await verifyRes.json() as { sub?: string; name?: string; picture?: string }
+  const lineUserId = lineProfile.sub
+  if (!lineUserId) {
+    return { success: false, message: 'ไม่สามารถดึง LINE User ID ได้ กรุณาลองใหม่' }
+  }
+
+  // ใช้ชื่อ/รูปจาก LINE API (server-verified) แทนที่จะเชื่อ client
+  const verifiedName    = lineProfile.name    ?? displayName
+  const verifiedPicture = lineProfile.picture ?? pictureUrl
+
   const supabase = await createClient()
   const { data, error } = await supabase.rpc('pair_tenant_line', {
     p_room_number:   roomNumber,
     p_line_user_id:  lineUserId,
-    p_display_name:  displayName,
-    p_picture_url:   pictureUrl,
+    p_display_name:  verifiedName,
+    p_picture_url:   verifiedPicture,
   })
 
   if (error) {
