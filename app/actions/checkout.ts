@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { getAuthedUser } from '@/lib/require-admin'
 import { logAudit } from './audit'
 
 export async function saveCheckout(data: {
@@ -12,6 +13,7 @@ export async function saveCheckout(data: {
   note?:      string
   paidBills?: { id: string; amount: number }[]
 }): Promise<{ success: boolean; message: string }> {
+  if (!(await getAuthedUser())) return { success: false, message: 'กรุณายืนยันตัวตน 2 ชั้นก่อนทำรายการ' }
   const supabase = await createClient()
 
   // 1. Terminate contract

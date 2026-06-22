@@ -1,6 +1,7 @@
 'use server'
 
 import { getLineMessagingConfig } from '@/lib/line-integration'
+import { getAuthedUser } from '@/lib/require-admin'
 
 export interface LineQuota {
   type:      'limited' | 'unlimited'
@@ -10,6 +11,7 @@ export interface LineQuota {
 }
 
 export async function getLineQuota(): Promise<LineQuota | null> {
+  if (!(await getAuthedUser())) return null
   const config = await getLineMessagingConfig()
   if (!config) return null
   const token = config.channelAccessToken

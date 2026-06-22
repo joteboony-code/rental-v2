@@ -1,10 +1,12 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { getAuthedUser } from '@/lib/require-admin'
 
 export async function uploadBroadcastImage(
   formData: FormData
 ): Promise<{ success: boolean; url?: string; message: string }> {
+  if (!(await getAuthedUser())) return { success: false, message: 'กรุณายืนยันตัวตน 2 ชั้นก่อนอัปโหลด' }
   const file = formData.get('file') as File | null
   if (!file || file.size === 0) return { success: false, message: 'ไม่พบไฟล์' }
   if (file.size > 5 * 1024 * 1024) return { success: false, message: 'ไฟล์ใหญ่เกิน 5MB' }

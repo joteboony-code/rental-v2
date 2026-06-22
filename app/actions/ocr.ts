@@ -1,5 +1,7 @@
 'use server'
 
+import { getAuthedUser } from '@/lib/require-admin'
+
 export interface MeterOcrResult {
   value: number | null
   rawText: string
@@ -82,6 +84,10 @@ function extractMeterValue(text: string): number | null {
 }
 
 export async function readMeterOCR(formData: FormData): Promise<MeterOcrResult> {
+  if (!(await getAuthedUser())) {
+    return { value: null, rawText: '', error: 'กรุณายืนยันตัวตน 2 ชั้นก่อนใช้งาน OCR' }
+  }
+
   const saJson = process.env.GOOGLE_CLOUD_SERVICE_ACCOUNT_JSON
   if (!saJson) {
     return { value: null, rawText: '', error: 'ยังไม่ได้ตั้งค่า GOOGLE_CLOUD_SERVICE_ACCOUNT_JSON' }

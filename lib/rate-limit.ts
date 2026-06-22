@@ -19,26 +19,12 @@ export async function isRateLimited(
   windowSec: number
 ): Promise<boolean> {
   const supabase = createServiceClient()
-  const windowStart = new Date(Date.now() - windowSec * 1000).toISOString()
+  const { data, error } = await supabase.rpc('consume_rate_limit', {
+    p_key: key,
+    p_limit: limit,
+    p_window_seconds: windowSec,
+  })
 
-  const { data: existing } = await supabase
-    .from('rate_limits')
-    .select('count, window_start')
-    .eq('key', key)
-    .maybeSingle()
-
-  if (!existing || existing.window_start < windowStart) {
-    await supabase
-      .from('rate_limits')
-      .upsert({ key, count: 1, window_start: new Date().toISOString() }, { onConflict: 'key' })
-    return false
-  }
-
-  if (existing.count >= limit) return true
-
-  await supabase
-    .from('rate_limits')
-    .update({ count: existing.count + 1 })
-    .eq('key', key)
-  return false
+  // Fail closed for authentication-sensitive callers if the rate-limit store is unavailable.
+  return error ? true : Boolean(data)
 }

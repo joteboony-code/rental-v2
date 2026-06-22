@@ -2,6 +2,7 @@
 
 import { createServiceClient } from '@/lib/supabase/service'
 import { createClient } from '@/lib/supabase/server'
+import { getAuthedUser } from '@/lib/require-admin'
 import { getLineMessagingConfig } from '@/lib/line-integration'
 import { revalidatePath } from 'next/cache'
 import { isRateLimited, getClientIp } from '@/lib/rate-limit'
@@ -314,8 +315,7 @@ export async function approveRegistration(
   requestId: string,
   adminNote?: string,
 ): Promise<{ success: boolean; message: string }> {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getAuthedUser()
   if (!user) return { success: false, message: 'ไม่มีสิทธิ์ใช้งาน' }
 
   const serviceSupabase = createServiceClient()
@@ -389,7 +389,7 @@ export async function rejectRegistration(
   requestId: string,
   adminNote?: string,
 ): Promise<{ success: boolean; message: string }> {
-  const { data: { user } } = await (await createClient()).auth.getUser()
+  const user = await getAuthedUser()
   if (!user) return { success: false, message: 'ไม่มีสิทธิ์ใช้งาน' }
 
   const serviceSupabase = createServiceClient()
@@ -423,6 +423,7 @@ export async function rejectRegistration(
 export async function regenerateRegistrationToken(
   roomId: string,
 ): Promise<{ success: boolean; token?: string; message?: string }> {
+  if (!(await getAuthedUser())) return { success: false, message: 'ไม่มีสิทธิ์ใช้งาน' }
   const supabase = await createClient()
   const newToken = crypto.randomUUID()
   const { error } = await supabase.from('rooms').update({ registration_token: newToken }).eq('id', roomId)

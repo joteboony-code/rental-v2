@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { getAuthedUser } from '@/lib/require-admin'
 
 export type SearchResult = {
   tenants: { id: string; full_name: string; phone: string | null; line_user_id: string | null }[]
@@ -15,6 +16,7 @@ const empty: SearchResult = { tenants: [], rooms: [], bills: [], payments: [], s
 
 export async function searchAction(query: string): Promise<SearchResult> {
   if (!query || query.trim().length < 1) return empty
+  if (!(await getAuthedUser())) return empty
 
   const q = query.trim()
   const like = `%${q}%`

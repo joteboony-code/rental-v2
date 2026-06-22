@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { createClient } from '@/lib/supabase/client'
-import { cleanupStaleMfaFactors } from '@/app/actions/auth'
+import { cleanupStaleMfaFactors, logMfaSecurityEvent } from '@/app/actions/auth'
 
 type Status = 'loading' | 'enabled' | 'disabled'
 
@@ -28,7 +28,7 @@ export function TwoFactorSection() {
   useEffect(() => {
     supabase.auth.mfa.listFactors().then(({ data, error: err }) => {
       if (err) { setStatus('disabled'); return }
-      const totp = data?.totp?.[0]
+      const totp = data?.totp?.find((factor) => factor.status === 'verified')
       if (totp) { setStatus('enabled'); setFactorId(totp.id) }
       else setStatus('disabled')
     })
@@ -60,6 +60,7 @@ export function TwoFactorSection() {
     const { error: err } = await supabase.auth.mfa.challengeAndVerify({ factorId: enrollId, code })
     setBusy(false)
     if (err) { setError('รหัสไม่ถูกต้อง ลองอีกครั้ง'); return }
+    await logMfaSecurityEvent('mfa_enabled')
     setStatus('enabled'); setFactorId(enrollId); setStep('idle'); setQrSvg(null); setTotpSecret(null); setCode('')
   }
 
@@ -69,6 +70,7 @@ export function TwoFactorSection() {
     const { error: err } = await supabase.auth.mfa.unenroll({ factorId })
     setBusy(false)
     if (err) { setError('เกิดข้อผิดพลาด: ' + err?.message); return }
+    await logMfaSecurityEvent('mfa_disabled')
     setStatus('disabled'); setFactorId(null); setStep('idle'); setCode('')
   }
 
