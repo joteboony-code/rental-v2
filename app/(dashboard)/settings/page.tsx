@@ -5,6 +5,7 @@ import { SettingsForm } from './_components/settings-form'
 import { Settings, MessageSquareText, ChevronRight, PenLine } from 'lucide-react'
 import { getLineIntegrationPublic } from '@/lib/line-integration'
 import { OwnerSignatureUpload } from './_components/owner-signature-upload'
+import { ChangePasswordSection } from './_components/change-password-section'
 
 export default async function SettingsPage() {
   const supabase = await createClient()
@@ -68,6 +69,8 @@ export default async function SettingsPage() {
         lineIntegration={lineIntegration ?? undefined}
         hasSlipokKey={hasSlipokKey}
       />
+
+      <ChangePasswordSection />
     </div>
   )
 }

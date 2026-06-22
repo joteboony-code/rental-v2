@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/service'
 import {
   LineIntegrationSchema,
   SettingsSchema,
@@ -127,6 +128,30 @@ export async function updateSettings(
 
   revalidatePath('/settings')
   return { success: true, message: 'บันทึกการตั้งค่าเรียบร้อยแล้ว' }
+}
+
+// ─── Change password + sign out all devices ─────────────────
+export async function changePasswordAndSignOutAll(
+  _: unknown,
+  formData: FormData
+): Promise<{ success?: boolean; message: string }> {
+  const newPassword = String(formData.get('new_password') ?? '').trim()
+  const confirm    = String(formData.get('confirm_password') ?? '').trim()
+
+  if (newPassword.length < 8) return { message: 'รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร' }
+  if (newPassword !== confirm)  return { message: 'รหัสผ่านใหม่ทั้งสองช่องไม่ตรงกัน' }
+
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { message: 'ไม่มีสิทธิ์ใช้งาน' }
+
+  const { error } = await supabase.auth.updateUser({ password: newPassword })
+  if (error) return { message: `เกิดข้อผิดพลาด: ${error.message}` }
+
+  // Revoke ALL sessions (including current device) — safe after password already changed
+  await createServiceClient().auth.admin.signOut(user.id, 'global')
+
+  return { success: true, message: 'เปลี่ยนรหัสผ่านและออกจากระบบทุกเครื่องแล้ว' }
 }
 
 // ─── Shift current billing month ────────────────────────────
