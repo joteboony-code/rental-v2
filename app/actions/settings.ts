@@ -1,6 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import {
@@ -12,6 +13,14 @@ import { DEFAULT_DORM_ID } from '@/lib/line-integration'
 import { encryptSecret, secretLast4 } from '@/lib/crypto-secrets'
 import { getAuthedUser } from '@/lib/require-admin'
 import { logAudit } from './audit'
+
+function createPasswordVerificationClient() {
+  return createSupabaseClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false } }
+  )
+}
 
 export async function updateSettings(
   state: SettingsFormState,
@@ -122,7 +131,7 @@ export async function updatePaymentSettings(
   const { data: { user } } = await supabase.auth.getUser()
   if (!user?.email) return { message: 'ไม่มีสิทธิ์ใช้งาน' }
 
-  const { error: verifyError } = await supabase.auth.signInWithPassword({
+  const { error: verifyError } = await createPasswordVerificationClient().auth.signInWithPassword({
     email: user.email, password: currentPassword,
   })
   if (verifyError) return { message: 'รหัสผ่านไม่ถูกต้อง' }
@@ -171,7 +180,8 @@ export async function changePasswordAndSignOutAll(
   if (!user?.email) return { message: 'ไม่มีสิทธิ์ใช้งาน' }
 
   // Verify current password before allowing any change
-  const { error: verifyError } = await supabase.auth.signInWithPassword({
+  // Verify the old password without replacing the current AAL2 session cookies.
+  const { error: verifyError } = await createPasswordVerificationClient().auth.signInWithPassword({
     email:    user.email,
     password: currentPassword,
   })
