@@ -7,7 +7,7 @@ import { decryptSecret } from '@/lib/crypto-secrets'
 
 export type LoginState =
   | { error: string }
-  | { mfaRequired: true; factorId: string; challengeId: string }
+  | { mfaRequired: true; factorId: string }
   | undefined
 
 async function sendLoginNotification() {
@@ -54,10 +54,9 @@ export async function login(_: unknown, formData: FormData): Promise<LoginState>
       (f) => f.factor_type === 'totp' && f.status === 'verified'
     )
     if (verifiedTotp) {
-      const { data: challenge } = await supabase.auth.mfa.challenge({ factorId: verifiedTotp.id })
-      if (challenge) {
-        return { mfaRequired: true, factorId: verifiedTotp.id, challengeId: challenge.id }
-      }
+      // Return factorId only — client creates the challenge using browser Supabase client
+      // which reads the session from response cookies (server can't do this in same request)
+      return { mfaRequired: true, factorId: verifiedTotp.id }
     }
   }
 
