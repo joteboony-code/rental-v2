@@ -297,6 +297,9 @@ export async function approveRegistration(
   adminNote?: string,
 ): Promise<{ success: boolean; message: string }> {
   const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { success: false, message: 'ไม่มีสิทธิ์ใช้งาน' }
+
   const serviceSupabase = createServiceClient()
 
   const { data: req } = await serviceSupabase
@@ -329,8 +332,6 @@ export async function approveRegistration(
     skipContract = true
     matchedTenantId = activeContract.tenant_id
   }
-
-  const { data: { user } } = await supabase.auth.getUser()
 
   const { tenantId, error: err } = await doApprove({
     requestId: req.id, roomId: req.room_id,
@@ -370,6 +371,9 @@ export async function rejectRegistration(
   requestId: string,
   adminNote?: string,
 ): Promise<{ success: boolean; message: string }> {
+  const { data: { user } } = await (await createClient()).auth.getUser()
+  if (!user) return { success: false, message: 'ไม่มีสิทธิ์ใช้งาน' }
+
   const serviceSupabase = createServiceClient()
 
   const { data: req } = await serviceSupabase

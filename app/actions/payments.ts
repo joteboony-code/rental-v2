@@ -5,6 +5,16 @@ import { createClient } from '@/lib/supabase/server'
 import { sendPaymentReceiptNotification } from './line'
 import { logAudit } from './audit'
 
+const MAX_SLIP_SIZE = 10 * 1024 * 1024
+const ALLOWED_SLIP_TYPES: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+  'application/pdf': 'pdf',
+}
+const VALID_PAYMENT_METHODS = ['cash', 'transfer', 'promptpay'] as const
+type PaymentMethod = typeof VALID_PAYMENT_METHODS[number]
+
 export async function recordPayment(
   billId: string,
   formData: FormData
@@ -12,7 +22,10 @@ export async function recordPayment(
   const supabase = await createClient()
 
   const amount = Number(formData.get('amount'))
-  const payment_method = (formData.get('payment_method') as string) || 'cash'
+  const rawMethod = (formData.get('payment_method') as string) || 'transfer'
+  const payment_method: PaymentMethod = (VALID_PAYMENT_METHODS as readonly string[]).includes(rawMethod)
+    ? (rawMethod as PaymentMethod)
+    : 'transfer'
   const note = (formData.get('note') as string) || null
   const paid_at = (formData.get('paid_at') as string) || new Date().toISOString()
 
@@ -44,8 +57,14 @@ export async function recordPayment(
   const slipFile = formData.get('slip') as File | null
 
   if (slipFile && slipFile.size > 0) {
+    if (slipFile.size > MAX_SLIP_SIZE) {
+      return { success: false, message: 'ไฟล์สลิปต้องไม่เกิน 10 MB' }
+    }
+    const ext = ALLOWED_SLIP_TYPES[slipFile.type]
+    if (!ext) {
+      return { success: false, message: 'รองรับเฉพาะไฟล์ JPEG, PNG, WebP, PDF' }
+    }
     const buffer = await slipFile.arrayBuffer()
-    const ext = slipFile.name.split('.').pop() ?? 'jpg'
     const path = `${billId}/${Date.now()}.${ext}`
 
     const { data: upload, error: uploadError } = await supabase.storage
@@ -148,6 +167,8 @@ export async function recordPayment(
 
 export async function deletePayment(paymentId: string, billId: string): Promise<void> {
   const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return
 
   const { data: payment } = await supabase
     .from('payments')
