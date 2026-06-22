@@ -13,5 +13,10 @@ import { createClient } from '@/lib/supabase/server'
 export async function getAuthedUser() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
+
+  const { data: assurance } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+  if (assurance?.nextLevel === 'aal2' && assurance.currentLevel !== 'aal2') return null
+
   return user
 }

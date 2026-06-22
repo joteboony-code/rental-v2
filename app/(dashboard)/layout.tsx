@@ -13,6 +13,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
+  const { data: assurance } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+  if (assurance?.nextLevel === 'aal2' && assurance.currentLevel !== 'aal2') {
+    redirect('/mfa')
+  }
+
   const displayName = user.email ?? 'เจ้าของ'
   const initials = displayName.slice(0, 2).toUpperCase()
   const [
