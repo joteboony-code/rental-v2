@@ -12,6 +12,7 @@ import {
 import { DEFAULT_DORM_ID } from '@/lib/line-integration'
 import { encryptSecret, secretLast4 } from '@/lib/crypto-secrets'
 import { getAuthedUser } from '@/lib/require-admin'
+import { isRateLimited } from '@/lib/rate-limit'
 import { logAudit } from './audit'
 
 function createPasswordVerificationClient() {
@@ -135,6 +136,21 @@ export async function updatePaymentSettings(
     email: user.email, password: currentPassword,
   })
   if (verifyError) return { message: 'รหัสผ่านไม่ถูกต้อง' }
+
+  // Step-up auth: if 2FA is enabled, require a FRESH OTP from the authenticator
+  // (same as login) — proves possession of the device right now, so a hijacked
+  // session alone can't change the bank account / PromptPay.
+  const { data: factors } = await supabase.auth.mfa.listFactors()
+  const totp = factors?.totp?.find((f) => f.status === 'verified')
+  if (totp) {
+    const otpCode = String(formData.get('otp_code') ?? '').replace(/\s/g, '')
+    if (!/^\d{6}$/.test(otpCode)) return { message: 'กรุณากรอกรหัส OTP 6 หลักจากแอป Authenticator' }
+    if (await isRateLimited(`mfa:payment:${user.id}`, 5, 5 * 60)) {
+      return { message: 'ลองรหัส OTP ผิดหลายครั้ง กรุณารอ 5 นาที' }
+    }
+    const { error: otpError } = await supabase.auth.mfa.challengeAndVerify({ factorId: totp.id, code: otpCode })
+    if (otpError) return { message: 'รหัส OTP ไม่ถูกต้องหรือหมดอายุ' }
+  }
 
   const { data: before } = await supabase
     .from('settings').select('promptpay_id, bank_accounts_text').eq('id', 1).single()

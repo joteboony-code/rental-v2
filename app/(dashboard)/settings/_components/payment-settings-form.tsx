@@ -1,7 +1,7 @@
 'use client'
 
 import { useActionState } from 'react'
-import { Loader2, QrCode, Banknote, Lock } from 'lucide-react'
+import { Loader2, QrCode, Banknote, Lock, ShieldCheck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -10,9 +10,10 @@ import type { Settings } from '@/lib/definitions'
 
 interface Props {
   settings?: Pick<Settings, 'promptpay_id' | 'promptpay_name' | 'bank_accounts_text'>
+  mfaEnabled?: boolean
 }
 
-export function PaymentSettingsForm({ settings }: Props) {
+export function PaymentSettingsForm({ settings, mfaEnabled }: Props) {
   const [state, formAction, isPending] = useActionState(updatePaymentSettings, undefined)
 
   return (
@@ -21,7 +22,7 @@ export function PaymentSettingsForm({ settings }: Props) {
         <QrCode className="size-4 text-amber-600" />
         <h2 className="text-sm font-semibold text-amber-800">PromptPay และบัญชีธนาคาร</h2>
         <span className="ml-auto flex items-center gap-1 text-xs text-amber-600 font-medium">
-          <Lock className="size-3" />ต้องยืนยันรหัสผ่าน
+          <Lock className="size-3" />{mfaEnabled ? 'ยืนยันรหัสผ่าน + OTP' : 'ต้องยืนยันรหัสผ่าน'}
         </span>
       </div>
       <div className="px-5 py-5">
@@ -77,6 +78,27 @@ export function PaymentSettingsForm({ settings }: Props) {
               required
             />
           </div>
+
+          {mfaEnabled && (
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium text-slate-700 flex items-center gap-1.5">
+                <ShieldCheck className="size-3.5 text-indigo-500" />
+                รหัส OTP จากแอป Authenticator
+              </Label>
+              <Input
+                type="text"
+                name="otp_code"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={6}
+                placeholder="000000"
+                autoComplete="one-time-code"
+                className="text-center font-mono text-lg tracking-widest"
+                required
+              />
+              <p className="text-xs text-slate-400">เปิดแอป Authenticator แล้วกรอกรหัส 6 หลักล่าสุด</p>
+            </div>
+          )}
 
           {state?.message && (
             <p className={`text-xs font-medium ${state.success ? 'text-emerald-600' : 'text-red-600'}`}>

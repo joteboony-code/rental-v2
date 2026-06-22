@@ -6,11 +6,15 @@ import { OwnerSignatureUpload } from '../_components/owner-signature-upload'
 
 export default async function PaymentSettingsPage() {
   const supabase = await createClient()
-  const { data: settings } = await supabase
-    .from('settings')
-    .select('promptpay_id, promptpay_name, bank_accounts_text, owner_signature_url')
-    .eq('id', 1)
-    .single()
+  const [{ data: settings }, { data: factors }] = await Promise.all([
+    supabase
+      .from('settings')
+      .select('promptpay_id, promptpay_name, bank_accounts_text, owner_signature_url')
+      .eq('id', 1)
+      .single(),
+    supabase.auth.mfa.listFactors(),
+  ])
+  const mfaEnabled = !!factors?.totp?.some((f) => f.status === 'verified')
 
   return (
     <div className="p-5 md:p-8 space-y-6 max-w-3xl">
@@ -29,7 +33,7 @@ export default async function PaymentSettingsPage() {
         </div>
       </div>
 
-      <PaymentSettingsForm settings={settings ?? undefined} />
+      <PaymentSettingsForm settings={settings ?? undefined} mfaEnabled={mfaEnabled} />
 
       {/* ── ลายเซ็นเจ้าของหอ ── */}
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
