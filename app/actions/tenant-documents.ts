@@ -4,6 +4,15 @@ import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { type DocumentType, type TenantDocument } from '@/lib/tenant-documents'
 
+const MAX_DOC_SIZE = 10 * 1024 * 1024
+const ALLOWED_DOC_TYPES: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+  'application/pdf': 'pdf',
+}
+const VALID_DOC_TYPES = ['id_card', 'contract', 'room_before', 'deposit_proof', 'other'] as const
+
 export async function getTenantDocuments(tenantId: string): Promise<TenantDocument[]> {
   const supabase = await createClient()
   const { data } = await supabase
@@ -22,15 +31,22 @@ export async function uploadTenantDocument(
   const { data: { user } } = await supabase.auth.getUser()
 
   const file = formData.get('file') as File | null
-  const documentType = (String(formData.get('document_type') ?? 'other') || 'other') as DocumentType
+  const rawDocType = String(formData.get('document_type') ?? 'other') || 'other'
+  const documentType = (VALID_DOC_TYPES.includes(rawDocType as DocumentType) ? rawDocType : 'other') as DocumentType
   const roomId = String(formData.get('room_id') ?? '').trim() || null
   const contractId = String(formData.get('contract_id') ?? '').trim() || null
 
   if (!file || file.size === 0) {
     return { success: false, message: 'ไม่พบไฟล์ที่อัพโหลด' }
   }
+  if (file.size > MAX_DOC_SIZE) {
+    return { success: false, message: 'ไฟล์ต้องไม่เกิน 10 MB' }
+  }
+  const ext = ALLOWED_DOC_TYPES[file.type]
+  if (!ext) {
+    return { success: false, message: 'รองรับเฉพาะไฟล์ JPEG, PNG, WebP, PDF' }
+  }
 
-  const ext = file.name.split('.').pop() ?? 'bin'
   const path = `${tenantId}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
 
   const { data: upload, error: uploadError } = await supabase.storage

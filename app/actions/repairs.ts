@@ -5,6 +5,13 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { RepairSchema, type RepairFormState, type RepairStatus } from '@/lib/definitions'
 
+const MAX_PHOTO_SIZE = 10 * 1024 * 1024
+const ALLOWED_PHOTO_TYPES: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+}
+
 // ─── Create Repair Request ────────────────────────────────────
 export async function createRepair(
   state: RepairFormState,
@@ -29,8 +36,14 @@ export async function createRepair(
   let photo_url: string | null = null
   const photoFile = formData.get('photo') as File | null
   if (photoFile && photoFile.size > 0) {
+    if (photoFile.size > MAX_PHOTO_SIZE) {
+      return { message: 'ไฟล์รูปภาพต้องไม่เกิน 10 MB' }
+    }
+    const ext = ALLOWED_PHOTO_TYPES[photoFile.type]
+    if (!ext) {
+      return { message: 'รองรับเฉพาะไฟล์ JPEG, PNG, WebP' }
+    }
     const buffer = await photoFile.arrayBuffer()
-    const ext    = photoFile.name.split('.').pop() ?? 'jpg'
     const path   = `${Date.now()}.${ext}`
 
     const { data: upload } = await supabase.storage
@@ -80,6 +93,8 @@ export async function updateRepairStatus(
 // ─── Delete Repair Request ────────────────────────────────────
 export async function deleteRepair(id: string): Promise<void> {
   const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return
 
   // Remove photo from storage
   const { data } = await supabase
