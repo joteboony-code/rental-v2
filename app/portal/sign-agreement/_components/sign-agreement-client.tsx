@@ -45,7 +45,7 @@ export function SignAgreementClient({ contractId, liffId }: Props) {
   // Load data เมื่อมี lineUserId
   useEffect(() => {
     if (!contractId) return // error state already set from initial props
-    const uid = lineUserId || (liffId ? '' : 'test')
+    const uid = lineUserId
     if (!uid) return
 
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time loading message before async fetch

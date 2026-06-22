@@ -174,6 +174,13 @@ export async function submitRegistration(formData: FormData): Promise<SubmitRegi
   const cleanPhone = phone.replace(/[-\s]/g, '')
   if (!/^0[0-9]{8,9}$/.test(cleanPhone)) return { success: false, message: 'เบอร์โทรศัพท์ไม่ถูกต้อง (ตัวอย่าง: 0812345678)' }
   if (idCard && !/^\d{13}$/.test(idCard)) return { success: false, message: 'เลขบัตรประชาชนต้องเป็นตัวเลข 13 หลัก' }
+  if (moveInDate) {
+    const d = new Date(moveInDate)
+    const maxDate = new Date(); maxDate.setFullYear(maxDate.getFullYear() + 1)
+    if (isNaN(d.getTime()) || d < new Date('2000-01-01') || d > maxDate) {
+      return { success: false, message: 'วันที่เข้าพักไม่ถูกต้อง (ต้องอยู่ระหว่างปี 2000 ถึง 1 ปีข้างหน้า)' }
+    }
+  }
 
   const { data: room } = await supabase
     .from('rooms')
