@@ -5,7 +5,7 @@ import { getLineMessagingConfig } from '@/lib/line-integration'
 function isAuthorized(req: NextRequest) {
   const secret = process.env.CRON_SECRET
   if (!secret) return false
-  return req.headers.get('x-cron-secret') === secret || req.nextUrl.searchParams.get('secret') === secret
+  return req.headers.get('x-cron-secret') === secret
 }
 
 const SEP = '━━━━━━━━━━━━━━'
@@ -66,18 +66,18 @@ export async function GET(req: NextRequest) {
     { data: promisesToday },
   ] = await Promise.all([
     // บิลค้างชำระทุกเดือน (ดึง room_number + billing_month มาด้วย)
-    supabase.from('bills').select('total_amount, status, billing_month, rooms(room_number), payments(amount)').in('status', ['pending', 'overdue']).order('billing_month', { ascending: true }),
+    supabase.from('bills').select('total_amount, status, billing_month, rooms(room_number), payments(amount)').in('status', ['pending', 'overdue']).order('billing_month', { ascending: true }).limit(2000),
     // บิลครบกำหนดวันนี้
-    supabase.from('bills').select('id').in('status', ['pending', 'overdue']).eq('due_date', today),
+    supabase.from('bills').select('id').in('status', ['pending', 'overdue']).eq('due_date', today).limit(2000),
     // สลิปรอตรวจ
     supabase.from('pending_slips').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
     // แจ้งซ่อมค้าง
     supabase.from('repair_requests').select('id', { count: 'exact', head: true }).in('status', ['pending', 'in_progress']),
     // สัญญาใกล้หมดอายุภายใน 30 วัน
     supabase.from('contracts').select('id, end_date, rooms(room_number)').eq('status', 'active')
-      .not('end_date', 'is', null).gte('end_date', today).lte('end_date', in30Str),
+      .not('end_date', 'is', null).gte('end_date', today).lte('end_date', in30Str).limit(500),
     // นัดจ่ายวันนี้
-    supabase.from('payment_promises').select('id, rooms(room_number)').eq('status', 'active').eq('promise_date', today),
+    supabase.from('payment_promises').select('id, rooms(room_number)').eq('status', 'active').eq('promise_date', today).limit(500),
   ])
 
   // คำนวณยอดค้างจริงแยกรายบิล

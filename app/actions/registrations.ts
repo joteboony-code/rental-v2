@@ -169,7 +169,11 @@ export async function submitRegistration(formData: FormData): Promise<SubmitRegi
   // ใช้ registration_token เป็นหลักเท่านั้น — ห้ามเชื่อ room_id/room_number จาก client
   if (!registrationToken) return { success: false, message: 'ลิงก์ไม่ถูกต้อง กรุณาสแกน QR ใหม่' }
   if (!fullName)          return { success: false, message: 'กรุณากรอกชื่อ-นามสกุล' }
+  if (fullName.length < 2 || fullName.length > 200) return { success: false, message: 'ชื่อต้องยาว 2-200 ตัวอักษร' }
   if (!phone)             return { success: false, message: 'กรุณากรอกเบอร์โทรศัพท์' }
+  const cleanPhone = phone.replace(/[-\s]/g, '')
+  if (!/^0[0-9]{8,9}$/.test(cleanPhone)) return { success: false, message: 'เบอร์โทรศัพท์ไม่ถูกต้อง (ตัวอย่าง: 0812345678)' }
+  if (idCard && !/^\d{13}$/.test(idCard)) return { success: false, message: 'เลขบัตรประชาชนต้องเป็นตัวเลข 13 หลัก' }
 
   const { data: room } = await supabase
     .from('rooms')

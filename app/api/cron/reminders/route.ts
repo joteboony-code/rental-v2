@@ -7,7 +7,7 @@ import { parseReminderDays } from '@/lib/reminder-utils'
 function isAuthorized(req: NextRequest) {
   const secret = process.env.CRON_SECRET
   if (!secret) return false
-  return req.headers.get('x-cron-secret') === secret || req.nextUrl.searchParams.get('secret') === secret
+  return req.headers.get('x-cron-secret') === secret
 }
 
 const SEP = '━━━━━━━━━━━━━━'
@@ -109,6 +109,7 @@ export async function GET(req: NextRequest) {
     `)
     .in('status', ['pending', 'overdue'])
     .order('billing_month', { ascending: true })
+    .limit(2000)
 
   if (!bills || bills.length === 0) {
     return NextResponse.json({ ok: true, sent: 0, message: 'no pending bills' })
@@ -120,6 +121,7 @@ export async function GET(req: NextRequest) {
     .select('bill_id, promise_date')
     .eq('status', 'active')
     .gte('promise_date', today)
+    .limit(500)
   const promisedBillIds = new Set(
     (activePromises ?? []).map((p) => p.bill_id as string | null).filter((id): id is string => Boolean(id))
   )
