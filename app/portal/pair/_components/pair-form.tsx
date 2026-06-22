@@ -33,6 +33,7 @@ export function PairForm({
   )
   const [scriptReady, setScriptReady] = useState(false)
   const [lineUserId, setLineUserId] = useState('')
+  const [lineIdToken, setLineIdToken] = useState('')
   const [lineDisplayName, setLineDisplayName] = useState('')
   const [linePictureUrl, setLinePictureUrl] = useState('')
   const [liffStatus, setLiffStatus] = useState<LiffStatus>(liffId ? 'loading' : 'no-liff')
@@ -50,9 +51,10 @@ export function PairForm({
         await liff.init({ liffId: liffId! })
         if (cancelled) return
         if (!liff.isLoggedIn()) { setLiffStatus('need-login'); return }
-        const profile = await liff.getProfile()
+        const [profile, idToken] = await Promise.all([liff.getProfile(), liff.getIDToken()])
         if (cancelled) return
         setLineUserId(profile.userId)
+        setLineIdToken(idToken ?? '')
         setLineDisplayName(profile.displayName ?? '')
         setLinePictureUrl(profile.pictureUrl ?? '')
         setLiffStatus('ok')
@@ -227,7 +229,7 @@ export function PairForm({
       {lineUserId && !alreadyLinked && (
         <form action={action} className="space-y-3">
           <input type="hidden" name="room_number"        value={initialRoomNumber} />
-          <input type="hidden" name="line_user_id"       value={lineUserId} />
+          <input type="hidden" name="id_token"           value={lineIdToken} />
           <input type="hidden" name="line_display_name"  value={lineDisplayName} />
           <input type="hidden" name="line_picture_url"   value={linePictureUrl} />
 
