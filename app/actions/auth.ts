@@ -39,18 +39,23 @@ export async function login(_: unknown, formData: FormData): Promise<LoginState>
   const password = String(formData.get('password') ?? '')
 
   const supabase = await createClient()
-  const { error } = await supabase.auth.signInWithPassword({ email, password })
+  const { data: authData, error } = await supabase.auth.signInWithPassword({ email, password })
   if (error) return { error: 'อีเมลหรือรหัสผ่านไม่ถูกต้อง' }
 
-  // Check if MFA is required
-  const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
-  if (aal?.nextLevel === 'aal2' && aal?.currentLevel !== 'aal2') {
-    const { data: factors } = await supabase.auth.mfa.listFactors()
-    const totp = factors?.totp?.[0]
-    if (totp) {
-      const { data: challenge } = await supabase.auth.mfa.challenge({ factorId: totp.id })
+  // Use admin API to reliably check verified MFA factors —
+  // getAuthenticatorAssuranceLevel() reads request cookies which don't yet
+  // contain the new session written by signInWithPassword in this same request.
+  const userId = authData.user?.id
+  if (userId) {
+    const service = createServiceClient()
+    const { data: mfaData } = await service.auth.admin.mfa.listFactors({ userId })
+    const verifiedTotp = mfaData?.factors?.find(
+      (f) => f.factor_type === 'totp' && f.status === 'verified'
+    )
+    if (verifiedTotp) {
+      const { data: challenge } = await supabase.auth.mfa.challenge({ factorId: verifiedTotp.id })
       if (challenge) {
-        return { mfaRequired: true, factorId: totp.id, challengeId: challenge.id }
+        return { mfaRequired: true, factorId: verifiedTotp.id, challengeId: challenge.id }
       }
     }
   }
