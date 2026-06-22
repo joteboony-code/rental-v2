@@ -7,6 +7,7 @@ import { getLineIntegrationPublic } from '@/lib/line-integration'
 import { OwnerSignatureUpload } from './_components/owner-signature-upload'
 import { ChangePasswordSection } from './_components/change-password-section'
 import { PaymentSettingsForm } from './_components/payment-settings-form'
+import { TwoFactorSection } from './_components/two-factor-section'
 
 export default async function SettingsPage() {
   const supabase = await createClient()
@@ -72,6 +73,8 @@ export default async function SettingsPage() {
         lineIntegration={lineIntegration ?? undefined}
         hasSlipokKey={hasSlipokKey}
       />
+
+      <TwoFactorSection />
 
       <ChangePasswordSection />
     </div>
