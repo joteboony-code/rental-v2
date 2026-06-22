@@ -139,9 +139,31 @@ export async function approveSlip(
 
   const { data: billMeta } = await supabase
     .from('bills')
-    .select('tenant_id, room_id')
+    .select('tenant_id, room_id, total_amount, payments(amount)')
     .eq('id', billId)
     .single()
+
+  if (!billMeta) {
+    await supabase.from('pending_slips')
+      .update({ status: 'pending', reviewed_at: null, reviewed_by: null, admin_note: null })
+      .eq('id', slipId)
+    return { success: false, message: 'ไม่พบบิลที่เลือก' }
+  }
+
+  type BillMetaRow = { tenant_id: string; room_id: string | null; total_amount: number; payments: { amount: number }[] | null }
+  const meta = billMeta as unknown as BillMetaRow
+  const alreadyPaid = (meta.payments ?? []).reduce((s, p) => s + Number(p.amount), 0)
+  const remaining = Math.max(0, Number(meta.total_amount) - alreadyPaid)
+
+  if (amount > remaining + 0.01) {
+    await supabase.from('pending_slips')
+      .update({ status: 'pending', reviewed_at: null, reviewed_by: null, admin_note: null })
+      .eq('id', slipId)
+    return {
+      success: false,
+      message: `ยอดเงิน ฿${amount.toLocaleString('th-TH')} เกินยอดค้างชำระ ฿${remaining.toLocaleString('th-TH')} — ใช้ "ตัดหนี้เก่าสุด" หรือบันทึกเป็นเงินล่วงหน้าแทน`,
+    }
+  }
 
   const paymentPayload = {
     bill_id: billId,
@@ -173,14 +195,14 @@ export async function approveSlip(
     action: 'slip_approve',
     entityType: 'pending_slip',
     entityId: slipId,
-    tenantId: billMeta?.tenant_id ?? null,
-    roomId: billMeta?.room_id ?? null,
+    tenantId: meta?.tenant_id ?? null,
+    roomId: meta?.room_id ?? null,
     newValue: {
       payment_id: payment?.id ?? null,
       amount,
       bill_id: billId,
-      tenant_id: billMeta?.tenant_id ?? null,
-      room_id: billMeta?.room_id ?? null,
+      tenant_id: meta?.tenant_id ?? null,
+      room_id: meta?.room_id ?? null,
       slip_ref: slip?.slip_ref ?? null,
     },
     description: `อนุมัติสลิป ฿${amount.toLocaleString('th-TH')} → บิล ${billId}`,
@@ -221,6 +243,20 @@ export async function approveSlipOldestFirst(
     .single()
   if (!slip) return { success: false, message: 'สลิปนี้ถูกดำเนินการไปแล้วหรือไม่พบ' }
 
+  // Guard: ถ้ามี slip_ref ตรวจสอบว่าไม่เคยบันทึกใน payments แล้ว (ป้องกันบันทึกซ้ำ)
+  if (slip.slip_ref) {
+    const { count: dupCount } = await supabase
+      .from('payments')
+      .select('id', { count: 'exact', head: true })
+      .eq('slip_ref', slip.slip_ref)
+    if ((dupCount ?? 0) > 0) {
+      await supabase.from('pending_slips')
+        .update({ status: 'pending', reviewed_at: null, reviewed_by: null })
+        .eq('id', slipId)
+      return { success: false, message: `slip_ref "${slip.slip_ref}" บันทึกไปแล้ว — ไม่สามารถบันทึกซ้ำได้` }
+    }
+  }
+
   // Collect all tenant_ids sharing the same LINE user
   let tenantIds: string[] = [tenantId]
   if (lineUserId) {
@@ -255,7 +291,6 @@ export async function approveSlipOldestFirst(
   }
 
   let remaining = amount
-  let firstPayment = true
   const insertedIds: string[] = []
   const applied: { payment_id: string | null; bill_id: string; room_id: string | null; amount: number }[] = []
   let insertError: string | null = null
@@ -268,13 +303,12 @@ export async function approveSlipOldestFirst(
       amount: toPay,
       payment_method: paymentMethod,
       slip_url: slip.slip_url ?? null,
-      slip_ref: firstPayment ? (slip.slip_ref ?? null) : null,
+      slip_ref: slip.slip_ref ?? null,
       note,
       paid_at: paidAt,
       recorded_by: user?.id ?? null,
     }).select('id').single()
     if (payErr) { insertError = payErr.message; break }
-    firstPayment = false
     insertedIds.push(payment!.id)
     applied.push({ payment_id: payment!.id, bill_id: bill.id, room_id: bill.room_id, amount: toPay })
     remaining -= toPay
@@ -406,11 +440,14 @@ export async function reassignSlipTenant(
     .eq('id', slipId)
     .single()
 
-  const { error } = await supabase
+  const { data: updated, error } = await supabase
     .from('pending_slips')
     .update({ tenant_id: tenantId, room_id: roomId })
     .eq('id', slipId)
+    .eq('status', 'pending')
+    .select('id')
   if (error) return { success: false, message: error.message }
+  if (!updated || updated.length === 0) return { success: false, message: 'สลิปนี้ถูกดำเนินการไปแล้ว ไม่สามารถเปลี่ยนผู้เช่าได้' }
 
   logAudit({
     action: 'slip_reassign',
