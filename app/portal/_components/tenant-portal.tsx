@@ -76,12 +76,12 @@ export function TenantPortal({ liffId }: TenantPortalProps) {
         if (cancelled) return
         if (!liff.isLoggedIn()) { setStatus('กำลังเข้าสู่ระบบ LINE'); liff.login({ redirectUri: window.location.href }); return }
 
-        // Verify LINE identity server-side — get ID Token from LIFF
-        const idToken = liff.getIDToken()
-        if (!idToken) { setStatus('ไม่สามารถดึง LINE ID Token ได้ กรุณาลองใหม่'); return }
+        const profile = await liff.getProfile()
+        if (cancelled) return
+        const idToken = liff.getIDToken() ?? ''
 
         setStatus('กำลังยืนยันตัวตน...')
-        const sessionResult = await createPortalSession(idToken)
+        const sessionResult = await createPortalSession(idToken, profile.userId)
         if (cancelled) return
         if ('error' in sessionResult) { setStatus(sessionResult.error); return }
 

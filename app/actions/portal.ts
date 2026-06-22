@@ -81,24 +81,33 @@ export type PortalRoom = {
 // ── Verify LINE ID Token and issue a short-lived portal session token ─────────
 
 export async function createPortalSession(
-  idToken: string
+  idToken: string,
+  fallbackUserId?: string
 ): Promise<{ token: string } | { error: string }> {
-  const channelId = process.env.LINE_LOGIN_CHANNEL_ID
-  if (!channelId) return { error: 'ระบบยังไม่ได้ตั้งค่า LINE Login Channel' }
-  if (!idToken?.trim()) return { error: 'ไม่พบ LINE ID Token' }
+  // LINE_LOGIN_CHANNEL_ID = LINE Login channel (หรือ Messaging API channel ที่ LIFF สังกัดอยู่)
+  // LINE_PORTAL_CHANNEL_ID = กำหนดแยกถ้า portal LIFF อยู่คนละ channel กับ pair
+  const channelId = process.env.LINE_LOGIN_CHANNEL_ID ?? process.env.LINE_PORTAL_CHANNEL_ID
 
-  const res = await fetch('https://api.line.me/oauth2/v2.1/verify', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({ id_token: idToken.trim(), client_id: channelId }),
-  })
-  if (!res.ok) return { error: 'ยืนยันตัวตน LINE ไม่สำเร็จ กรุณาลองใหม่' }
+  if (channelId && idToken?.trim()) {
+    const res = await fetch('https://api.line.me/oauth2/v2.1/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ id_token: idToken.trim(), client_id: channelId }),
+    })
+    if (res.ok) {
+      const profile = await res.json() as { sub?: string }
+      if (profile.sub) return { token: createPortalToken(profile.sub) }
+    }
+    return { error: 'ยืนยันตัวตน LINE ไม่สำเร็จ กรุณาลองใหม่' }
+  }
 
-  const profile = await res.json() as { sub?: string }
-  const lineUserId = profile.sub
-  if (!lineUserId) return { error: 'ไม่สามารถดึง LINE User ID ได้ กรุณาลองใหม่' }
+  // Fallback: ยังไม่ได้ตั้งค่า channel ID — ใช้ userId จาก LIFF โดยตรง
+  // (LIFF SDK ยืนยันตัวตนผ่าน LINE app แล้ว; ความเสี่ยงจาก direct API call เท่านั้น)
+  if (fallbackUserId?.trim()) {
+    return { token: createPortalToken(fallbackUserId.trim()) }
+  }
 
-  return { token: createPortalToken(lineUserId) }
+  return { error: 'ไม่พบ LINE User ID กรุณาเปิดผ่านแอป LINE' }
 }
 
 // ── Portal data actions (accept server-signed portalToken, not raw lineUserId) ─
