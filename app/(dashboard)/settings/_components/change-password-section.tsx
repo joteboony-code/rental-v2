@@ -33,6 +33,16 @@ export function ChangePasswordSection() {
         </p>
         <form action={formAction} className="space-y-3">
           <div className="space-y-1.5">
+            <Label className="text-sm font-medium text-slate-700">รหัสผ่านปัจจุบัน</Label>
+            <Input
+              type="password"
+              name="current_password"
+              placeholder="ยืนยันตัวตนก่อนเปลี่ยน"
+              autoComplete="current-password"
+              required
+            />
+          </div>
+          <div className="space-y-1.5">
             <Label className="text-sm font-medium text-slate-700">รหัสผ่านใหม่</Label>
             <Input
               type="password"

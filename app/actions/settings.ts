@@ -135,20 +135,30 @@ export async function changePasswordAndSignOutAll(
   _: unknown,
   formData: FormData
 ): Promise<{ success?: boolean; message: string }> {
-  const newPassword = String(formData.get('new_password') ?? '').trim()
-  const confirm    = String(formData.get('confirm_password') ?? '').trim()
+  const currentPassword = String(formData.get('current_password') ?? '').trim()
+  const newPassword     = String(formData.get('new_password') ?? '').trim()
+  const confirm         = String(formData.get('confirm_password') ?? '').trim()
 
-  if (newPassword.length < 8) return { message: 'รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร' }
-  if (newPassword !== confirm)  return { message: 'รหัสผ่านใหม่ทั้งสองช่องไม่ตรงกัน' }
+  if (!currentPassword)           return { message: 'กรุณากรอกรหัสผ่านปัจจุบัน' }
+  if (newPassword.length < 8)     return { message: 'รหัสผ่านใหม่ต้องมีอย่างน้อย 8 ตัวอักษร' }
+  if (newPassword !== confirm)     return { message: 'รหัสผ่านใหม่ทั้งสองช่องไม่ตรงกัน' }
+  if (newPassword === currentPassword) return { message: 'รหัสผ่านใหม่ต้องไม่ซ้ำกับรหัสเก่า' }
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { message: 'ไม่มีสิทธิ์ใช้งาน' }
+  if (!user?.email) return { message: 'ไม่มีสิทธิ์ใช้งาน' }
+
+  // Verify current password before allowing any change
+  const { error: verifyError } = await supabase.auth.signInWithPassword({
+    email:    user.email,
+    password: currentPassword,
+  })
+  if (verifyError) return { message: 'รหัสผ่านปัจจุบันไม่ถูกต้อง' }
 
   const { error } = await supabase.auth.updateUser({ password: newPassword })
   if (error) return { message: `เกิดข้อผิดพลาด: ${error.message}` }
 
-  // Revoke ALL sessions (including current device) — safe after password already changed
+  // Revoke ALL sessions including current device
   await createServiceClient().auth.admin.signOut(user.id, 'global')
 
   return { success: true, message: 'เปลี่ยนรหัสผ่านและออกจากระบบทุกเครื่องแล้ว' }
