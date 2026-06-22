@@ -123,9 +123,35 @@ export async function simulatePaymentMatch(
     return { ...base, matchRule: 'no_outstanding', canAutoPay: false, billsToPay: [], creditAmount: 0, reason: 'ไม่มีบิลค้างชำระ' }
   }
 
+  // Pre-compute room groups (needed for cross-rule conflict detection)
+  const byRoom = new Map<string, typeof outstanding>()
+  for (const b of outstanding) {
+    if (!byRoom.has(b.roomNumber)) byRoom.set(b.roomNumber, [])
+    byRoom.get(b.roomNumber)!.push(b)
+  }
+  const roomExact:   { rn: string; bills: typeof outstanding }[] = []
+  const roomOverpay: { rn: string; bills: typeof outstanding; over: number }[] = []
+  for (const [rn, rBills] of byRoom) {
+    const rTotal = rBills.reduce((s, b) => s + b.remainingAmount, 0)
+    if (Math.abs(rTotal - amount) < 1) roomExact.push({ rn, bills: rBills })
+    const over = amount - rTotal
+    if (over > 0 && over <= OVERPAY_MAX) roomOverpay.push({ rn, bills: rBills, over })
+  }
+
   // Rule 1: unique single-bill exact
   const singleMatches = outstanding.filter((b) => Math.abs(b.remainingAmount - amount) < 1)
+
+  // Cross-rule conflict: single-bill match collides with a room total (different bill set)
+  // e.g. amount = ห้อง B single bill = ห้อง A (2 bills) total → ambiguous, not auto-pay
+  let crossRuleConflict = false
   if (singleMatches.length === 1) {
+    const b = singleMatches[0]
+    crossRuleConflict =
+      (Math.abs(totalOutstanding - amount) < 1 && outstanding.length > 1) ||
+      roomExact.some(({ bills }) => !(bills.length === 1 && bills[0].id === b.id))
+  }
+
+  if (singleMatches.length === 1 && !crossRuleConflict) {
     const b = singleMatches[0]
     return {
       ...base, matchRule: 'unique_single_bill', canAutoPay: true, creditAmount: 0,
@@ -171,20 +197,6 @@ export async function simulatePaymentMatch(
   }
 
   // Rule 3: room total exact
-  const byRoom = new Map<string, typeof outstanding>()
-  for (const b of outstanding) {
-    if (!byRoom.has(b.roomNumber)) byRoom.set(b.roomNumber, [])
-    byRoom.get(b.roomNumber)!.push(b)
-  }
-  const roomExact:   { rn: string; bills: typeof outstanding }[] = []
-  const roomOverpay: { rn: string; bills: typeof outstanding; over: number }[] = []
-  for (const [rn, rBills] of byRoom) {
-    const rTotal = rBills.reduce((s, b) => s + b.remainingAmount, 0)
-    if (Math.abs(rTotal - amount) < 1) roomExact.push({ rn, bills: rBills })
-    const over = amount - rTotal
-    if (over > 0 && over <= OVERPAY_MAX) roomOverpay.push({ rn, bills: rBills, over })
-  }
-
   if (roomExact.length === 1) {
     const { rn, bills: rBills } = roomExact[0]
     return {
@@ -205,11 +217,21 @@ export async function simulatePaymentMatch(
     }
   }
 
-  // Rule 4: ambiguous
-  const isAmbiguous = singleMatches.length > 1 || roomExact.length > 1
+  // Rule 4: ambiguous (within-rule + cross-rule)
+  const isAmbiguous = singleMatches.length > 1 || roomExact.length > 1 || crossRuleConflict
   if (isAmbiguous) {
-    const candidates = (singleMatches.length > 1 ? singleMatches : roomExact.flatMap((m) => m.bills))
-      .map((b) => ({ room: b.roomNumber, month: b.billing_month, remaining: b.remainingAmount }))
+    let candidates: { room: string; month: string; remaining: number }[]
+    if (crossRuleConflict) {
+      const seen = new Set<string>()
+      const parts: typeof outstanding = []
+      for (const b of [...singleMatches, ...roomExact.flatMap((m) => m.bills)]) {
+        if (!seen.has(b.id)) { seen.add(b.id); parts.push(b) }
+      }
+      candidates = parts.map((b) => ({ room: b.roomNumber, month: b.billing_month, remaining: b.remainingAmount }))
+    } else {
+      candidates = (singleMatches.length > 1 ? singleMatches : roomExact.flatMap((m) => m.bills))
+        .map((b) => ({ room: b.roomNumber, month: b.billing_month, remaining: b.remainingAmount }))
+    }
     return {
       ...base, matchRule: 'ambiguous', canAutoPay: false, billsToPay: [], creditAmount: 0, candidates,
       reason: `ยอด ฿${amount.toLocaleString('th-TH')} ตรงกับหลายบิล ต้องให้เจ้าของเลือกเอง`,
