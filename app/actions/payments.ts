@@ -47,6 +47,8 @@ export async function recordPayment(
   }
 
   const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { success: false, message: 'ไม่มีสิทธิ์ใช้งาน' }
+
   const { data: billMeta } = await supabase
     .from('bills')
     .select('tenant_id, room_id')

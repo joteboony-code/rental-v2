@@ -6,6 +6,12 @@ import { revalidatePath } from 'next/cache'
 import { sendPaymentReceiptNotification } from '@/lib/line-notify'
 import { logAudit } from './audit'
 
+const VALID_PAYMENT_METHODS = ['cash', 'transfer', 'promptpay'] as const
+type PaymentMethod = typeof VALID_PAYMENT_METHODS[number]
+function sanitizePaymentMethod(raw: string): PaymentMethod {
+  return (VALID_PAYMENT_METHODS as readonly string[]).includes(raw) ? (raw as PaymentMethod) : 'transfer'
+}
+
 export type PendingSlip = {
   id: string
   tenant_id: string | null
@@ -115,7 +121,7 @@ export async function approveSlip(
 
   const billId = String(formData.get('bill_id') ?? '').trim()
   const amount = Number(formData.get('amount'))
-  const paymentMethod = String(formData.get('payment_method') ?? 'transfer')
+  const paymentMethod = sanitizePaymentMethod(String(formData.get('payment_method') ?? 'transfer'))
   const paidAt = String(formData.get('paid_at') ?? new Date().toISOString())
   const note = String(formData.get('note') ?? '').trim() || null
 
@@ -228,6 +234,7 @@ export async function approveSlipOldestFirst(
 ): Promise<{ success: boolean; message: string }> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
+  const safePaymentMethod = sanitizePaymentMethod(paymentMethod)
 
   // H1: Atomically claim slip — only succeeds if still pending (race guard)
   const { data: slip } = await supabase
@@ -301,7 +308,7 @@ export async function approveSlipOldestFirst(
     const { data: payment, error: payErr } = await supabase.from('payments').insert({
       bill_id: bill.id,
       amount: toPay,
-      payment_method: paymentMethod,
+      payment_method: safePaymentMethod,
       slip_url: slip.slip_url ?? null,
       slip_ref: slip.slip_ref ?? null,
       note,
