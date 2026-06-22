@@ -169,7 +169,7 @@ export async function updatePaymentSettings(
       entityId: '1',
       oldValue: { promptpay_id: before?.promptpay_id, bank_accounts_text: before?.bank_accounts_text },
       newValue: { promptpay_id: promptpayId, bank_accounts_text: bankAccountsText },
-      description: 'เปลี่ยนข้อมูลบัญชี/PromptPay (ยืนยันรหัสผ่านแล้ว)',
+      description: `เปลี่ยนข้อมูลบัญชี/PromptPay (ยืนยัน${totp ? 'รหัสผ่าน + OTP' : 'รหัสผ่าน'}แล้ว)`,
     }).catch(() => {})
   }
 
