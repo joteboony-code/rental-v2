@@ -9,11 +9,15 @@ import {
 } from '@/lib/definitions'
 import { DEFAULT_DORM_ID } from '@/lib/line-integration'
 import { encryptSecret, secretLast4 } from '@/lib/crypto-secrets'
+import { getAuthedUser } from '@/lib/require-admin'
+import { logAudit } from './audit'
 
 export async function updateSettings(
   state: SettingsFormState,
   formData: FormData
 ): Promise<SettingsFormState> {
+  if (!(await getAuthedUser())) return { message: 'ไม่มีสิทธิ์ใช้งาน' }
+
   const raw = {
     water_unit_price:           formData.get('water_unit_price'),
     electricity_unit_price:     formData.get('electricity_unit_price'),
@@ -53,6 +57,14 @@ export async function updateSettings(
   }
 
   const supabase = await createClient()
+
+  // Snapshot sensitive payment fields before update for audit trail
+  const { data: before } = await supabase
+    .from('settings')
+    .select('promptpay_id, bank_accounts_text')
+    .eq('id', 1)
+    .single()
+
   const settingsUpdate: Record<string, unknown> = { ...parsed.data }
   if (slipokApiKey) {
     // เข้ารหัสก่อนเก็บ — เดิมเก็บ plaintext ในตาราง settings
@@ -65,6 +77,22 @@ export async function updateSettings(
     .eq('id', 1)
 
   if (error) return { message: `เกิดข้อผิดพลาด: ${error.message}` }
+
+  // Log audit if payment-sensitive fields changed
+  const newPromptpay = parsed.data.promptpay_id ?? ''
+  const newBankText  = parsed.data.bank_accounts_text ?? ''
+  const oldPromptpay = before?.promptpay_id ?? ''
+  const oldBankText  = before?.bank_accounts_text ?? ''
+  if (newPromptpay !== oldPromptpay || newBankText !== oldBankText) {
+    logAudit({
+      action: 'settings_update',
+      entityType: 'settings',
+      entityId: '1',
+      oldValue: { promptpay_id: oldPromptpay, bank_accounts_text: oldBankText },
+      newValue: { promptpay_id: newPromptpay, bank_accounts_text: newBankText },
+      description: 'เปลี่ยนข้อมูลบัญชี/PromptPay',
+    }).catch(() => {})
+  }
 
   const lineData = parsedLine.data
   const lineUpdate: Record<string, string | null> = {
@@ -105,6 +133,8 @@ export async function updateSettings(
 export async function shiftBillingMonth(
   direction: 'prev' | 'next'
 ): Promise<{ success: boolean; month: string }> {
+  if (!(await getAuthedUser())) return { success: false, month: '' }
+
   const supabase = await createClient()
   const { data: s } = await supabase
     .from('settings')
