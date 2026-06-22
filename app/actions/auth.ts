@@ -135,6 +135,10 @@ export async function cleanupStaleMfaFactors(): Promise<void> {
 
 export async function logout() {
   const supabase = await createClient()
-  await supabase.auth.signOut()
+  try {
+    await supabase.auth.signOut()
+  } catch {
+    // signOut may fail due to network timeout — redirect to login regardless
+  }
   redirect('/login')
 }
