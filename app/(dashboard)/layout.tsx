@@ -14,7 +14,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
   if (!user) redirect('/login')
 
   const { data: assurance } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
-  if (assurance?.nextLevel === 'aal2' && assurance.currentLevel !== 'aal2') {
+  // fail closed: if AAL can't be confirmed, bounce to /mfa (which re-checks / re-auths)
+  if (!assurance || (assurance.nextLevel === 'aal2' && assurance.currentLevel !== 'aal2')) {
     redirect('/mfa')
   }
 

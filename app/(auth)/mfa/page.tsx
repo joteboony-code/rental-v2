@@ -8,7 +8,8 @@ export default async function MfaPage() {
   if (!user) redirect('/login')
 
   const { data: assurance } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
-  if (assurance?.currentLevel === 'aal2' || assurance?.nextLevel !== 'aal2') redirect('/rooms')
+  if (!assurance) redirect('/login')   // fail closed: cannot confirm AAL → re-auth
+  if (assurance.currentLevel === 'aal2' || assurance.nextLevel !== 'aal2') redirect('/rooms')
 
   const { data: factors } = await supabase.auth.mfa.listFactors()
   const factorId = factors?.totp.find((factor) => factor.status === 'verified')?.id

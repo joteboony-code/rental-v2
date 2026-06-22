@@ -56,18 +56,18 @@ export async function login(_: unknown, formData: FormData): Promise<LoginState>
   const normalizedEmail = email.trim().toLowerCase()
   const ip = await getClientIp()
 
-  if (
-    await isRateLimited(`login:ip:${ip}`, 5, 15 * 60) ||
-    await isRateLimited(`login:email:${normalizedEmail}`, 10, 15 * 60)
-  ) {
-    void logSecurityEvent('login_rate_limited', 'Login attempt rate limited')
-    return { error: 'อีเมลหรือรหัสผ่านไม่ถูกต้อง' }
-  }
-
   const supabase = await createClient()
   const { error } = await supabase.auth.signInWithPassword({ email, password })
   if (error) {
-    void logSecurityEvent('login_failed', 'Login failed')
+    // Count only FAILED attempts so a legitimate admin never locks themselves
+    // out by signing in successfully. (Supabase also throttles natively.)
+    const ipBlocked    = await isRateLimited(`login:ip:${ip}`, 5, 15 * 60)
+    const emailBlocked = await isRateLimited(`login:email:${normalizedEmail}`, 10, 15 * 60)
+    const blocked = ipBlocked || emailBlocked
+    void logSecurityEvent(
+      blocked ? 'login_rate_limited' : 'login_failed',
+      blocked ? 'Login attempt rate limited' : 'Login failed'
+    )
     return { error: 'อีเมลหรือรหัสผ่านไม่ถูกต้อง' }
   }
 
@@ -82,10 +82,11 @@ export async function login(_: unknown, formData: FormData): Promise<LoginState>
   return undefined
 }
 
-export async function finalizeLogin(method: 'password' | 'mfa' = 'password'): Promise<void> {
+async function finalizeLogin(method: 'password' | 'mfa' = 'password'): Promise<void> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  void logSecurityEvent('login_success', `Login completed with ${method}`, user?.id ?? null)
+  if (!user) redirect('/login')   // guard: never log/notify for an unauthenticated caller
+  void logSecurityEvent('login_success', `Login completed with ${method}`, user.id)
   sendLoginNotification().catch(() => {})
   redirect('/rooms')
 }
@@ -100,13 +101,20 @@ export async function verifyMfa(_: unknown, formData: FormData): Promise<{ error
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'กรุณาเข้าสู่ระบบใหม่' }
+
+  // Block brute-force BEFORE attempting verification, otherwise the limit
+  // only changes the error text without ever stopping the attempt.
+  if (await isRateLimited(`mfa:verify:${user.id}`, 5, 5 * 60)) {
+    void logSecurityEvent('mfa_rate_limited', 'MFA verification rate limited', user.id)
+    return { error: 'ลองรหัสผิดหลายครั้ง กรุณารอ 5 นาที' }
+  }
+
   const { error } = challengeId
     ? await supabase.auth.mfa.verify({ factorId, challengeId, code })
     : await supabase.auth.mfa.challengeAndVerify({ factorId, code })
   if (error) {
-    const blocked = await isRateLimited(`mfa:verify:${user.id}`, 5, 5 * 60)
     void logSecurityEvent('mfa_failed', 'MFA verification failed', user.id)
-    return { error: blocked ? 'ลองรหัสผิดหลายครั้ง กรุณารอ 5 นาที' : 'รหัส OTP ไม่ถูกต้องหรือหมดอายุ' }
+    return { error: 'รหัส OTP ไม่ถูกต้องหรือหมดอายุ' }
   }
 
   await finalizeLogin('mfa')

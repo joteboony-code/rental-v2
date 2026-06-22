@@ -15,8 +15,9 @@ export async function getAuthedUser() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
 
-  const { data: assurance } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
-  if (assurance?.nextLevel === 'aal2' && assurance.currentLevel !== 'aal2') return null
+  const { data: assurance, error } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+  if (error || !assurance) return null   // fail closed: cannot confirm AAL → deny
+  if (assurance.nextLevel === 'aal2' && assurance.currentLevel !== 'aal2') return null
 
   return user
 }
