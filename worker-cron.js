@@ -12,12 +12,17 @@ const worker = {
   async scheduled(event, env, ctx) {
     const secret = env.CRON_SECRET ?? ''
     const headers = secret ? { 'x-cron-secret': secret } : {}
+    const cronPaths = [
+      '/api/cron/reminders',
+      '/api/cron/contracts',
+      '/api/cron/daily-summary',
+    ]
 
-    ctx.waitUntil(Promise.all([
-      env.WORKER_SELF_REFERENCE.fetch(new Request('https://self/api/cron/reminders'), { headers }),
-      env.WORKER_SELF_REFERENCE.fetch(new Request('https://self/api/cron/contracts'), { headers }),
-      env.WORKER_SELF_REFERENCE.fetch(new Request('https://self/api/cron/daily-summary'), { headers }),
-    ]))
+    ctx.waitUntil(Promise.allSettled(
+      cronPaths.map((path) =>
+        env.WORKER_SELF_REFERENCE.fetch(new Request(`https://self${path}`), { headers })
+      )
+    ))
   },
 }
 

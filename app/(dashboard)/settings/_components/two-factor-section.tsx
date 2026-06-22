@@ -127,7 +127,7 @@ export function TwoFactorSection() {
           <div className="space-y-4">
             <p className="text-xs text-slate-500">
               1. เปิด <span className="font-semibold">Google Authenticator</span> หรือ <span className="font-semibold">Authy</span><br />
-              2. กด "+" → <span className="font-semibold">สแกน QR code</span> (หรือกรอกรหัสเองด้านล่าง)<br />
+              2. กด &quot;+&quot; → <span className="font-semibold">สแกน QR code</span> (หรือกรอกรหัสเองด้านล่าง)<br />
               3. กรอกรหัส 6 หลักจากแอปด้านล่าง
             </p>
 
@@ -155,7 +155,7 @@ export function TwoFactorSection() {
                 {showSecret && (
                   <div className="px-4 pb-4 space-y-2 bg-slate-50">
                     <p className="text-xs text-slate-400">
-                      ในแอป Authenticator → กด "+" → <span className="font-semibold">กรอกรหัสด้วยตนเอง / Enter setup key</span> → วางรหัสนี้
+                      ในแอป Authenticator → กด &quot;+&quot; → <span className="font-semibold">กรอกรหัสด้วยตนเอง / Enter setup key</span> → วางรหัสนี้
                     </p>
                     <div className="flex items-center gap-2">
                       <code className="flex-1 block bg-white border border-slate-200 rounded-lg px-3 py-2 font-mono text-sm tracking-widest text-slate-800 break-all select-all">

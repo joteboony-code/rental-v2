@@ -18,7 +18,6 @@ export function LoginForm() {
   const [factorId, setFactorId]       = useState<string | null>(null)
   const [challengeId, setChallengeId] = useState<string | null>(null)
   const [mfaErr, setMfaErr]           = useState<string | null>(null)
-  const [checking, setChecking]       = useState(false)
 
   const supabase = useMemo(() => createClient(), [])
 
@@ -28,9 +27,6 @@ export function LoginForm() {
     // Password is verified — session cookies are now set in the browser.
     // Use browser Supabase client to check if MFA upgrade is needed
     // (server client cannot see the newly-set session in the same request).
-    setChecking(true)
-    setMfaErr(null)
-
     ;(async () => {
       try {
         const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
@@ -48,7 +44,6 @@ export function LoginForm() {
           const { data: challenge, error: challengeErr } = await supabase.auth.mfa.challenge({ factorId: totp.id })
           if (challengeErr || !challenge) {
             setMfaErr('ไม่สามารถสร้าง OTP challenge: ' + (challengeErr?.message ?? 'ไม่ทราบสาเหตุ'))
-            setChecking(false)
             return
           }
 
@@ -59,14 +54,12 @@ export function LoginForm() {
         }
       } catch {
         setMfaErr('เกิดข้อผิดพลาดในการตรวจสอบ 2FA')
-      } finally {
-        setChecking(false)
       }
     })()
   }, [state, supabase])
 
   // Loading while checking AAL
-  if (checking || (state && 'passwordOk' in state && !factorId && !mfaErr)) {
+  if (state && 'passwordOk' in state && !factorId && !mfaErr) {
     return (
       <div className="flex justify-center py-8">
         <Loader2 className="size-5 animate-spin text-slate-400" />

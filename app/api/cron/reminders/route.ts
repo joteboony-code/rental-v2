@@ -24,6 +24,15 @@ function thaiDate(dateStr: string) {
   return new Date(dateStr).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })
 }
 
+function bangkokDateKey(d = new Date()) {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Bangkok',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(d)
+}
+
 async function pushMessage(to: string, token: string, messages: object[]) {
   const res = await fetch('https://api.line.me/v2/bot/message/push', {
     method: 'POST',
@@ -36,18 +45,56 @@ async function pushMessage(to: string, token: string, messages: object[]) {
   }
 }
 
-function buildPortalFlex(portalUrl: string) {
+function buildPortalFlex(portalUrl: string, details: string, isOverdue: boolean) {
   return {
     type: 'flex',
-    altText: 'ดูบิล / ชำระเงิน',
+    altText: isOverdue ? 'แจ้งเตือนค่าเช่าค้างชำระ' : 'แจ้งเตือนค่าเช่า',
     contents: {
-      type: 'bubble', size: 'micro',
+      type: 'bubble',
+      size: 'kilo',
+      header: {
+        type: 'box',
+        layout: 'vertical',
+        backgroundColor: isOverdue ? '#DC2626' : '#0F766E',
+        paddingAll: '16px',
+        contents: [
+          {
+            type: 'text',
+            text: isOverdue ? 'แจ้งเตือนค่าเช่าค้างชำระ' : 'แจ้งเตือนค่าเช่า',
+            color: '#FFFFFF',
+            weight: 'bold',
+            size: 'lg',
+            wrap: true,
+          },
+          {
+            type: 'text',
+            text: 'กรุณาตรวจสอบรายละเอียดและชำระเงินตามกำหนด',
+            color: '#FFFFFFCC',
+            size: 'xs',
+            margin: 'sm',
+            wrap: true,
+          },
+        ],
+      },
+      body: {
+        type: 'box',
+        layout: 'vertical',
+        paddingAll: '16px',
+        contents: [{
+          type: 'text',
+          text: details,
+          color: '#334155',
+          size: 'sm',
+          wrap: true,
+          lineSpacing: '5px',
+        }],
+      },
       footer: {
         type: 'box', layout: 'vertical', paddingAll: '12px',
         contents: [{
           type: 'button',
-          action: { type: 'uri', label: '🔗 ดูบิล / ชำระเงิน', uri: portalUrl },
-          style: 'primary', color: '#0C1B4D', height: 'sm',
+          action: { type: 'uri', label: 'ดูบิลและชำระเงิน', uri: portalUrl },
+          style: 'primary', color: isOverdue ? '#DC2626' : '#0F766E', height: 'sm',
         }],
       },
     },
@@ -75,21 +122,37 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: true, skipped: `not a reminder day (today=${todayDay}, days=${reminderDays.join(',')})` })
   }
 
-  // Guard: ป้องกันส่งซ้ำในวันเดิม (ตรวจ audit_logs ก่อน)
-  const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' }) // YYYY-MM-DD
-  const { data: alreadySent } = await supabase
+  const lineConfig = await getLineMessagingConfig()
+  if (!lineConfig) return NextResponse.json({ ok: false, error: 'LINE not configured' })
+
+  const reminderKey = bangkokDateKey()
+  const { data: sentLog } = await supabase
     .from('audit_logs')
     .select('id')
     .eq('action', 'cron_reminders_sent')
-    .gte('created_at', `${todayStr}T00:00:00+07:00`)
-    .lte('created_at', `${todayStr}T23:59:59+07:00`)
+    .eq('entity_type', 'cron')
+    .eq('entity_id', reminderKey)
+    .limit(1)
     .maybeSingle()
-  if (alreadySent) {
-    return NextResponse.json({ ok: true, skipped: 'already sent today' })
+
+  if (sentLog) {
+    return NextResponse.json({ ok: true, skipped: 'reminders already sent today', date: reminderKey })
   }
 
-  const lineConfig = await getLineMessagingConfig()
-  if (!lineConfig) return NextResponse.json({ ok: false, error: 'LINE not configured' })
+  const { error: lockError } = await supabase.from('audit_logs').insert({
+    action: 'cron_reminders_sent',
+    entity_type: 'cron',
+    entity_id: reminderKey,
+    description: `Automated reminders started for ${reminderKey}`,
+  })
+
+  if (lockError) {
+    const code = (lockError as { code?: string }).code
+    if (code === '23505') {
+      return NextResponse.json({ ok: true, skipped: 'reminders already sent today', date: reminderKey })
+    }
+    return NextResponse.json({ ok: false, error: lockError.message }, { status: 500 })
+  }
 
   const today = new Date().toISOString().split('T')[0]
   const todayThai = thaiDate(today)
@@ -142,17 +205,6 @@ export async function GET(req: NextRequest) {
     const tid = bill.tenant_id as string
     if (!byTenant.has(tid)) byTenant.set(tid, [])
     byTenant.get(tid)!.push(bill)
-  }
-
-  // Claim via audit log BEFORE sending — unique index on (date, action) rejects concurrent duplicates
-  const { error: auditErr } = await supabase.from('audit_logs').insert({
-    action:      'cron_reminders_sent',
-    entity_type: 'cron',
-    description: `ส่งแจ้งเตือนอัตโนมัติ (เริ่มส่ง)`,
-    new_value:   { date: todayStr },
-  })
-  if (auditErr) {
-    return NextResponse.json({ ok: true, skipped: 'already sent today' })
   }
 
   let sent = 0, failed = 0, snoozed = 0, noLine = 0, totalReminded = 0
@@ -245,8 +297,7 @@ export async function GET(req: NextRequest) {
 
     try {
       await pushMessage(lineUserId, lineConfig.channelAccessToken, [
-        { type: 'text', text: lines.join('\n') },
-        buildPortalFlex(portalUrl),
+        buildPortalFlex(portalUrl, lines.slice(2).join('\n'), hasOverdue),
       ])
       sent++
       totalReminded += totalOwed
@@ -279,5 +330,15 @@ export async function GET(req: NextRequest) {
     } catch { /* silent */ }
   }
 
-  return NextResponse.json({ ok: true, sent, failed, snoozed, noLine })
+  await supabase
+    .from('audit_logs')
+    .update({
+      description: `Automated reminders sent for ${reminderKey}`,
+      new_value: { sent, failed, snoozed, noLine },
+    })
+    .eq('action', 'cron_reminders_sent')
+    .eq('entity_type', 'cron')
+    .eq('entity_id', reminderKey)
+
+  return NextResponse.json({ ok: true, date: reminderKey, sent, failed, snoozed, noLine })
 }

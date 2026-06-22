@@ -62,7 +62,6 @@ export function SignAgreementClient({ contractId, liffId }: Props) {
         setStatus('form')
       }
     })
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lineUserId, contractId])
 
   // Signature canvas helpers
