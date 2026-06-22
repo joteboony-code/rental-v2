@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
-import { sendPaymentReceiptNotification } from './line'
+import { sendPaymentReceiptNotification } from '@/lib/line-notify'
 import { logAudit } from './audit'
 
 const MAX_SLIP_SIZE = 10 * 1024 * 1024
@@ -47,6 +47,8 @@ export async function recordPayment(
   }
 
   const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { success: false, message: 'ไม่มีสิทธิ์ใช้งาน' }
+
   const { data: billMeta } = await supabase
     .from('bills')
     .select('tenant_id, room_id')

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/service'
 import {
   LineIntegrationSchema,
   SettingsSchema,
@@ -9,11 +10,15 @@ import {
 } from '@/lib/definitions'
 import { DEFAULT_DORM_ID } from '@/lib/line-integration'
 import { encryptSecret, secretLast4 } from '@/lib/crypto-secrets'
+import { getAuthedUser } from '@/lib/require-admin'
+import { logAudit } from './audit'
 
 export async function updateSettings(
   state: SettingsFormState,
   formData: FormData
 ): Promise<SettingsFormState> {
+  if (!(await getAuthedUser())) return { message: 'ไม่มีสิทธิ์ใช้งาน' }
+
   const raw = {
     water_unit_price:           formData.get('water_unit_price'),
     electricity_unit_price:     formData.get('electricity_unit_price'),
@@ -53,9 +58,9 @@ export async function updateSettings(
   }
 
   const supabase = await createClient()
+
   const settingsUpdate: Record<string, unknown> = { ...parsed.data }
   if (slipokApiKey) {
-    // เข้ารหัสก่อนเก็บ — เดิมเก็บ plaintext ในตาราง settings
     settingsUpdate.slipok_api_key = await encryptSecret(slipokApiKey)
   }
 
@@ -101,10 +106,92 @@ export async function updateSettings(
   return { success: true, message: 'บันทึกการตั้งค่าเรียบร้อยแล้ว' }
 }
 
+// ─── Update payment info (requires password confirmation) ────
+export async function updatePaymentSettings(
+  _: unknown,
+  formData: FormData
+): Promise<{ success?: boolean; message: string }> {
+  const currentPassword  = String(formData.get('current_password') ?? '').trim()
+  const promptpayId      = String(formData.get('promptpay_id') ?? '').trim()
+  const promptpayName    = String(formData.get('promptpay_name') ?? '').trim() || 'ห้องเช่า'
+  const bankAccountsText = String(formData.get('bank_accounts_text') ?? '').trim()
+
+  if (!currentPassword) return { message: 'กรุณายืนยันรหัสผ่านก่อนบันทึก' }
+
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user?.email) return { message: 'ไม่มีสิทธิ์ใช้งาน' }
+
+  const { error: verifyError } = await supabase.auth.signInWithPassword({
+    email: user.email, password: currentPassword,
+  })
+  if (verifyError) return { message: 'รหัสผ่านไม่ถูกต้อง' }
+
+  const { data: before } = await supabase
+    .from('settings').select('promptpay_id, bank_accounts_text').eq('id', 1).single()
+
+  const { error } = await supabase
+    .from('settings')
+    .update({ promptpay_id: promptpayId, promptpay_name: promptpayName, bank_accounts_text: bankAccountsText || null })
+    .eq('id', 1)
+
+  if (error) return { message: `เกิดข้อผิดพลาด: ${error.message}` }
+
+  if (promptpayId !== (before?.promptpay_id ?? '') || bankAccountsText !== (before?.bank_accounts_text ?? '')) {
+    logAudit({
+      action: 'settings_update',
+      entityType: 'settings',
+      entityId: '1',
+      oldValue: { promptpay_id: before?.promptpay_id, bank_accounts_text: before?.bank_accounts_text },
+      newValue: { promptpay_id: promptpayId, bank_accounts_text: bankAccountsText },
+      description: 'เปลี่ยนข้อมูลบัญชี/PromptPay (ยืนยันรหัสผ่านแล้ว)',
+    }).catch(() => {})
+  }
+
+  revalidatePath('/settings')
+  return { success: true, message: 'บันทึกข้อมูลการชำระเงินแล้ว' }
+}
+
+// ─── Change password + sign out all devices ─────────────────
+export async function changePasswordAndSignOutAll(
+  _: unknown,
+  formData: FormData
+): Promise<{ success?: boolean; message: string }> {
+  const currentPassword = String(formData.get('current_password') ?? '').trim()
+  const newPassword     = String(formData.get('new_password') ?? '').trim()
+  const confirm         = String(formData.get('confirm_password') ?? '').trim()
+
+  if (!currentPassword)           return { message: 'กรุณากรอกรหัสผ่านปัจจุบัน' }
+  if (newPassword.length < 8)     return { message: 'รหัสผ่านใหม่ต้องมีอย่างน้อย 8 ตัวอักษร' }
+  if (newPassword !== confirm)     return { message: 'รหัสผ่านใหม่ทั้งสองช่องไม่ตรงกัน' }
+  if (newPassword === currentPassword) return { message: 'รหัสผ่านใหม่ต้องไม่ซ้ำกับรหัสเก่า' }
+
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user?.email) return { message: 'ไม่มีสิทธิ์ใช้งาน' }
+
+  // Verify current password before allowing any change
+  const { error: verifyError } = await supabase.auth.signInWithPassword({
+    email:    user.email,
+    password: currentPassword,
+  })
+  if (verifyError) return { message: 'รหัสผ่านปัจจุบันไม่ถูกต้อง' }
+
+  const { error } = await supabase.auth.updateUser({ password: newPassword })
+  if (error) return { message: `เกิดข้อผิดพลาด: ${error.message}` }
+
+  // Revoke ALL sessions including current device
+  await createServiceClient().auth.admin.signOut(user.id, 'global')
+
+  return { success: true, message: 'เปลี่ยนรหัสผ่านและออกจากระบบทุกเครื่องแล้ว' }
+}
+
 // ─── Shift current billing month ────────────────────────────
 export async function shiftBillingMonth(
   direction: 'prev' | 'next'
 ): Promise<{ success: boolean; month: string }> {
+  if (!(await getAuthedUser())) return { success: false, month: '' }
+
   const supabase = await createClient()
   const { data: s } = await supabase
     .from('settings')

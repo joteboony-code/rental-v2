@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { type SettingsFormState, type Settings } from '@/lib/definitions'
 import { type LineIntegrationPublic } from '@/lib/line-integration'
-import { Loader2, Droplets, Zap, Calendar, QrCode, MessageCircle, Globe, ShieldCheck, Bell, Banknote, FileText, Download, UserCheck } from 'lucide-react'
+import { Loader2, Droplets, Zap, Calendar, MessageCircle, Globe, ShieldCheck, Bell, FileText, Download, UserCheck } from 'lucide-react'
 
 interface Props {
   action: (state: SettingsFormState, formData: FormData) => Promise<SettingsFormState>
@@ -98,29 +98,6 @@ export function SettingsForm({ action, settings, lineIntegration, hasSlipokKey }
               defaultValue={settings?.due_day ?? 10} />
           </Field>
         </div>
-      </Section>
-
-      {/* ── PromptPay ── */}
-      <Section title="PromptPay" icon={<QrCode className="size-4 text-blue-500" />}>
-        <div className="grid grid-cols-2 gap-4">
-          <Field label="เบอร์ / บัตรประชาชน PromptPay" hint="ใช้สร้าง QR code ในบิล">
-            <Input id="promptpay_id" name="promptpay_id" type="text"
-              defaultValue={settings?.promptpay_id ?? ''} placeholder="เช่น 0812345678" className="font-mono" />
-          </Field>
-          <Field label="ชื่อที่แสดงใต้ QR">
-            <Input id="promptpay_name" name="promptpay_name"
-              defaultValue={settings?.promptpay_name ?? 'ห้องเช่า'} placeholder="ชื่อร้าน / ชื่อเจ้าของ" />
-          </Field>
-        </div>
-        <Field label="เลขบัญชีธนาคาร" hint="แสดงในข้อความแจ้งเตือนค้างชำระ เช่น ttb 919-7-253892 / กรุงศรี 800-4-557541">
-          <div className="relative">
-            <Banknote className="absolute left-3 top-2.5 size-4 text-slate-400" />
-            <Input id="bank_accounts_text" name="bank_accounts_text"
-              defaultValue={settings?.bank_accounts_text ?? ''}
-              placeholder="เช่น ttb 919-7-253892 / กรุงศรี 800-4-557541"
-              className="pl-9" />
-          </div>
-        </Field>
       </Section>
 
       {/* ── LINE ── */}

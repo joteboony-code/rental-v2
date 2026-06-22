@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import { decryptSecret } from '@/lib/crypto-secrets'
+import { getAuthedUser } from '@/lib/require-admin'
 
 async function notifyOwnerNewLead(name: string, phone: string, note: string | null) {
   const supabase = createServiceClient()
@@ -73,6 +74,8 @@ export async function submitLead(
 
 export async function updateLeadAnnouncement(text: string): Promise<{ error?: string }> {
   const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'ไม่มีสิทธิ์ใช้งาน' }
   const { error } = await supabase
     .from('settings')
     .update({ lead_announcement: text.trim() || null })
@@ -86,6 +89,7 @@ export async function updateLeadStatus(
   id: string,
   status: 'new' | 'contacted' | 'converted' | 'dismissed'
 ): Promise<{ error?: string }> {
+  if (!(await getAuthedUser())) return { error: 'ไม่มีสิทธิ์ใช้งาน' }
   const supabase = await createClient()
   const { error } = await supabase.from('leads').update({ status }).eq('id', id)
   if (error) return { error: error.message }
@@ -94,6 +98,7 @@ export async function updateLeadStatus(
 }
 
 export async function deleteLead(id: string): Promise<{ error?: string }> {
+  if (!(await getAuthedUser())) return { error: 'ไม่มีสิทธิ์ใช้งาน' }
   const supabase = await createClient()
   const { error } = await supabase.from('leads').delete().eq('id', id)
   if (error) return { error: error.message }

@@ -199,7 +199,9 @@ export async function submitPortalRepair(
 
   const title = String(formData.get('title') ?? '').trim()
   const description = String(formData.get('description') ?? '').trim() || null
-  const priority = String(formData.get('priority') ?? 'normal')
+  const VALID_PRIORITIES = ['low', 'normal', 'high', 'urgent'] as const
+  const rawPriority = String(formData.get('priority') ?? 'normal')
+  const priority = (VALID_PRIORITIES as readonly string[]).includes(rawPriority) ? rawPriority : 'normal'
   if (!title) return { success: false, message: 'กรุณาระบุหัวข้อ' }
 
   let photo_url: string | null = null
