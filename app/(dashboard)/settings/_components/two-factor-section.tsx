@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import { ShieldCheck, ShieldOff, Loader2, X } from 'lucide-react'
+import { ShieldCheck, ShieldOff, Loader2, X, ChevronDown, ChevronUp, Copy, Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -10,14 +10,17 @@ import { createClient } from '@/lib/supabase/client'
 type Status = 'loading' | 'enabled' | 'disabled'
 
 export function TwoFactorSection() {
-  const [status, setStatus]     = useState<Status>('loading')
-  const [factorId, setFactorId] = useState<string | null>(null)
-  const [step, setStep]         = useState<'idle' | 'enroll' | 'unenroll'>('idle')
-  const [qrSvg, setQrSvg]       = useState<string | null>(null)
-  const [enrollId, setEnrollId] = useState<string | null>(null)
-  const [code, setCode]         = useState('')
-  const [error, setError]       = useState<string | null>(null)
-  const [busy, setBusy]         = useState(false)
+  const [status, setStatus]       = useState<Status>('loading')
+  const [factorId, setFactorId]   = useState<string | null>(null)
+  const [step, setStep]           = useState<'idle' | 'enroll' | 'unenroll'>('idle')
+  const [qrSvg, setQrSvg]         = useState<string | null>(null)
+  const [totpSecret, setTotpSecret] = useState<string | null>(null)
+  const [enrollId, setEnrollId]   = useState<string | null>(null)
+  const [code, setCode]           = useState('')
+  const [error, setError]         = useState<string | null>(null)
+  const [busy, setBusy]           = useState(false)
+  const [showSecret, setShowSecret] = useState(false)
+  const [copied, setCopied]       = useState(false)
 
   const supabase = useMemo(() => createClient(), [])
 
@@ -39,9 +42,11 @@ export function TwoFactorSection() {
       return
     }
     setQrSvg(data.totp.qr_code)
+    setTotpSecret(data.totp.secret)
     setEnrollId(data.id)
     setStep('enroll')
     setCode('')
+    setShowSecret(false)
   }
 
   async function confirmEnroll() {
@@ -50,7 +55,7 @@ export function TwoFactorSection() {
     const { error: err } = await supabase.auth.mfa.challengeAndVerify({ factorId: enrollId, code })
     setBusy(false)
     if (err) { setError('รหัสไม่ถูกต้อง ลองอีกครั้ง'); return }
-    setStatus('enabled'); setFactorId(enrollId); setStep('idle'); setQrSvg(null); setCode('')
+    setStatus('enabled'); setFactorId(enrollId); setStep('idle'); setQrSvg(null); setTotpSecret(null); setCode('')
   }
 
   async function confirmUnenroll() {
@@ -60,6 +65,14 @@ export function TwoFactorSection() {
     setBusy(false)
     if (err) { setError('เกิดข้อผิดพลาด: ' + err?.message); return }
     setStatus('disabled'); setFactorId(null); setStep('idle'); setCode('')
+  }
+
+  function copySecret() {
+    if (!totpSecret) return
+    navigator.clipboard.writeText(totpSecret).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
   }
 
   if (status === 'loading') {
@@ -109,9 +122,11 @@ export function TwoFactorSection() {
           <div className="space-y-4">
             <p className="text-xs text-slate-500">
               1. เปิด <span className="font-semibold">Google Authenticator</span> หรือ <span className="font-semibold">Authy</span><br />
-              2. กด "+" แล้วสแกน QR นี้<br />
+              2. กด "+" → <span className="font-semibold">สแกน QR code</span> (หรือกรอกรหัสเองด้านล่าง)<br />
               3. กรอกรหัส 6 หลักจากแอปด้านล่าง
             </p>
+
+            {/* QR code */}
             <div className="flex justify-center bg-white p-3 rounded-xl border border-slate-100">
               {qrSvg.startsWith('data:') ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -120,6 +135,43 @@ export function TwoFactorSection() {
                 <div dangerouslySetInnerHTML={{ __html: qrSvg }} />
               )}
             </div>
+
+            {/* Manual entry toggle */}
+            {totpSecret && (
+              <div className="rounded-xl border border-slate-100 overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setShowSecret((v) => !v)}
+                  className="w-full flex items-center justify-between px-4 py-2.5 text-xs font-medium text-slate-500 hover:bg-slate-50 transition-colors"
+                >
+                  สแกนไม่ได้? กรอกรหัสเองแทน
+                  {showSecret ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
+                </button>
+                {showSecret && (
+                  <div className="px-4 pb-4 space-y-2 bg-slate-50">
+                    <p className="text-xs text-slate-400">
+                      ในแอป Authenticator → กด "+" → <span className="font-semibold">กรอกรหัสด้วยตนเอง / Enter setup key</span> → วางรหัสนี้
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <code className="flex-1 block bg-white border border-slate-200 rounded-lg px-3 py-2 font-mono text-sm tracking-widest text-slate-800 break-all select-all">
+                        {totpSecret}
+                      </code>
+                      <button
+                        type="button"
+                        onClick={copySecret}
+                        className="shrink-0 flex items-center justify-center size-9 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 transition-colors"
+                        title="คัดลอก"
+                      >
+                        {copied
+                          ? <Check className="size-4 text-emerald-600" />
+                          : <Copy className="size-4 text-slate-400" />}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="space-y-1.5">
               <Label className="text-sm font-medium text-slate-700">รหัส OTP จากแอป</Label>
               <Input
@@ -131,7 +183,7 @@ export function TwoFactorSection() {
             {error && <p className="text-xs text-red-600 font-medium">{error}</p>}
             <div className="flex gap-2">
               <Button variant="outline" className="flex-1"
-                onClick={() => { setStep('idle'); setQrSvg(null); setError(null) }}>
+                onClick={() => { setStep('idle'); setQrSvg(null); setTotpSecret(null); setError(null) }}>
                 <X className="size-4 mr-1" />ยกเลิก
               </Button>
               <Button className="flex-1" onClick={confirmEnroll} disabled={busy || code.length !== 6}>
