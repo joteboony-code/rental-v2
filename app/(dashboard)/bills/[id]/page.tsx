@@ -232,11 +232,19 @@ export default async function BillDetailPage({
               <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest flex items-center gap-2">
                 <CreditCard className="size-3.5" /> ประวัติการชำระ
               </p>
-              {totalPaid > 0 && (
-                <span className="text-xs font-semibold text-emerald-600">
-                  รวม ฿{totalPaid.toLocaleString('th-TH', { minimumFractionDigits: 2 })}
-                </span>
-              )}
+              <div className="flex items-center gap-2">
+                {totalPaid > 0 && (
+                  <span className="text-xs font-semibold text-emerald-600">
+                    รวม ฿{totalPaid.toLocaleString('th-TH', { minimumFractionDigits: 2 })}
+                  </span>
+                )}
+                <Link
+                  href={`/bills/${id}/receipt`}
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 bg-slate-50 border border-slate-200 hover:bg-slate-100 px-2.5 py-1.5 rounded-lg transition-colors"
+                >
+                  🖨 พิมพ์ใบเสร็จ
+                </Link>
+              </div>
             </div>
 
             {payments && payments.length > 0 ? (

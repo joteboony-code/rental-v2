@@ -3,7 +3,7 @@ import { Suspense } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { buttonVariants } from '@/components/ui/button'
 import { BillStatusBadge } from './_components/bill-status-badge'
-import { ClipboardList, Download, History, ArrowRight, Wallet } from 'lucide-react'
+import { ClipboardList, Download, History, ArrowRight, Wallet, CalendarClock } from 'lucide-react'
 import { roomRow } from '@/lib/room-utils'
 import { BulkLineButton } from './_components/bulk-line-button'
 import { BillingMonthNav } from './_components/billing-month-nav'
@@ -96,6 +96,10 @@ export default async function BillsPage({ searchParams }: Props) {
         </div>
         <div className="flex flex-col items-end gap-2">
           <div className="flex gap-2 flex-wrap justify-end">
+            <Link href="/bills/promises"
+              className={buttonVariants({ variant: 'outline', size: 'sm' }) + ' hidden md:inline-flex rounded-xl gap-1.5 border-slate-200 text-slate-600 hover:bg-slate-50'}>
+              <CalendarClock className="size-3.5" /> ดูนัดจ่าย →
+            </Link>
             <Link href="/bills/payments"
               className={buttonVariants({ variant: 'outline', size: 'sm' }) + ' hidden md:inline-flex rounded-xl gap-1.5 border-slate-200 text-slate-600 hover:bg-slate-50'}>
               <Wallet className="size-3.5" /> ประวัติชำระ
