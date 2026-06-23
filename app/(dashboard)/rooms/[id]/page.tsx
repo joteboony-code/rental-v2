@@ -125,7 +125,11 @@ export default async function RoomDetailPage({ params }: { params: Promise<{ id:
                   <p className="rounded-xl bg-white/70 p-3 text-sm text-violet-700">{room.reservation_note}</p>
                 )}
               </div>
-              <ReservationActions roomId={id} />
+              <ReservationActions
+                roomId={id}
+                fullDeposit={Number(room.deposit ?? 0)}
+                reservedDeposit={Number(room.reserved_deposit ?? 0)}
+              />
             </div>
           )}
 

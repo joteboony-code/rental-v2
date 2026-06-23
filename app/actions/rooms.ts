@@ -148,7 +148,10 @@ export async function clearRoomReservation(roomId: string): Promise<{ success: b
   return { success: true }
 }
 
-export async function convertReservationToTenant(roomId: string): Promise<{ success: boolean; message?: string }> {
+export async function convertReservationToTenant(
+  roomId: string,
+  startDate?: string,
+): Promise<{ success: boolean; message?: string; tenantId?: string }> {
   const { supabase } = await getOwnerOrThrow()
   const { data: room } = await supabase
     .from('rooms')
@@ -188,7 +191,7 @@ export async function convertReservationToTenant(roomId: string): Promise<{ succ
   const { error: contractError } = await supabase.from('contracts').insert({
     room_id: roomId,
     tenant_id: tenantId,
-    start_date: today,
+    start_date: startDate || today,
     monthly_rent: Number(room.monthly_rent),
     deposit_paid: Number(room.reserved_deposit ?? 0),
     status: 'active',
@@ -215,7 +218,7 @@ export async function convertReservationToTenant(roomId: string): Promise<{ succ
   revalidatePath('/rooms')
   revalidatePath(`/rooms/${roomId}`)
   revalidatePath('/tenants')
-  return { success: true }
+  return { success: true, tenantId }
 }
 
 export async function deleteRoom(id: string): Promise<{ success: boolean; message?: string }> {
