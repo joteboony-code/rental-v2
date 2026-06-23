@@ -16,12 +16,17 @@ export function ReservationActions({ roomId, fullDeposit, reservedDeposit }: Pro
   const router = useRouter()
   const [confirming, setConfirming] = useState(false)
   const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10))
+  const [additionalDeposit, setAdditionalDeposit] = useState(
+    fullDeposit > reservedDeposit ? String(fullDeposit - reservedDeposit) : ''
+  )
 
-  const remainingDeposit = Math.max(0, fullDeposit - reservedDeposit)
+  const additional = parseFloat(additionalDeposit) || 0
+  const totalReceived = reservedDeposit + additional
+  const remainingDeposit = Math.max(0, fullDeposit - totalReceived)
 
   function handleConvert() {
     startTransition(async () => {
-      const result = await convertReservationToTenant(roomId, startDate)
+      const result = await convertReservationToTenant(roomId, startDate, additional)
       if (!result.success) {
         window.alert(result.message ?? 'ทำรายการไม่สำเร็จ')
         return
@@ -63,19 +68,42 @@ export function ReservationActions({ roomId, fullDeposit, reservedDeposit }: Pro
 
         {/* Deposit breakdown */}
         <div className="rounded-lg bg-slate-50 p-3 space-y-2 text-sm">
-          <div className="flex justify-between text-slate-500">
-            <span>เงินมัดจำที่ต้องชำระ</span>
-            <span className="font-medium text-slate-700">฿{fullDeposit.toLocaleString()}</span>
-          </div>
+          {fullDeposit > 0 && (
+            <div className="flex justify-between text-slate-500">
+              <span>มัดจำทั้งหมด (ตามสัญญา)</span>
+              <span className="font-medium text-slate-700">฿{fullDeposit.toLocaleString()}</span>
+            </div>
+          )}
           <div className="flex justify-between text-slate-500">
             <span>รับแล้ว (จากเงินจอง)</span>
             <span className="font-medium text-emerald-600">฿{reservedDeposit.toLocaleString()}</span>
           </div>
-          <div className="border-t border-slate-200 pt-2 flex justify-between font-semibold">
-            <span className="text-slate-700">ยังต้องชำระเพิ่ม</span>
-            <span className={remainingDeposit > 0 ? 'text-rose-600' : 'text-emerald-600'}>
-              ฿{remainingDeposit.toLocaleString()}
-            </span>
+          {/* รับเพิ่มวันเข้าอยู่ */}
+          <div className="space-y-1">
+            <label className="text-xs text-slate-500">รับเพิ่มวันเข้าอยู่ (บาท)</label>
+            <input
+              type="number"
+              min="0"
+              step="1"
+              value={additionalDeposit}
+              onChange={(e) => setAdditionalDeposit(e.target.value)}
+              placeholder="0"
+              className="w-full rounded-md border border-slate-200 bg-white px-2.5 py-1 text-sm outline-none focus:border-violet-400 focus:ring-1 focus:ring-violet-100"
+            />
+          </div>
+          <div className="border-t border-slate-200 pt-2 space-y-1">
+            <div className="flex justify-between text-slate-500 text-xs">
+              <span>รับรวมทั้งหมด</span>
+              <span className="font-medium text-emerald-600">฿{totalReceived.toLocaleString()}</span>
+            </div>
+            {fullDeposit > 0 && (
+              <div className="flex justify-between font-semibold">
+                <span className="text-slate-700">ยังค้างอีก</span>
+                <span className={remainingDeposit > 0 ? 'text-rose-600' : 'text-emerald-600'}>
+                  ฿{remainingDeposit.toLocaleString()}
+                </span>
+              </div>
+            )}
           </div>
         </div>
 

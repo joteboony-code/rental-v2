@@ -146,6 +146,7 @@ export async function clearRoomReservation(roomId: string): Promise<{ success: b
 export async function convertReservationToTenant(
   roomId: string,
   startDate?: string,
+  additionalDeposit?: number,
 ): Promise<{ success: boolean; message?: string; tenantId?: string }> {
   const { supabase } = await getOwnerOrThrow()
   const { data: room } = await supabase
@@ -183,12 +184,13 @@ export async function convertReservationToTenant(
   }
 
   const today = new Date().toISOString().slice(0, 10)
+  const depositPaid = Number(room.reserved_deposit ?? 0) + (additionalDeposit ?? 0)
   const { error: contractError } = await supabase.from('contracts').insert({
     room_id: roomId,
     tenant_id: tenantId,
     start_date: startDate || today,
     monthly_rent: Number(room.monthly_rent),
-    deposit_paid: Number(room.reserved_deposit ?? 0),
+    deposit_paid: depositPaid,
     status: 'active',
     note: 'สร้างจากการแปลงการจองเป็นสัญญาเช่า',
   })
