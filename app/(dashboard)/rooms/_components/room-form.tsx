@@ -1,6 +1,6 @@
 'use client'
 
-import { useActionState, useEffect, useState } from 'react'
+import { useActionState, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -25,6 +25,7 @@ export function RoomForm({ action, room, submitLabel = 'บันทึก', ten
   const [selectedTenantId, setSelectedTenantId] = useState(room?.reserved_tenant_id ?? '')
   const [reservedName, setReservedName]         = useState(room?.reserved_name ?? '')
   const [reservedPhone, setReservedPhone]       = useState(room?.reserved_phone ?? '')
+  const handledState = useRef<typeof state>(undefined)
 
   function handleTenantSelect(tenantId: string) {
     setSelectedTenantId(tenantId)
@@ -37,7 +38,8 @@ export function RoomForm({ action, room, submitLabel = 'บันทึก', ten
   }
 
   useEffect(() => {
-    if (!state?.message) return
+    if (!state?.message || state === handledState.current) return
+    handledState.current = state
     if (state.success) {
       toast.success(state.message, { description: room ? undefined : 'ห้องใหม่พร้อมใช้งานแล้ว' })
       if (!room) router.push('/rooms')
