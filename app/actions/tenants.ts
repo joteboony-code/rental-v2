@@ -144,8 +144,9 @@ export async function createContract(
 
   logAudit({ action: 'contract_create', entityType: 'contract', entityId: contract?.id ?? null, tenantId: parsed.data.tenant_id, roomId: parsed.data.room_id, description: `สร้างสัญญาห้อง ${parsed.data.room_id}` }).catch(() => {})
 
-  revalidatePath('/tenants')
-  revalidatePath('/rooms')
+  // ไม่ใช้ revalidatePath เพราะทำให้ Next.js re-render page ใน action response
+  // และ Supabase query ใน page อาจ hang → ปุ่มค้าง
+  // ให้ client เรียก router.refresh() หลัง success แทน
   return { success: true, message: 'สร้างสัญญาเรียบร้อยแล้ว' }
 }
 

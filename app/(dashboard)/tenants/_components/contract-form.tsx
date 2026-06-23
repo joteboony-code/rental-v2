@@ -1,6 +1,7 @@
 'use client'
 
-import { useActionState, useState } from 'react'
+import { useActionState, useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -16,9 +17,14 @@ interface ContractFormProps {
 }
 
 export function ContractForm({ action, tenantId, availableRooms }: ContractFormProps) {
+  const router = useRouter()
   const [state, formAction, isPending] = useActionState(action, undefined)
   const [rent, setRent] = useState('')
   const [deposit, setDeposit] = useState('')
+
+  useEffect(() => {
+    if (state?.success) router.refresh()
+  }, [state?.success, router])
 
   const today = new Date().toISOString().split('T')[0]
 
