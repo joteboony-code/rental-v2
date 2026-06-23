@@ -8,6 +8,7 @@ import { logAudit } from './audit'
 import { getAuthedUser } from '@/lib/require-admin'
 
 export async function unlinkTenantLine(tenantId: string): Promise<{ success: boolean; message?: string }> {
+  if (!(await getAuthedUser())) return { success: false, message: 'ไม่มีสิทธิ์ใช้งาน' }
   const supabase = await createClient()
   const { error } = await supabase
     .from('tenants')
@@ -71,7 +72,9 @@ export async function pairTenantLine(
   const verifiedName    = lineProfile.name    ?? displayName
   const verifiedPicture = lineProfile.picture ?? pictureUrl
 
-  const supabase = await createClient()
+  // The caller has proved ownership of this LINE identity with LINE's token.
+  // Use service_role because the RPC is deliberately unavailable to browser roles.
+  const supabase = createServiceClient()
   const { data, error } = await supabase.rpc('pair_tenant_line', {
     p_room_number:   roomNumber,
     p_line_user_id:  lineUserId,
