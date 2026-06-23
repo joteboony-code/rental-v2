@@ -210,21 +210,55 @@ async function notifyOwnerAgreementSigned({
   const appUrl = (cfg.app_url ?? process.env.NEXT_PUBLIC_APP_URL ?? '').replace(/\/$/, '')
   const tenantUrl = appUrl ? `${appUrl}/tenants` : null
 
-  const lines = [
-    '✅ ผู้เช่าลงนามสัญญาแล้ว',
-    `ห้อง: ${roomNumber}`,
-    `ผู้เช่า: ${tenantName}`,
-    '',
-    `ดาวน์โหลด PDF: ${pdfUrl}`,
+  const footerContents: object[] = [
+    {
+      type: 'button',
+      style: 'primary',
+      action: { type: 'uri', label: 'ดาวน์โหลด PDF', uri: pdfUrl },
+    },
   ]
-  if (tenantUrl) lines.push(`จัดการ: ${tenantUrl}`)
+  if (tenantUrl) {
+    footerContents.push({
+      type: 'button',
+      style: 'secondary',
+      margin: 'sm',
+      action: { type: 'uri', label: 'จัดการผู้เช่า', uri: tenantUrl },
+    })
+  }
+
+  const flexMessage = {
+    type: 'flex',
+    altText: `✅ ${tenantName} ลงนามสัญญาห้อง ${roomNumber} แล้ว`,
+    contents: {
+      type: 'bubble',
+      body: {
+        type: 'box',
+        layout: 'vertical',
+        contents: [
+          { type: 'text', text: '✅ ผู้เช่าลงนามสัญญาแล้ว', weight: 'bold', size: 'md' },
+          {
+            type: 'text',
+            text: `ห้อง ${roomNumber}  •  ${tenantName}`,
+            size: 'sm',
+            color: '#555555',
+            margin: 'sm',
+          },
+        ],
+      },
+      footer: {
+        type: 'box',
+        layout: 'vertical',
+        contents: footerContents,
+      },
+    },
+  }
 
   await fetch('https://api.line.me/v2/bot/message/push', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify({
       to: cfg.owner_line_user_id,
-      messages: [{ type: 'text', text: lines.join('\n') }],
+      messages: [flexMessage],
     }),
   })
 }
@@ -271,19 +305,45 @@ export async function sendAgreementLinkToTenant(
     signUrl = `${appUrl}${signPath}`
   }
 
-  const text = [
-    `สวัสดีครับ คุณ${tenant.full_name}`,
-    `กรุณาลงนามสัญญาเช่าห้อง ${roomNumber} ผ่านลิงก์ด้านล่างนี้`,
-    '',
-    signUrl,
-    '',
-    'กรุณาตรวจสอบข้อมูลให้ครบถ้วนก่อนลงนามครับ',
-  ].join('\n')
+  const flexMessage = {
+    type: 'flex',
+    altText: `กรุณาลงนามสัญญาเช่าห้อง ${roomNumber}`,
+    contents: {
+      type: 'bubble',
+      body: {
+        type: 'box',
+        layout: 'vertical',
+        contents: [
+          { type: 'text', text: 'สัญญาเช่า', weight: 'bold', size: 'lg' },
+          {
+            type: 'text',
+            text: `สวัสดีครับ คุณ${tenant.full_name}\nกรุณาตรวจสอบข้อมูลให้ครบถ้วนก่อนลงนามสัญญาเช่าห้อง ${roomNumber} ครับ`,
+            size: 'sm',
+            color: '#555555',
+            wrap: true,
+            margin: 'md',
+          },
+        ],
+      },
+      footer: {
+        type: 'box',
+        layout: 'vertical',
+        contents: [
+          {
+            type: 'button',
+            style: 'primary',
+            color: '#06C755',
+            action: { type: 'uri', label: 'ลงนามสัญญา', uri: signUrl },
+          },
+        ],
+      },
+    },
+  }
 
   const res = await fetch('https://api.line.me/v2/bot/message/push', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ to: tenant.line_user_id, messages: [{ type: 'text', text }] }),
+    body: JSON.stringify({ to: tenant.line_user_id, messages: [flexMessage] }),
   })
 
   if (!res.ok) {
