@@ -7,6 +7,7 @@ import { logout } from '@/app/actions/auth'
 import {
   Building2, LayoutDashboard, Home, Users, FileText, ClipboardList,
   Wrench, Settings, LogOut, History, Megaphone, Inbox, MoreHorizontal, X,
+  BarChart2, Wallet,
 } from 'lucide-react'
 import { ThemeToggle } from './theme-toggle'
 
@@ -20,6 +21,8 @@ const mainItems = [
 const moreItems = [
   { href: '/bills/meter',      label: 'จดมิเตอร์',       icon: ClipboardList, bg: 'bg-teal-50',    accent: 'text-teal-500',    match: (p: string) => p.startsWith('/bills/meter') },
   { href: '/repairs',          label: 'แจ้งซ่อม',        icon: Wrench,        bg: 'bg-amber-50',   accent: 'text-amber-500',   match: (p: string) => p.startsWith('/repairs') },
+  { href: '/expenses',         label: 'ค่าใช้จ่าย',      icon: Wallet,        bg: 'bg-rose-50',    accent: 'text-rose-500',    match: (p: string) => p.startsWith('/expenses') },
+  { href: '/reports',          label: 'รายงาน',          icon: BarChart2,     bg: 'bg-indigo-50',  accent: 'text-indigo-500',  match: (p: string) => p.startsWith('/reports') },
   { href: '/payment-reviews',  label: 'สลิปรอตรวจ',      icon: Inbox,         bg: 'bg-orange-50',  accent: 'text-orange-500',  match: (p: string) => p.startsWith('/payment-reviews') },
   { href: '/broadcast',        label: 'ประกาศ',          icon: Megaphone,     bg: 'bg-violet-50',  accent: 'text-violet-500',  match: (p: string) => p.startsWith('/broadcast') },
   { href: '/audit-logs',       label: 'ประวัติการกระทำ', icon: History,       bg: 'bg-rose-50',    accent: 'text-rose-500',    match: (p: string) => p.startsWith('/audit-logs') },
