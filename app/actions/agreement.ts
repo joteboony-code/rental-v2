@@ -166,14 +166,81 @@ export async function submitSignedAgreement(
     .update({ agreement_pdf_url: pdfUrl, signed_at: new Date().toISOString() })
     .eq('id', contractId)
 
-  // แจ้ง owner ทาง LINE
+  // แจ้ง owner และผู้เช่าทาง LINE
   try {
-    await notifyOwnerAgreementSigned({ contractId, tenantId: tenant.id, pdfUrl })
+    await Promise.all([
+      notifyOwnerAgreementSigned({ contractId, tenantId: tenant.id, pdfUrl }),
+      notifyTenantAgreementSigned({ lineUserId, pdfUrl }),
+    ])
   } catch (e) {
     console.error('notify agreement signed failed', e)
   }
 
   return { success: true, message: 'ลงนามสัญญาเรียบร้อยแล้ว', pdfUrl }
+}
+
+async function notifyTenantAgreementSigned({
+  lineUserId,
+  pdfUrl,
+}: {
+  lineUserId: string
+  pdfUrl: string
+}) {
+  const supabase = createServiceClient()
+  const cfg = (
+    await supabase
+      .from('line_integrations')
+      .select('encrypted_channel_access_token')
+      .eq('dorm_id', DEFAULT_DORM_ID)
+      .maybeSingle()
+  ).data
+  if (!cfg?.encrypted_channel_access_token) return
+
+  const token = await decryptSecret(cfg.encrypted_channel_access_token)
+
+  await fetch('https://api.line.me/v2/bot/message/push', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({
+      to: lineUserId,
+      messages: [
+        {
+          type: 'flex',
+          altText: '✅ ลงนามสัญญาเรียบร้อยแล้ว — กดเพื่อดาวน์โหลด PDF',
+          contents: {
+            type: 'bubble',
+            body: {
+              type: 'box',
+              layout: 'vertical',
+              contents: [
+                { type: 'text', text: '✅ ลงนามสัญญาเรียบร้อย', weight: 'bold', size: 'md' },
+                {
+                  type: 'text',
+                  text: 'สัญญาเช่าของคุณถูกบันทึกในระบบแล้ว กดปุ่มด้านล่างเพื่อเก็บสำเนา PDF ไว้',
+                  size: 'sm',
+                  color: '#555555',
+                  wrap: true,
+                  margin: 'md',
+                },
+              ],
+            },
+            footer: {
+              type: 'box',
+              layout: 'vertical',
+              contents: [
+                {
+                  type: 'button',
+                  style: 'primary',
+                  color: '#06C755',
+                  action: { type: 'uri', label: 'ดาวน์โหลด PDF สัญญา', uri: pdfUrl },
+                },
+              ],
+            },
+          },
+        },
+      ],
+    }),
+  })
 }
 
 async function notifyOwnerAgreementSigned({
