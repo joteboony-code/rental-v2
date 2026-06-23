@@ -5,6 +5,7 @@ import { DEFAULT_DORM_ID } from '@/lib/line-integration'
 import { decryptSecret } from '@/lib/crypto-secrets'
 import { getAuthedUser } from '@/lib/require-admin'
 import { verifyPortalToken } from '@/lib/portal-session'
+import { logAudit } from './audit'
 
 export type AgreementData = {
   tenant: {
@@ -297,26 +298,35 @@ export async function uploadOwnerSignature(
   formData: FormData
 ): Promise<{ success: boolean; message: string; url?: string }> {
   // ตรวจสิทธิ์เอง — ลายเซ็นนี้ถูกฝังในทุก PDF สัญญา ห้ามให้ anon เขียนทับ
-  if (!(await getAuthedUser())) return { success: false, message: 'ไม่มีสิทธิ์ใช้งาน' }
+  const user = await getAuthedUser()
+  if (!user) return { success: false, message: 'ไม่มีสิทธิ์ใช้งาน' }
 
-  const supabase = createServiceClient()
   const file = formData.get('signature') as File | null
   if (!file || file.size === 0) return { success: false, message: 'ไม่พบไฟล์' }
 
-  const ext = file.name.split('.').pop() ?? 'png'
+  const ALLOWED_MIME: Record<string, string> = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' }
+  const ext = ALLOWED_MIME[file.type]
+  if (!ext) return { success: false, message: 'รองรับเฉพาะ PNG, JPG, WebP' }
+  if (file.size > 2 * 1024 * 1024) return { success: false, message: 'ไฟล์ต้องไม่เกิน 2 MB' }
+
+  const supabase = createServiceClient()
   const buffer = await file.arrayBuffer()
   const { data: upload, error } = await supabase.storage
     .from('tenant-documents')
-    .upload(`signatures/owner_signature.${ext}`, buffer, {
-      contentType: file.type,
-      upsert: true,
-    })
+    .upload(`signatures/owner_signature.${ext}`, buffer, { contentType: file.type, upsert: true })
 
   if (error || !upload) return { success: false, message: `อัพโหลดไม่สำเร็จ: ${error?.message ?? 'unknown'}` }
 
   const url = supabase.storage.from('tenant-documents').getPublicUrl(upload.path).data.publicUrl
 
   await supabase.from('settings').update({ owner_signature_url: url }).eq('id', 1)
+
+  logAudit({
+    action: 'settings_update',
+    entityType: 'settings',
+    entityId: '1',
+    description: `เปลี่ยนลายเซ็นเจ้าของหอ (${file.size} bytes)`,
+  }).catch(() => {})
 
   return { success: true, message: 'บันทึกลายเซ็นเรียบร้อยแล้ว', url }
 }
