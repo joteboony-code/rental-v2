@@ -14,11 +14,10 @@ export default async function EditRoomPage({
   const { id } = await params
   const supabase = await createClient()
 
-  const { data: room } = await supabase
-    .from('rooms')
-    .select('*')
-    .eq('id', id)
-    .single()
+  const [{ data: room }, { data: tenants }] = await Promise.all([
+    supabase.from('rooms').select('*').eq('id', id).single(),
+    supabase.from('tenants').select('id, full_name, phone').order('full_name'),
+  ])
 
   if (!room) notFound()
 
@@ -42,7 +41,7 @@ export default async function EditRoomPage({
       </div>
 
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 md:p-6">
-        <RoomForm action={boundAction} room={room} submitLabel="บันทึกการแก้ไข" />
+        <RoomForm action={boundAction} room={room} submitLabel="บันทึกการแก้ไข" tenants={tenants ?? []} />
       </div>
     </div>
   )

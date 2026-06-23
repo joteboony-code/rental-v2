@@ -29,6 +29,7 @@ export async function createRoom(
     deposit:      formData.get('deposit') || 0,
     wifi_fee:     formData.get('wifi_fee') || null,
     status:       formData.get('status'),
+    reserved_tenant_id:  formData.get('reserved_tenant_id') || null,
     reserved_name:       formData.get('reserved_name') || '',
     reserved_phone:      formData.get('reserved_phone') || '',
     reserved_deposit:    formData.get('reserved_deposit') || null,
@@ -71,6 +72,7 @@ export async function updateRoom(
     deposit:      formData.get('deposit') || 0,
     wifi_fee:     formData.get('wifi_fee') || null,
     status:       formData.get('status'),
+    reserved_tenant_id:  formData.get('reserved_tenant_id') || null,
     reserved_name:       formData.get('reserved_name') || '',
     reserved_phone:      formData.get('reserved_phone') || '',
     reserved_deposit:    formData.get('reserved_deposit') || null,
@@ -102,6 +104,7 @@ function normalizeReservationFields(data: Record<string, unknown>) {
   if (data.status !== 'reserved') {
     return {
       ...data,
+      reserved_tenant_id: null,
       reserved_name: null,
       reserved_phone: null,
       reserved_deposit: null,
@@ -112,6 +115,7 @@ function normalizeReservationFields(data: Record<string, unknown>) {
 
   return {
     ...data,
+    reserved_tenant_id: data.reserved_tenant_id ?? null,
     reserved_name: String(data.reserved_name ?? '').trim() || null,
     reserved_phone: String(data.reserved_phone ?? '').trim() || null,
     reserved_deposit: data.reserved_deposit ?? null,
@@ -126,6 +130,7 @@ export async function clearRoomReservation(roomId: string): Promise<{ success: b
     .from('rooms')
     .update({
       status: 'available',
+      reserved_tenant_id: null,
       reserved_name: null,
       reserved_phone: null,
       reserved_deposit: null,
@@ -147,35 +152,47 @@ export async function convertReservationToTenant(roomId: string): Promise<{ succ
   const { supabase } = await getOwnerOrThrow()
   const { data: room } = await supabase
     .from('rooms')
-    .select('room_number, monthly_rent, reserved_name, reserved_phone, reserved_deposit, reservation_note, status')
+    .select('room_number, monthly_rent, reserved_tenant_id, reserved_name, reserved_phone, reserved_deposit, reservation_note, status')
     .eq('id', roomId)
     .single()
 
   if (!room) return { success: false, message: 'ไม่พบห้อง' }
   if (room.status !== 'reserved') return { success: false, message: 'ห้องนี้ไม่ได้อยู่ในสถานะจอง' }
-  const reservedName = String(room.reserved_name ?? '').trim()
-  if (!reservedName) return { success: false, message: 'กรุณากรอกชื่อผู้จองก่อนแปลงเป็นผู้เช่า' }
 
-  const { data: tenant, error: tenantError } = await supabase
-    .from('tenants')
-    .insert({
-      full_name: reservedName,
-      phone: room.reserved_phone ?? null,
-      note: room.reservation_note ? `มาจากการจองห้อง ${room.room_number}: ${room.reservation_note}` : `มาจากการจองห้อง ${room.room_number}`,
-    })
-    .select('id')
-    .single()
-  if (tenantError || !tenant) return { success: false, message: tenantError?.message ?? 'สร้างผู้เช่าไม่สำเร็จ' }
+  let tenantId: string
+
+  if (room.reserved_tenant_id) {
+    // ผู้เช่าที่มีในระบบแล้ว — ใช้ ID เดิม
+    tenantId = room.reserved_tenant_id
+  } else {
+    // ผู้จองใหม่ — สร้าง tenant ใหม่จากชื่อ/โทร
+    const reservedName = String(room.reserved_name ?? '').trim()
+    if (!reservedName) return { success: false, message: 'กรุณากรอกชื่อผู้จองก่อนแปลงเป็นผู้เช่า' }
+
+    const { data: newTenant, error: tenantError } = await supabase
+      .from('tenants')
+      .insert({
+        full_name: reservedName,
+        phone: room.reserved_phone ?? null,
+        note: room.reservation_note
+          ? `มาจากการจองห้อง ${room.room_number}: ${room.reservation_note}`
+          : `มาจากการจองห้อง ${room.room_number}`,
+      })
+      .select('id')
+      .single()
+    if (tenantError || !newTenant) return { success: false, message: tenantError?.message ?? 'สร้างผู้เช่าไม่สำเร็จ' }
+    tenantId = newTenant.id
+  }
 
   const today = new Date().toISOString().slice(0, 10)
   const { error: contractError } = await supabase.from('contracts').insert({
     room_id: roomId,
-    tenant_id: tenant.id,
+    tenant_id: tenantId,
     start_date: today,
     monthly_rent: Number(room.monthly_rent),
     deposit_paid: Number(room.reserved_deposit ?? 0),
     status: 'active',
-    note: 'สร้างจากการแปลงผู้จองเป็นผู้เช่า',
+    note: 'สร้างจากการแปลงการจองเป็นสัญญาเช่า',
   })
   if (contractError) return { success: false, message: contractError.message }
 
@@ -183,6 +200,7 @@ export async function convertReservationToTenant(roomId: string): Promise<{ succ
     .from('rooms')
     .update({
       status: 'occupied',
+      reserved_tenant_id: null,
       reserved_name: null,
       reserved_phone: null,
       reserved_deposit: null,
@@ -192,7 +210,7 @@ export async function convertReservationToTenant(roomId: string): Promise<{ succ
     .eq('id', roomId)
   if (roomError) return { success: false, message: roomError.message }
 
-  logAudit({ action: 'reservation_convert', entityType: 'room', entityId: roomId, roomId, tenantId: tenant.id, description: `แปลงผู้จองห้อง ${room.room_number} เป็นผู้เช่า: ${reservedName}` }).catch(() => {})
+  logAudit({ action: 'reservation_convert', entityType: 'room', entityId: roomId, roomId, tenantId, description: `แปลงการจองห้อง ${room.room_number} เป็นสัญญาเช่า` }).catch(() => {})
 
   revalidatePath('/rooms')
   revalidatePath(`/rooms/${roomId}`)

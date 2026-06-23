@@ -1,6 +1,6 @@
 'use client'
 
-import { useActionState, useEffect } from 'react'
+import { useActionState, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -9,15 +9,32 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { type RoomFormState, type Room } from '@/lib/definitions'
 
+type TenantOption = { id: string; full_name: string; phone: string | null }
+
 type Props = {
   action: (state: RoomFormState, formData: FormData) => Promise<RoomFormState>
   room?: Room
   submitLabel?: string
+  tenants?: TenantOption[]
 }
 
-export function RoomForm({ action, room, submitLabel = 'บันทึก' }: Props) {
+export function RoomForm({ action, room, submitLabel = 'บันทึก', tenants = [] }: Props) {
   const [state, formAction, pending] = useActionState(action, undefined)
   const router = useRouter()
+
+  const [selectedTenantId, setSelectedTenantId] = useState(room?.reserved_tenant_id ?? '')
+  const [reservedName, setReservedName]         = useState(room?.reserved_name ?? '')
+  const [reservedPhone, setReservedPhone]       = useState(room?.reserved_phone ?? '')
+
+  function handleTenantSelect(tenantId: string) {
+    setSelectedTenantId(tenantId)
+    if (tenantId) {
+      const t = tenants.find((x) => x.id === tenantId)
+      if (t) { setReservedName(t.full_name); setReservedPhone(t.phone ?? '') }
+    } else {
+      setReservedName(''); setReservedPhone('')
+    }
+  }
 
   useEffect(() => {
     if (!state?.message) return
@@ -175,16 +192,51 @@ export function RoomForm({ action, room, submitLabel = 'บันทึก' }: P
       <div className="rounded-xl border border-violet-100 bg-violet-50/60 p-4 space-y-3">
         <div>
           <p className="text-sm font-semibold text-violet-800">ข้อมูลการจอง</p>
-          <p className="text-xs text-violet-500">กรอกเมื่อเลือกสถานะ “จอง” เพื่อเก็บข้อมูลผู้สนใจเช่า</p>
+          <p className="text-xs text-violet-500">กรอกเมื่อเลือกสถานะ "จอง" เพื่อเก็บข้อมูลผู้สนใจเช่า</p>
         </div>
+
+        {/* hidden field เก็บ tenant id */}
+        <input type="hidden" name="reserved_tenant_id" value={selectedTenantId} />
+
+        {/* เลือกจากผู้เช่าที่มีในระบบ */}
+        {tenants.length > 0 && (
+          <div className="space-y-1.5">
+            <Label htmlFor="tenant_selector">เลือกจากผู้เช่าที่มีในระบบ</Label>
+            <select
+              id="tenant_selector"
+              value={selectedTenantId}
+              onChange={(e) => handleTenantSelect(e.target.value)}
+              className="flex h-8 w-full rounded-lg border border-violet-200 bg-white px-2.5 py-1 text-sm outline-none focus-visible:border-violet-400 focus-visible:ring-2 focus-visible:ring-violet-200"
+            >
+              <option value="">— ไม่ระบุ / กรอกเองด้านล่าง —</option>
+              {tenants.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.full_name}{t.phone ? ` · ${t.phone}` : ''}
+                </option>
+              ))}
+            </select>
+            {selectedTenantId && (
+              <p className="text-xs text-violet-600">✓ เลือกผู้เช่าจากระบบแล้ว — ชื่อ/เบอร์ถูกเติมให้อัตโนมัติ</p>
+            )}
+          </div>
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div className="space-y-1.5">
             <Label htmlFor="reserved_name">ชื่อผู้จอง</Label>
-            <Input id="reserved_name" name="reserved_name" defaultValue={room?.reserved_name ?? ''} placeholder="ชื่อ-นามสกุล" />
+            <Input
+              id="reserved_name" name="reserved_name"
+              value={reservedName} onChange={(e) => setReservedName(e.target.value)}
+              placeholder="ชื่อ-นามสกุล"
+            />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="reserved_phone">เบอร์โทร</Label>
-            <Input id="reserved_phone" name="reserved_phone" defaultValue={room?.reserved_phone ?? ''} placeholder="08x-xxx-xxxx" />
+            <Input
+              id="reserved_phone" name="reserved_phone"
+              value={reservedPhone} onChange={(e) => setReservedPhone(e.target.value)}
+              placeholder="08x-xxx-xxxx"
+            />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="reserved_deposit">เงินจอง (฿)</Label>
