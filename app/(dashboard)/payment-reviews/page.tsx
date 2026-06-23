@@ -60,7 +60,7 @@ export default async function PaymentReviewsPage() {
                   <div className="size-16 shrink-0 rounded-xl overflow-hidden bg-slate-100 flex items-center justify-center">
                     {slip.slip_url ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={slip.slip_url} alt="slip" className="size-full object-cover" />
+                      <img src={`/api/pending-slip/${slip.id}`} alt="slip" className="size-full object-cover" />
                     ) : (
                       <AlertCircle className="size-6 text-slate-300" />
                     )}

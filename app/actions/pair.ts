@@ -5,6 +5,7 @@ import { createServiceClient } from '@/lib/supabase/service'
 import { revalidatePath } from 'next/cache'
 import { getLineMessagingConfig } from '@/lib/line-integration'
 import { logAudit } from './audit'
+import { getAuthedUser } from '@/lib/require-admin'
 
 export async function unlinkTenantLine(tenantId: string): Promise<{ success: boolean; message?: string }> {
   const supabase = await createClient()
@@ -95,6 +96,7 @@ export async function pairTenantLine(
 }
 
 export async function syncLineProfiles(): Promise<{ success: boolean; updated: number; message: string }> {
+  if (!(await getAuthedUser())) return { success: false, updated: 0, message: 'ไม่ได้รับอนุญาต' }
   const lineConfig = await getLineMessagingConfig()
   if (!lineConfig) return { success: false, updated: 0, message: 'ยังไม่ได้ตั้งค่า LINE' }
 

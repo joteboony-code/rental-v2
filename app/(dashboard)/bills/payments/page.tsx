@@ -227,7 +227,7 @@ export default async function PaymentHistoryPage({
                         <p className="font-bold text-emerald-600 text-sm">฿{fmt(Number(p.amount))}</p>
                         {p.slip_url && (
                           <a
-                            href={p.slip_url}
+                            href={`/api/slip/${p.id}`}
                             target="_blank"
                             rel="noreferrer"
                             className="inline-flex items-center gap-0.5 text-xs text-slate-400 hover:text-slate-600 mt-0.5"

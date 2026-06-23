@@ -3,7 +3,6 @@
 import { createServiceClient } from '@/lib/supabase/service'
 import { revalidatePath } from 'next/cache'
 import { DEFAULT_DORM_ID } from '@/lib/line-integration'
-import { createPortalToken, verifyPortalToken } from '@/lib/portal-session'
 
 const MAX_REPAIR_PHOTO_SIZE = 10 * 1024 * 1024
 const ALLOWED_REPAIR_PHOTO_TYPES: Record<string, string> = {
@@ -12,6 +11,7 @@ const ALLOWED_REPAIR_PHOTO_TYPES: Record<string, string> = {
   'image/webp': 'webp',
 }
 import { decryptSecret } from '@/lib/crypto-secrets'
+import { signPortalToken, verifyPortalToken } from '@/lib/portal-session'
 
 export type TenantPortalData = {
   tenant: {
@@ -78,44 +78,29 @@ export type PortalRoom = {
   monthly_rent: number
 }
 
-// ── Verify LINE ID Token and issue a short-lived portal session token ─────────
+export async function verifyAndGetPortalToken(
+  idToken: string
+): Promise<{ success: true; token: string } | { success: false; message: string }> {
+  const loginChannelId = process.env.LINE_LOGIN_CHANNEL_ID
+  if (!loginChannelId) return { success: false, message: 'ระบบยังไม่ได้ตั้งค่า LINE Login Channel' }
+  if (!idToken) return { success: false, message: 'ไม่พบ LINE ID token' }
 
-export async function createPortalSession(
-  idToken: string,
-  fallbackUserId?: string
-): Promise<{ token: string } | { error: string }> {
-  // LINE_LOGIN_CHANNEL_ID = LINE Login channel (หรือ Messaging API channel ที่ LIFF สังกัดอยู่)
-  // LINE_PORTAL_CHANNEL_ID = กำหนดแยกถ้า portal LIFF อยู่คนละ channel กับ pair
-  const channelId = process.env.LINE_LOGIN_CHANNEL_ID ?? process.env.LINE_PORTAL_CHANNEL_ID
+  const verifyRes = await fetch('https://api.line.me/oauth2/v2.1/verify', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ id_token: idToken, client_id: loginChannelId }),
+  })
+  if (!verifyRes.ok) return { success: false, message: 'ยืนยันตัวตน LINE ไม่สำเร็จ กรุณาเปิดใหม่อีกครั้ง' }
 
-  if (channelId && idToken?.trim()) {
-    const res = await fetch('https://api.line.me/oauth2/v2.1/verify', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({ id_token: idToken.trim(), client_id: channelId }),
-    })
-    if (res.ok) {
-      const profile = await res.json() as { sub?: string }
-      if (profile.sub) return { token: createPortalToken(profile.sub) }
-    }
-    return { error: 'ยืนยันตัวตน LINE ไม่สำเร็จ กรุณาลองใหม่' }
-  }
+  const profile = await verifyRes.json() as { sub?: string }
+  if (!profile.sub) return { success: false, message: 'ไม่สามารถดึง LINE User ID ได้' }
 
-  // Fallback: ยังไม่ได้ตั้งค่า channel ID — ใช้ userId จาก LIFF โดยตรง
-  // (LIFF SDK ยืนยันตัวตนผ่าน LINE app แล้ว; ความเสี่ยงจาก direct API call เท่านั้น)
-  if (fallbackUserId?.trim()) {
-    return { token: createPortalToken(fallbackUserId.trim()) }
-  }
-
-  return { error: 'ไม่พบ LINE User ID กรุณาเปิดผ่านแอป LINE' }
+  return { success: true, token: signPortalToken(profile.sub) }
 }
-
-// ── Portal data actions (accept server-signed portalToken, not raw lineUserId) ─
 
 export async function getPortalRooms(portalToken: string): Promise<{ rooms: PortalRoom[] }> {
   const lineUserId = verifyPortalToken(portalToken)
   if (!lineUserId) return { rooms: [] }
-
   const supabase = createServiceClient()
   const { data: tenant } = await supabase
     .from('tenants').select('id').eq('line_user_id', lineUserId).maybeSingle()
@@ -145,7 +130,7 @@ export async function getPortalRooms(portalToken: string): Promise<{ rooms: Port
 
 export async function getTenantPortalDashboard(portalToken: string, roomId?: string): Promise<PortalResult> {
   const lineUserId = verifyPortalToken(portalToken)
-  if (!lineUserId) return { success: false, message: 'ไม่พบข้อมูลการยืนยันตัวตน กรุณาโหลดหน้าใหม่' }
+  if (!lineUserId) return { success: false, message: 'Session หมดอายุ กรุณาเปิดหน้า Portal ใหม่อีกครั้ง' }
 
   const supabase = createServiceClient()
   const { data, error } = await supabase.rpc('get_tenant_portal_by_line_user', {
@@ -153,21 +138,42 @@ export async function getTenantPortalDashboard(portalToken: string, roomId?: str
     p_room_id: roomId ?? null,
   })
 
-  if (error) return { success: false, message: error.message }
-  if (!data) return { success: false, message: 'ยังไม่ได้เชื่อม LINE กับห้องพัก' }
+  if (error) {
+    return { success: false, message: error.message }
+  }
 
+  if (!data) {
+    return { success: false, message: 'ยังไม่ได้เชื่อม LINE กับห้องพัก' }
+  }
+
+  // บันทึกเวลาที่เปิด portal ล่าสุด (ใช้ service client เพราะ portal เป็น public/anon)
   try {
     const svc = createServiceClient()
     await svc.from('tenants').update({ last_portal_open_at: new Date().toISOString() }).eq('line_user_id', lineUserId)
-  } catch { /* ไม่ critical */ }
+  } catch { /* ไม่ critical — เปิด portal ต่อได้ */ }
 
   const svc2 = createServiceClient()
   const { data: settings } = await svc2.from('settings').select('promptpay_id, promptpay_name').eq('id', 1).maybeSingle()
 
+  // Generate short-lived signed URLs for payment slips (bucket เป็น private)
+  const portalData = data as TenantPortalData
+  const svc3 = createServiceClient()
+  for (const bill of portalData.bills ?? []) {
+    for (const payment of bill.payments ?? []) {
+      if (payment.slip_url) {
+        const path = payment.slip_url.split('/payment-slips/')[1]
+        if (path) {
+          const { data: signed } = await svc3.storage.from('payment-slips').createSignedUrl(path, 3600)
+          payment.slip_url = signed?.signedUrl ?? null
+        }
+      }
+    }
+  }
+
   return {
     success: true,
     data: {
-      ...(data as TenantPortalData),
+      ...portalData,
       promptpay: {
         id:   (settings as { promptpay_id?: string | null } | null)?.promptpay_id   ?? null,
         name: (settings as { promptpay_name?: string | null } | null)?.promptpay_name ?? null,
@@ -193,9 +199,9 @@ export async function getPortalRepairs(
   portalToken: string
 ): Promise<{ success: boolean; repairs?: PortalRepairItem[]; message?: string }> {
   const lineUserId = verifyPortalToken(portalToken)
-  if (!lineUserId) return { success: false, message: 'ไม่พบข้อมูลการยืนยันตัวตน กรุณาโหลดหน้าใหม่' }
-
+  if (!lineUserId) return { success: false, message: 'Session หมดอายุ กรุณาเปิดใหม่อีกครั้ง' }
   const supabase = createServiceClient()
+
   const { data: tenant } = await supabase
     .from('tenants').select('id, full_name, phone').eq('line_user_id', lineUserId).maybeSingle()
   if (!tenant) return { success: false, message: 'ไม่พบข้อมูลผู้เช่า' }
@@ -217,9 +223,9 @@ export async function submitPortalRepair(
   roomId?: string
 ): Promise<{ success: boolean; message: string }> {
   const lineUserId = verifyPortalToken(portalToken)
-  if (!lineUserId) return { success: false, message: 'ไม่พบข้อมูลการยืนยันตัวตน กรุณาโหลดหน้าใหม่' }
-
+  if (!lineUserId) return { success: false, message: 'Session หมดอายุ กรุณาเปิดใหม่อีกครั้ง' }
   const supabase = createServiceClient()
+
   const { data: tenant } = await supabase
     .from('tenants').select('id, full_name, phone').eq('line_user_id', lineUserId).maybeSingle()
   if (!tenant) return { success: false, message: 'ไม่พบข้อมูลผู้เช่า' }
@@ -329,7 +335,10 @@ async function notifyOwnerNewRepairFromPortal({
   const roomNumber = (room as { room_number: string } | null)?.room_number ?? '-'
 
   const priorityLabel: Record<string, string> = {
-    low: 'ต่ำ', normal: 'ปกติ', high: 'สูง', urgent: 'ด่วนมาก',
+    low: 'ต่ำ',
+    normal: 'ปกติ',
+    high: 'สูง',
+    urgent: 'ด่วนมาก',
   }
   const appUrl = (cfg.app_url ?? process.env.NEXT_PUBLIC_APP_URL ?? '').replace(/\/$/, '')
   const repairUrl = appUrl ? `${appUrl}/repairs/${repairId}` : null
@@ -357,4 +366,45 @@ async function notifyOwnerNewRepairFromPortal({
     const body = await res.text()
     throw new Error(`LINE owner repair notification failed ${res.status}: ${body}`)
   }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+async function notifyOwnerNewRepair(
+  roomId: string,
+  title: string,
+  priority: string,
+  photoUrl: string | null
+) {
+  const supabase = createServiceClient()
+
+  const { data: cfg } = await supabase
+    .from('line_integrations')
+    .select('encrypted_channel_access_token, owner_line_user_id')
+    .eq('dorm_id', DEFAULT_DORM_ID)
+    .maybeSingle()
+
+  if (!cfg?.encrypted_channel_access_token || !cfg.owner_line_user_id) return
+
+  const token = await decryptSecret(cfg.encrypted_channel_access_token)
+
+  const { data: room } = await supabase
+    .from('rooms').select('room_number').eq('id', roomId).maybeSingle()
+  const roomNumber = (room as { room_number: string } | null)?.room_number ?? '—'
+
+  const priorityLabel: Record<string, string> = {
+    low: '🟢 ต่ำ', normal: '🟡 ปกติ', high: '🟠 สูง', urgent: '🔴 ด่วนมาก'
+  }
+
+  const text = `🔧 มีแจ้งซ่อมใหม่ครับ\n🏠 ห้อง ${roomNumber}\n📝 ${title}\n⚡ ความเร่งด่วน: ${priorityLabel[priority] ?? priority}`
+
+  const messages: object[] = [{ type: 'text', text }]
+  if (photoUrl) {
+    messages.push({ type: 'image', originalContentUrl: photoUrl, previewImageUrl: photoUrl })
+  }
+
+  await fetch('https://api.line.me/v2/bot/message/push', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ to: cfg.owner_line_user_id, messages }),
+  })
 }

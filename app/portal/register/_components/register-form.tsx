@@ -21,6 +21,7 @@ export function RegisterForm({ room, liffId, registrationToken }: { room: Room; 
   const [lineUserId, setLineUserId] = useState('')
   const [lineDisplayName, setLineDisplayName] = useState('')
   const [linePictureUrl, setLinePictureUrl] = useState('')
+  const [lineIdToken, setLineIdToken] = useState('')
   const [result, setResult] = useState<SubmitRegistrationResult | null>(null)
   const [isPending, startTransition] = useTransition()
 
@@ -36,9 +37,11 @@ export function RegisterForm({ room, liffId, registrationToken }: { room: Room; 
         if (!liff.isLoggedIn()) { setLiffStatus('need-login'); return }
         const profile = await liff.getProfile()
         if (cancelled) return
+        const idToken = liff.getIDToken()
         setLineUserId(profile.userId)
         setLineDisplayName(profile.displayName ?? '')
         setLinePictureUrl(profile.pictureUrl ?? '')
+        setLineIdToken(idToken ?? '')
         setLiffStatus('ok')
       } catch {
         if (!cancelled) setLiffStatus('error')
@@ -145,7 +148,7 @@ export function RegisterForm({ room, liffId, registrationToken }: { room: Room; 
       {/* Registration form */}
       <form onSubmit={handleSubmit} className="space-y-3">
         <input type="hidden" name="registration_token" value={registrationToken ?? ''} />
-        <input type="hidden" name="line_user_id"      value={lineUserId} />
+        <input type="hidden" name="line_id_token"     value={lineIdToken} />
         <input type="hidden" name="line_display_name" value={lineDisplayName} />
         <input type="hidden" name="line_picture_url"  value={linePictureUrl} />
 

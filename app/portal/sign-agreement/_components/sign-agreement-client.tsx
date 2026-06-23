@@ -4,7 +4,7 @@ import Script from 'next/script'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AlertCircle, CheckCircle2, Download, FileText, Loader2, RotateCcw } from 'lucide-react'
 import { getSignAgreementData, submitSignedAgreement, type AgreementData } from '@/app/actions/agreement'
-import { createPortalSession } from '@/app/actions/portal'
+import { verifyAndGetPortalToken } from '@/app/actions/portal'
 import { AgreementTemplate } from './agreement-template'
 import type { LiffClient } from '@/lib/liff-types'
 
@@ -33,29 +33,29 @@ export function SignAgreementClient({ contractId, liffId }: Props) {
   const isDrawingRef = useRef(false)
   const lastPosRef   = useRef<{ x: number; y: number } | null>(null)
 
-  // Init LIFF and create portal session
+  // Init LIFF
   useEffect(() => {
     if (!liffId || !scriptReady) return
     window.liff?.init({ liffId }).then(async () => {
       if (!window.liff?.isLoggedIn()) { window.liff?.login(); return }
-      const idToken = window.liff?.getIDToken()
-      if (!idToken) { setStatus('error'); setErrorMsg('ไม่สามารถดึง LINE ID Token ได้ กรุณาลองใหม่'); return }
-      setLoadMsg('กำลังยืนยันตัวตน...')
-      const sessionResult = await createPortalSession(idToken)
-      if ('error' in sessionResult) { setStatus('error'); setErrorMsg(sessionResult.error); return }
-      setPortalToken(sessionResult.token)
+      const liff = window.liff
+      if (!liff) return
+      const [profile, idToken] = await Promise.all([liff.getProfile(), Promise.resolve(liff.getIDToken())])
+      if (!profile?.userId) return
+      const tokenRes = await verifyAndGetPortalToken(idToken ?? '')
+      if (!tokenRes.success) { setLoadMsg('ยืนยันตัวตน LINE ไม่สำเร็จ'); return }
+      setPortalToken(tokenRes.token)
     }).catch(() => setLoadMsg('เกิดข้อผิดพลาดในการเชื่อมต่อ LINE'))
   }, [liffId, scriptReady])
 
   // Load data เมื่อมี portalToken
   useEffect(() => {
     if (!contractId) return // error state already set from initial props
-    const token = portalToken
-    if (!token) return
+    if (!portalToken) return
 
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time loading message before async fetch
     setLoadMsg('กำลังโหลดข้อมูลสัญญา...')
-    getSignAgreementData(token, contractId).then((res) => {
+    getSignAgreementData(portalToken, contractId).then((res) => {
       if (!res.success) { setStatus('error'); setErrorMsg(res.message); return }
       setData(res.data)
       setIdCard(res.data.tenant.id_card ?? '')

@@ -14,7 +14,7 @@ const PromptPayQR = dynamic(
   () => import('@/app/(dashboard)/bills/[id]/_components/promptpay-qr').then((m) => m.PromptPayQR),
   { ssr: false }
 )
-import { getTenantPortalDashboard, getPortalRepairs, getPortalRooms, createPortalSession, type TenantPortalData, type PortalRepairItem, type PortalRoom } from '@/app/actions/portal'
+import { getTenantPortalDashboard, getPortalRepairs, getPortalRooms, verifyAndGetPortalToken, type TenantPortalData, type PortalRepairItem, type PortalRoom } from '@/app/actions/portal'
 import { roomRow } from '@/lib/room-utils'
 import { Badge } from '@/components/ui/badge'
 import { RepairSubmit } from './repair-submit'
@@ -36,8 +36,8 @@ const statusLabel: Record<string, string> = {
 
 export function TenantPortal({ liffId }: TenantPortalProps) {
   const [scriptReady, setScriptReady]       = useState(false)
+  const [lineUserId, setLineUserId]         = useState('')
   const [portalToken, setPortalToken]       = useState('')
-  const [lineProfile, setLineProfile]       = useState<{ displayName: string; pictureUrl: string } | null>(null)
   const [status, setStatus]                 = useState(liffId ? 'กำลังเชื่อมต่อ LINE' : 'กำลังเตรียมข้อมูลห้อง')
   const [data, setData]                     = useState<TenantPortalData | null>(null)
   const [error, setError]                   = useState('')
@@ -76,27 +76,20 @@ export function TenantPortal({ liffId }: TenantPortalProps) {
         await liff.init({ liffId: liffId! })
         if (cancelled) return
         if (!liff.isLoggedIn()) { setStatus('กำลังเข้าสู่ระบบ LINE'); liff.login({ redirectUri: window.location.href }); return }
-
-        const profile = await liff.getProfile()
+        const [profile, idToken] = await Promise.all([liff.getProfile(), Promise.resolve(liff.getIDToken())])
         if (cancelled) return
-        const idToken = liff.getIDToken() ?? ''
-
+        setLineUserId(profile.userId)
         setStatus('กำลังยืนยันตัวตน...')
-        const sessionResult = await createPortalSession(idToken, profile.userId)
+        const tokenRes = await verifyAndGetPortalToken(idToken ?? '')
         if (cancelled) return
-        if ('error' in sessionResult) { setStatus(sessionResult.error); return }
-
-        const token = sessionResult.token
-        setPortalToken(token)
-        setLineProfile({ displayName: profile.displayName ?? '', pictureUrl: profile.pictureUrl ?? '' })
+        if (!tokenRes.success) { setStatus(tokenRes.message); return }
+        setPortalToken(tokenRes.token)
         setStatus('เชื่อมต่อ LINE แล้ว')
-
-        const { rooms: activeRooms } = await getPortalRooms(token)
-        if (cancelled) return
+        const { rooms: activeRooms } = await getPortalRooms(tokenRes.token)
         setRooms(activeRooms)
         const firstRoomId = activeRooms[0]?.room_id
         setSelectedRoomId(firstRoomId)
-        loadDashboard(token, firstRoomId)
+        loadDashboard(tokenRes.token, firstRoomId)
       } catch (err) {
         console.error(err)
         if (!cancelled) setStatus('ยังดึงข้อมูลจาก LINE ไม่ได้')
@@ -153,19 +146,7 @@ export function TenantPortal({ liffId }: TenantPortalProps) {
                     {data.tenant.full_name}{data.room?.room_number ? ` · แถวที่ ${roomRow(data.room.room_number)}` : ''}
                   </p>
                 </div>
-                {lineProfile?.pictureUrl ? (
-                  <div className="relative shrink-0">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={lineProfile.pictureUrl}
-                      alt={lineProfile.displayName}
-                      className="size-14 rounded-full object-cover ring-2 ring-[#06C755] ring-offset-2 ring-offset-slate-950"
-                    />
-                    <span className="absolute -bottom-0.5 -right-0.5 flex size-5 items-center justify-center rounded-full bg-[#06C755] text-[10px] font-black text-white shadow-md">L</span>
-                  </div>
-                ) : (
-                  <div className="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-white">เชื่อม LINE แล้ว</div>
-                )}
+                <div className="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-white">เชื่อม LINE แล้ว</div>
               </div>
               <div className="mt-5 grid grid-cols-2 gap-3">
                 <Metric label="ค่าเช่าต่อเดือน" value={`฿${money.format(monthlyRent)}`} />
