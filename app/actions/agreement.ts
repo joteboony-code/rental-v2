@@ -4,6 +4,7 @@ import { createServiceClient } from '@/lib/supabase/service'
 import { DEFAULT_DORM_ID } from '@/lib/line-integration'
 import { decryptSecret } from '@/lib/crypto-secrets'
 import { getAuthedUser } from '@/lib/require-admin'
+import { verifyPortalToken } from '@/lib/portal-session'
 
 export type AgreementData = {
   tenant: {
@@ -35,18 +36,19 @@ export type AgreementData = {
 }
 
 export async function getSignAgreementData(
-  lineUserId: string,
+  portalToken: string,
   contractId: string
 ): Promise<{ success: true; data: AgreementData } | { success: false; message: string }> {
-  const trimmed = lineUserId.trim()
-  if (!trimmed || !contractId) return { success: false, message: 'ข้อมูลไม่ครบ' }
+  if (!contractId) return { success: false, message: 'ข้อมูลไม่ครบ' }
+  const lineUserId = verifyPortalToken(portalToken)
+  if (!lineUserId) return { success: false, message: 'Session หมดอายุ กรุณาเปิดใหม่อีกครั้ง' }
 
   const supabase = createServiceClient()
 
   const { data: tenant } = await supabase
     .from('tenants')
     .select('id, full_name, phone, id_card, address')
-    .eq('line_user_id', trimmed)
+    .eq('line_user_id', lineUserId)
     .maybeSingle()
 
   if (!tenant) return { success: false, message: 'ไม่พบข้อมูลผู้เช่า กรุณาจับคู่ห้องก่อน' }
@@ -114,14 +116,17 @@ export async function getSignAgreementData(
 export async function submitSignedAgreement(
   formData: FormData
 ): Promise<{ success: boolean; message: string; pdfUrl?: string }> {
-  const lineUserId = String(formData.get('lineUserId') ?? '').trim()
+  const portalToken = String(formData.get('portalToken') ?? '').trim()
   const contractId = String(formData.get('contractId') ?? '').trim()
   const idCard     = String(formData.get('id_card') ?? '').trim() || null
   const address    = String(formData.get('address') ?? '').trim() || null
   const pdfFile    = formData.get('pdf') as File | null
 
-  if (!lineUserId || !contractId) return { success: false, message: 'ข้อมูลไม่ครบ' }
+  if (!portalToken || !contractId) return { success: false, message: 'ข้อมูลไม่ครบ' }
   if (!pdfFile || pdfFile.size === 0) return { success: false, message: 'ไม่พบไฟล์ PDF' }
+
+  const lineUserId = verifyPortalToken(portalToken)
+  if (!lineUserId) return { success: false, message: 'Session หมดอายุ กรุณาเปิดใหม่อีกครั้ง' }
 
   const supabase = createServiceClient()
 

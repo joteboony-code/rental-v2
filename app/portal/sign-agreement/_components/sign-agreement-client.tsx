@@ -4,6 +4,7 @@ import Script from 'next/script'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AlertCircle, CheckCircle2, Download, FileText, Loader2, RotateCcw } from 'lucide-react'
 import { getSignAgreementData, submitSignedAgreement, type AgreementData } from '@/app/actions/agreement'
+import { verifyAndGetPortalToken } from '@/app/actions/portal'
 import { AgreementTemplate } from './agreement-template'
 import type { LiffClient } from '@/lib/liff-types'
 
@@ -17,7 +18,7 @@ interface Props {
 type Status = 'loading' | 'form' | 'preview' | 'submitting' | 'done' | 'error'
 
 export function SignAgreementClient({ contractId, liffId }: Props) {
-  const [lineUserId, setLineUserId]   = useState('')
+  const [portalToken, setPortalToken] = useState('')
   const [scriptReady, setScriptReady] = useState(false)
   const [status, setStatus]           = useState<Status>(contractId ? 'loading' : 'error')
   const [loadMsg, setLoadMsg]         = useState(liffId ? 'กำลังเชื่อมต่อ LINE...' : 'กำลังโหลด...')
@@ -37,20 +38,24 @@ export function SignAgreementClient({ contractId, liffId }: Props) {
     if (!liffId || !scriptReady) return
     window.liff?.init({ liffId }).then(async () => {
       if (!window.liff?.isLoggedIn()) { window.liff?.login(); return }
-      const profile = await window.liff?.getProfile()
-      setLineUserId(profile?.userId ?? '')
+      const liff = window.liff
+      if (!liff) return
+      const [profile, idToken] = await Promise.all([liff.getProfile(), Promise.resolve(liff.getIDToken())])
+      if (!profile?.userId) return
+      const tokenRes = await verifyAndGetPortalToken(idToken ?? '')
+      if (!tokenRes.success) { setLoadMsg('ยืนยันตัวตน LINE ไม่สำเร็จ'); return }
+      setPortalToken(tokenRes.token)
     }).catch(() => setLoadMsg('เกิดข้อผิดพลาดในการเชื่อมต่อ LINE'))
   }, [liffId, scriptReady])
 
-  // Load data เมื่อมี lineUserId
+  // Load data เมื่อมี portalToken
   useEffect(() => {
     if (!contractId) return // error state already set from initial props
-    const uid = lineUserId
-    if (!uid) return
+    if (!portalToken) return
 
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time loading message before async fetch
     setLoadMsg('กำลังโหลดข้อมูลสัญญา...')
-    getSignAgreementData(uid, contractId).then((res) => {
+    getSignAgreementData(portalToken, contractId).then((res) => {
       if (!res.success) { setStatus('error'); setErrorMsg(res.message); return }
       setData(res.data)
       setIdCard(res.data.tenant.id_card ?? '')
@@ -62,7 +67,7 @@ export function SignAgreementClient({ contractId, liffId }: Props) {
         setStatus('form')
       }
     })
-  }, [lineUserId, contractId])
+  }, [portalToken, contractId])
 
   // Signature canvas helpers
   function getPos(e: React.TouchEvent | React.MouseEvent, canvas: HTMLCanvasElement) {
@@ -126,7 +131,7 @@ export function SignAgreementClient({ contractId, liffId }: Props) {
   }, [])
 
   const handleSubmit = useCallback(async () => {
-    if (!data || !sigDataUrl || !lineUserId) return
+    if (!data || !sigDataUrl || !portalToken) return
     setStatus('submitting')
     try {
       const [{ default: jsPDF }, { default: html2canvas }] = await Promise.all([
@@ -165,7 +170,7 @@ export function SignAgreementClient({ contractId, liffId }: Props) {
       const pdfBlob = pdf.output('blob')
       const pdfFile = new File([pdfBlob], 'agreement.pdf', { type: 'application/pdf' })
       const fd = new FormData()
-      fd.append('lineUserId', lineUserId)
+      fd.append('portalToken', portalToken)
       fd.append('contractId', data.contract.id)
       fd.append('id_card', idCard)
       fd.append('address', address)
@@ -179,7 +184,7 @@ export function SignAgreementClient({ contractId, liffId }: Props) {
       setStatus('error')
       setErrorMsg(e instanceof Error ? e.message : 'เกิดข้อผิดพลาด')
     }
-  }, [data, sigDataUrl, lineUserId, idCard, address])
+  }, [data, sigDataUrl, portalToken, idCard, address])
 
   return (
     <>

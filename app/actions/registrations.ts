@@ -158,9 +158,31 @@ export async function submitRegistration(formData: FormData): Promise<SubmitRegi
   const supabase = createServiceClient()
 
   const registrationToken = String(formData.get('registration_token') ?? '').trim()
-  const lineUserId      = String(formData.get('line_user_id')      ?? '').trim() || null
+  const lineIdToken     = String(formData.get('line_id_token')     ?? '').trim() || null
   const lineDisplayName = String(formData.get('line_display_name') ?? '').trim() || null
   const linePictureUrl  = String(formData.get('line_picture_url')  ?? '').trim() || null
+
+  // Verify LINE ID token server-side
+  let lineUserId: string | null = null
+  let verifiedName: string | null = lineDisplayName
+  let verifiedPicture: string | null = linePictureUrl
+  if (lineIdToken) {
+    const loginChannelId = process.env.LINE_LOGIN_CHANNEL_ID
+    if (loginChannelId) {
+      const verifyRes = await fetch('https://api.line.me/oauth2/v2.1/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ id_token: lineIdToken, client_id: loginChannelId }),
+      })
+      if (verifyRes.ok) {
+        const lineProfile = await verifyRes.json() as { sub?: string; name?: string; picture?: string }
+        lineUserId = lineProfile.sub ?? null
+        verifiedName = lineProfile.name ?? lineDisplayName
+        verifiedPicture = lineProfile.picture ?? linePictureUrl
+      }
+      // If verify fails, treat as no-LINE (goes to pending)
+    }
+  }
   const fullName        = String(formData.get('full_name')         ?? '').trim()
   const phone           = String(formData.get('phone')             ?? '').trim()
   const idCard          = String(formData.get('id_card')           ?? '').trim() || null
@@ -260,7 +282,7 @@ export async function submitRegistration(formData: FormData): Promise<SubmitRegi
     .from('tenant_registration_requests')
     .insert({
       room_id: roomId, room_number: roomNumber,
-      line_user_id: lineUserId, line_display_name: lineDisplayName, line_picture_url: linePictureUrl,
+      line_user_id: lineUserId, line_display_name: verifiedName, line_picture_url: verifiedPicture,
       full_name: fullName, phone, id_card: idCard, move_in_date: moveInDate, note,
       deposit_paid: depositPaid,
       status, pending_reason: pendingReasons.join(', ') || null,
@@ -275,7 +297,7 @@ export async function submitRegistration(formData: FormData): Promise<SubmitRegi
     // auto path = ห้องว่าง + มี LINE + ไม่ซ้ำ → สร้าง tenant + contract ใหม่เสมอ
     const { tenantId, error } = await doApprove({
       requestId: req.id, roomId, fullName, phone, idCard, moveInDate,
-      lineUserId, lineDisplayName, linePictureUrl,
+      lineUserId, lineDisplayName: verifiedName, linePictureUrl: verifiedPicture,
       matchedTenantId: null, skipContract: false,
       monthlyRent: Number(room.monthly_rent),
       depositPaid,

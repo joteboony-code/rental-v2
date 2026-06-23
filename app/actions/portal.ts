@@ -11,6 +11,7 @@ const ALLOWED_REPAIR_PHOTO_TYPES: Record<string, string> = {
   'image/webp': 'webp',
 }
 import { decryptSecret } from '@/lib/crypto-secrets'
+import { signPortalToken, verifyPortalToken } from '@/lib/portal-session'
 
 export type TenantPortalData = {
   tenant: {
@@ -77,10 +78,32 @@ export type PortalRoom = {
   monthly_rent: number
 }
 
-export async function getPortalRooms(lineUserId: string): Promise<{ rooms: PortalRoom[] }> {
+export async function verifyAndGetPortalToken(
+  idToken: string
+): Promise<{ success: true; token: string } | { success: false; message: string }> {
+  const loginChannelId = process.env.LINE_LOGIN_CHANNEL_ID
+  if (!loginChannelId) return { success: false, message: 'ระบบยังไม่ได้ตั้งค่า LINE Login Channel' }
+  if (!idToken) return { success: false, message: 'ไม่พบ LINE ID token' }
+
+  const verifyRes = await fetch('https://api.line.me/oauth2/v2.1/verify', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ id_token: idToken, client_id: loginChannelId }),
+  })
+  if (!verifyRes.ok) return { success: false, message: 'ยืนยันตัวตน LINE ไม่สำเร็จ กรุณาเปิดใหม่อีกครั้ง' }
+
+  const profile = await verifyRes.json() as { sub?: string }
+  if (!profile.sub) return { success: false, message: 'ไม่สามารถดึง LINE User ID ได้' }
+
+  return { success: true, token: signPortalToken(profile.sub) }
+}
+
+export async function getPortalRooms(portalToken: string): Promise<{ rooms: PortalRoom[] }> {
+  const lineUserId = verifyPortalToken(portalToken)
+  if (!lineUserId) return { rooms: [] }
   const supabase = createServiceClient()
   const { data: tenant } = await supabase
-    .from('tenants').select('id').eq('line_user_id', lineUserId.trim()).maybeSingle()
+    .from('tenants').select('id').eq('line_user_id', lineUserId).maybeSingle()
   if (!tenant) return { rooms: [] }
 
   const { data } = await supabase
@@ -105,15 +128,13 @@ export async function getPortalRooms(lineUserId: string): Promise<{ rooms: Porta
   }
 }
 
-export async function getTenantPortalDashboard(lineUserId: string, roomId?: string): Promise<PortalResult> {
-  const trimmed = lineUserId.trim()
-  if (!trimmed) {
-    return { success: false, message: 'ไม่พบ LINE User ID' }
-  }
+export async function getTenantPortalDashboard(portalToken: string, roomId?: string): Promise<PortalResult> {
+  const lineUserId = verifyPortalToken(portalToken)
+  if (!lineUserId) return { success: false, message: 'Session หมดอายุ กรุณาเปิดหน้า Portal ใหม่อีกครั้ง' }
 
   const supabase = createServiceClient()
   const { data, error } = await supabase.rpc('get_tenant_portal_by_line_user', {
-    p_line_user_id: trimmed,
+    p_line_user_id: lineUserId,
     p_room_id: roomId ?? null,
   })
 
@@ -128,7 +149,7 @@ export async function getTenantPortalDashboard(lineUserId: string, roomId?: stri
   // บันทึกเวลาที่เปิด portal ล่าสุด (ใช้ service client เพราะ portal เป็น public/anon)
   try {
     const svc = createServiceClient()
-    await svc.from('tenants').update({ last_portal_open_at: new Date().toISOString() }).eq('line_user_id', trimmed)
+    await svc.from('tenants').update({ last_portal_open_at: new Date().toISOString() }).eq('line_user_id', lineUserId)
   } catch { /* ไม่ critical — เปิด portal ต่อได้ */ }
 
   const svc2 = createServiceClient()
@@ -175,8 +196,10 @@ export type PortalRepairItem = {
 }
 
 export async function getPortalRepairs(
-  lineUserId: string
+  portalToken: string
 ): Promise<{ success: boolean; repairs?: PortalRepairItem[]; message?: string }> {
+  const lineUserId = verifyPortalToken(portalToken)
+  if (!lineUserId) return { success: false, message: 'Session หมดอายุ กรุณาเปิดใหม่อีกครั้ง' }
   const supabase = createServiceClient()
 
   const { data: tenant } = await supabase
@@ -195,10 +218,12 @@ export async function getPortalRepairs(
 }
 
 export async function submitPortalRepair(
-  lineUserId: string,
+  portalToken: string,
   formData: FormData,
   roomId?: string
 ): Promise<{ success: boolean; message: string }> {
+  const lineUserId = verifyPortalToken(portalToken)
+  if (!lineUserId) return { success: false, message: 'Session หมดอายุ กรุณาเปิดใหม่อีกครั้ง' }
   const supabase = createServiceClient()
 
   const { data: tenant } = await supabase

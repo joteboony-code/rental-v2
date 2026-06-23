@@ -16,6 +16,7 @@ type LineConfig = {
 
 type LineEvent = {
   type: string
+  webhookEventId?: string
   replyToken?: string
   source: { userId: string }
   message?: { id: string; type: string; text?: string }
@@ -885,6 +886,17 @@ export async function POST(req: NextRequest) {
   const supabase = createServiceClient()
 
   for (const event of payload.events ?? []) {
+    // Idempotency: skip events already processed (guards against LINE retry delivery)
+    if (event.webhookEventId) {
+      const { data: existing } = await supabase
+        .from('processed_line_events')
+        .select('event_id')
+        .eq('event_id', event.webhookEventId)
+        .maybeSingle()
+      if (existing) continue
+      await supabase.from('processed_line_events').insert({ event_id: event.webhookEventId })
+    }
+
     try {
       const lineUserId = event.source.userId
 
