@@ -1,6 +1,7 @@
 'use client'
 
 import { useTransition, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { MessageCircle, Link2Off, UserRound } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -16,13 +17,15 @@ type Props = {
 export function LinePairCard({ tenantId, lineUserId, lineDisplayName, linePictureUrl }: Props) {
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
+  const router = useRouter()
 
   function handleUnlink() {
     if (!window.confirm('ยืนยันการยกเลิกจับคู่ LINE?')) return
     setError(null)
     startTransition(async () => {
       const result = await unlinkTenantLine(tenantId)
-      if (!result.success) setError(result.message ?? 'เกิดข้อผิดพลาด')
+      if (!result.success) { setError(result.message ?? 'เกิดข้อผิดพลาด'); return }
+      router.refresh()
     })
   }
 

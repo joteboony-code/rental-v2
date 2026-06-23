@@ -1,11 +1,13 @@
 'use client'
 
 import { useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import { Trash2 } from 'lucide-react'
 import { deleteRoom } from '@/app/actions/rooms'
 
 export function DeleteRoomButton({ id, roomNumber }: { id: string; roomNumber: string }) {
   const [pending, startTransition] = useTransition()
+  const router = useRouter()
 
   // ลบได้เฉพาะห้องเลข 31 ขึ้นไป — ห้อง 1–30 ไม่แสดงปุ่มลบ
   if ((parseInt(roomNumber) || 0) < 31) return null
@@ -14,7 +16,8 @@ export function DeleteRoomButton({ id, roomNumber }: { id: string; roomNumber: s
     if (!confirm(`ยืนยันการลบห้อง ${roomNumber}?\nจะลบสัญญา บิล และประวัติการชำระของห้องนี้ทั้งหมด ไม่สามารถกู้คืนได้`)) return
     startTransition(async () => {
       const result = await deleteRoom(id)
-      if (!result.success) alert(result.message ?? 'ลบไม่สำเร็จ')
+      if (!result.success) { alert(result.message ?? 'ลบไม่สำเร็จ'); return }
+      router.push('/rooms')
     })
   }
 

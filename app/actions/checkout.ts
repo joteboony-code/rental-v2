@@ -1,6 +1,5 @@
 'use server'
 
-import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { getAuthedUser } from '@/lib/require-admin'
 import { logAudit } from './audit'
@@ -38,11 +37,6 @@ export async function saveCheckout(data: {
     roomId: data.roomId,
     description: `ย้ายออก วันที่ ${data.moveOutDate}${data.note ? ` — ${data.note}` : ''}`,
   }).catch(() => {})
-
-  revalidatePath(`/tenants/${data.tenantId}`)
-  revalidatePath('/tenants')
-  revalidatePath('/rooms')
-  revalidatePath('/bills')
 
   return { success: true, message: 'บันทึกการย้ายออกเรียบร้อย' }
 }

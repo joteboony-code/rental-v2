@@ -1,16 +1,19 @@
 'use client'
 
 import { useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import { RefreshCw } from 'lucide-react'
 import { syncLineProfiles } from '@/app/actions/pair'
 
 export function SyncLineButton() {
   const [isPending, startTransition] = useTransition()
+  const router = useRouter()
 
   function handleSync() {
     startTransition(async () => {
       const result = await syncLineProfiles()
       alert(result.message)
+      if (result.success) router.refresh()
     })
   }
 

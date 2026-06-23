@@ -1,6 +1,5 @@
 'use server'
 
-import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { RoomSchema, RoomFormState } from '@/lib/definitions'
@@ -52,7 +51,6 @@ export async function createRoom(
 
   logAudit({ action: 'room_create', entityType: 'room', entityId: newRoom?.id ?? null, roomId: newRoom?.id ?? null, description: `เพิ่มห้อง ${validated.data.room_number}` }).catch(() => {})
 
-  revalidatePath('/rooms')
   return { success: true, message: 'เพิ่มห้องเรียบร้อยแล้ว' }
 }
 
@@ -96,7 +94,6 @@ export async function updateRoom(
 
   logAudit({ action: 'room_update', entityType: 'room', entityId: id, roomId: id, description: `แก้ไขห้อง ${validated.data.room_number}` }).catch(() => {})
 
-  revalidatePath('/rooms')
   return { success: true, message: 'แก้ไขห้องเรียบร้อยแล้ว' }
 }
 
@@ -143,8 +140,6 @@ export async function clearRoomReservation(roomId: string): Promise<{ success: b
 
   logAudit({ action: 'reservation_clear', entityType: 'room', entityId: roomId, roomId, description: `ยกเลิกจองห้อง` }).catch(() => {})
 
-  revalidatePath('/rooms')
-  revalidatePath(`/rooms/${roomId}`)
   return { success: true }
 }
 
@@ -215,9 +210,6 @@ export async function convertReservationToTenant(
 
   logAudit({ action: 'reservation_convert', entityType: 'room', entityId: roomId, roomId, tenantId, description: `แปลงการจองห้อง ${room.room_number} เป็นสัญญาเช่า` }).catch(() => {})
 
-  revalidatePath('/rooms')
-  revalidatePath(`/rooms/${roomId}`)
-  revalidatePath('/tenants')
   return { success: true, tenantId }
 }
 
@@ -259,7 +251,6 @@ export async function deleteRoom(id: string): Promise<{ success: boolean; messag
 
   logAudit({ action: 'room_delete', entityType: 'room', description: `ลบห้อง ${room.room_number}` }).catch(() => {})
 
-  revalidatePath('/rooms')
   return { success: true }
 }
 

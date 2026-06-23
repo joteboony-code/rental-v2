@@ -79,8 +79,6 @@ export async function updateTenant(
 
   logAudit({ action: 'tenant_update', entityType: 'tenant', entityId: id, description: `แก้ข้อมูลผู้เช่า ${parsed.data.full_name}`, newValue: parsed.data }).catch(() => {})
 
-  revalidatePath('/tenants')
-  revalidatePath(`/tenants/${id}`)
   return { success: true, message: 'บันทึกข้อมูลเรียบร้อยแล้ว' }
 }
 
@@ -209,7 +207,6 @@ export async function uploadContractImages(
     .update({ contract_images: [...existing, ...newUrls] })
     .eq('id', tenantId)
 
-  revalidatePath(`/tenants/${tenantId}`)
   return { success: true, message: `อัพโหลดสำเร็จ ${newUrls.length} ไฟล์`, urls: newUrls }
 }
 
@@ -243,7 +240,6 @@ export async function deleteContractImage(
     }
   } catch {}
 
-  revalidatePath(`/tenants/${tenantId}`)
 }
 
 // ─── Terminate Contract ───────────────────────────────────────
@@ -270,9 +266,6 @@ export async function terminateContract(contractId: string, tenantId: string): P
 
   logAudit({ action: 'contract_terminate', entityType: 'contract', entityId: contractId, tenantId: contractData?.tenant_id ?? tenantId, roomId: contractData?.room_id ?? null, description: `ยกเลิกสัญญาห้อง ${contractData?.room_id ?? ''}` }).catch(() => {})
 
-  revalidatePath('/tenants')
-  revalidatePath(`/tenants/${tenantId}`)
-  revalidatePath('/rooms')
   return {}
 }
 

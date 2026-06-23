@@ -1,6 +1,7 @@
 'use client'
 
-import { useActionState } from 'react'
+import { useActionState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -16,6 +17,11 @@ interface TenantFormProps {
 
 export function TenantForm({ action, tenant, submitLabel = 'บันทึก' }: TenantFormProps) {
   const [state, formAction, isPending] = useActionState(action, undefined)
+  const router = useRouter()
+
+  useEffect(() => {
+    if (state?.success) router.refresh()
+  }, [state?.success, router])
 
   return (
     <form action={formAction} className="space-y-5">

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import { terminateContract } from '@/app/actions/tenants'
 import { Button } from '@/components/ui/button'
 import { Loader2, XCircle } from 'lucide-react'
@@ -13,13 +14,15 @@ interface Props {
 export function TerminateContractButton({ contractId, tenantId }: Props) {
   const [isPending, startTransition] = useTransition()
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const router = useRouter()
 
   function handleClick() {
     if (!confirm('ยืนยันการยกเลิกสัญญาเช่า? ห้องจะกลับเป็น "ว่าง" โดยอัตโนมัติ')) return
     setErrorMsg(null)
     startTransition(async () => {
       const res = await terminateContract(contractId, tenantId)
-      if (res.error) setErrorMsg(res.error)
+      if (res.error) { setErrorMsg(res.error); return }
+      router.refresh()
     })
   }
 

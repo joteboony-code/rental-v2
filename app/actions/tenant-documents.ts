@@ -1,7 +1,6 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
-import { revalidatePath } from 'next/cache'
 import { type DocumentType, type TenantDocument } from '@/lib/tenant-documents'
 
 const MAX_DOC_SIZE = 10 * 1024 * 1024
@@ -79,7 +78,6 @@ export async function uploadTenantDocument(
     return { success: false, message: `บันทึกไม่สำเร็จ: ${error.message}` }
   }
 
-  revalidatePath(`/tenants/${tenantId}`)
   return { success: true, message: 'อัพโหลดเอกสารเรียบร้อยแล้ว', document: inserted as unknown as TenantDocument }
 }
 
@@ -108,6 +106,5 @@ export async function deleteTenantDocument(
   const { error } = await supabase.from('tenant_documents').delete().eq('id', documentId)
   if (error) return { success: false, message: `ลบไม่สำเร็จ: ${error.message}` }
 
-  if (doc.tenant_id) revalidatePath(`/tenants/${doc.tenant_id}`)
   return { success: true, message: 'ลบเอกสารแล้ว' }
 }

@@ -2,7 +2,6 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
-import { revalidatePath } from 'next/cache'
 import { getLineMessagingConfig } from '@/lib/line-integration'
 import { logAudit } from './audit'
 import { getAuthedUser } from '@/lib/require-admin'
@@ -19,7 +18,6 @@ export async function unlinkTenantLine(tenantId: string): Promise<{ success: boo
 
   logAudit({ action: 'line_unpair', entityType: 'tenant', entityId: tenantId, tenantId, description: `ยกเลิกจับคู่ LINE` }).catch(() => {})
 
-  revalidatePath(`/tenants/${tenantId}`)
   return { success: true }
 }
 
@@ -131,6 +129,5 @@ export async function syncLineProfiles(): Promise<{ success: boolean; updated: n
   )
   const updated = results.filter((r) => r.status === 'fulfilled' && r.value === true).length
 
-  revalidatePath('/tenants')
   return { success: true, updated, message: `อัปเดตสำเร็จ ${updated} จาก ${tenants.length} คน` }
 }

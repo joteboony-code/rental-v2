@@ -41,6 +41,7 @@ export function RoomForm({ action, room, submitLabel = 'บันทึก', ten
     if (state.success) {
       toast.success(state.message, { description: room ? undefined : 'ห้องใหม่พร้อมใช้งานแล้ว' })
       if (!room) router.push('/rooms')
+      else router.refresh()
     } else {
       toast.error(state.message)
     }
