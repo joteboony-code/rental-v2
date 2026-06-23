@@ -105,7 +105,6 @@ export async function createContract(
   state: ContractFormState,
   formData: FormData
 ): Promise<ContractFormState> {
-  if (!(await getAuthedUser())) return { message: 'กรุณายืนยันตัวตน 2 ชั้นก่อนทำรายการ' }
   const raw = {
     room_id:      formData.get('room_id'),
     tenant_id:    formData.get('tenant_id'),
@@ -123,13 +122,13 @@ export async function createContract(
 
   const supabase = await createClient()
 
-  // ตรวจว่าห้องนี้ว่างหรือไม่
-  const { data: room } = await supabase
-    .from('rooms')
-    .select('status, monthly_rent')
-    .eq('id', parsed.data.room_id)
-    .single()
+  // auth check + room check พร้อมกัน — ลด sequential round trips จาก 3 เหลือ 1
+  const [authedUser, { data: room }] = await Promise.all([
+    getAuthedUser(),
+    supabase.from('rooms').select('status, monthly_rent').eq('id', parsed.data.room_id).single(),
+  ])
 
+  if (!authedUser) return { message: 'กรุณายืนยันตัวตน 2 ชั้นก่อนทำรายการ' }
   if (!room) return { message: 'ไม่พบห้องที่เลือก' }
   if (room.status === 'occupied') return { message: 'ห้องนี้มีผู้เช่าอยู่แล้ว' }
 
