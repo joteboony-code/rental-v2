@@ -134,12 +134,15 @@ export function TwoFactorSection() {
             </p>
 
             {/* QR code */}
-            <div className="flex justify-center bg-white p-3 rounded-xl border border-slate-100">
+            <div className="flex justify-center bg-white p-4 rounded-xl border border-slate-100" style={{ colorScheme: 'light' }}>
               {qrSvg.startsWith('data:') ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={qrSvg} alt="QR code สำหรับ 2FA" className="size-48" />
               ) : (
-                <div dangerouslySetInnerHTML={{ __html: qrSvg }} />
+                <div
+                  className="size-48 [&>svg]:w-full [&>svg]:h-full [&>svg]:block [&>svg]:max-w-full"
+                  dangerouslySetInnerHTML={{ __html: qrSvg }}
+                />
               )}
             </div>
 
