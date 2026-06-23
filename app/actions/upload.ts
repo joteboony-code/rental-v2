@@ -11,10 +11,11 @@ export async function uploadBroadcastImage(
   if (!file || file.size === 0) return { success: false, message: 'ไม่พบไฟล์' }
   if (file.size > 5 * 1024 * 1024) return { success: false, message: 'ไฟล์ใหญ่เกิน 5MB' }
 
-  const ext = file.name.split('.').pop()?.toLowerCase() ?? 'jpg'
-  if (!['jpg', 'jpeg', 'png', 'webp', 'gif'].includes(ext)) {
-    return { success: false, message: 'รองรับเฉพาะ jpg, png, webp, gif' }
+  const ALLOWED_MIME: Record<string, string> = {
+    'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif',
   }
+  const ext = ALLOWED_MIME[file.type]
+  if (!ext) return { success: false, message: 'รองรับเฉพาะ jpg, png, webp, gif' }
 
   const supabase = await createClient()
   const path = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`

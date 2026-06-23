@@ -186,6 +186,8 @@ export async function snoozeBill(
   snoozeUntil: string,
   snoozeNote: string
 ): Promise<{ success: boolean; message: string }> {
+  if (!(await getAuthedUser())) return { success: false, message: 'กรุณายืนยันตัวตน 2 ชั้นก่อนทำรายการ' }
+  if (!snoozeUntil || isNaN(Date.parse(snoozeUntil))) return { success: false, message: 'วันที่ไม่ถูกต้อง' }
   const supabase = await createClient()
   const { error } = await supabase
     .from('bills')
@@ -200,6 +202,7 @@ export async function snoozeBill(
 export async function clearSnooze(
   billId: string
 ): Promise<{ success: boolean; message: string }> {
+  if (!(await getAuthedUser())) return { success: false, message: 'กรุณายืนยันตัวตน 2 ชั้นก่อนทำรายการ' }
   const supabase = await createClient()
   const { error } = await supabase
     .from('bills')
@@ -399,6 +402,7 @@ export async function updateReminderSettings(
   reminderDays: string,
   enabled: boolean
 ): Promise<{ success: boolean; message: string }> {
+  if (!(await getAuthedUser())) return { success: false, message: 'กรุณายืนยันตัวตน 2 ชั้นก่อนทำรายการ' }
   const supabase = await createClient()
   const days = parseReminderDays(reminderDays)
   if (days.length === 0) return { success: false, message: 'กรุณาระบุวันที่แจ้งเตือนอย่างน้อย 1 วัน' }

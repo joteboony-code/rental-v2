@@ -4,12 +4,13 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { RoomSchema, RoomFormState } from '@/lib/definitions'
+import { getAuthedUser } from '@/lib/require-admin'
 import { logAudit } from './audit'
 
 async function getOwnerOrThrow() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getAuthedUser()
   if (!user) redirect('/login')
+  const supabase = await createClient()
   return { supabase, user }
 }
 

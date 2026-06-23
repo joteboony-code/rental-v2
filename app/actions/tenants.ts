@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { TenantSchema, ContractSchema, type TenantFormState, type ContractFormState } from '@/lib/definitions'
+import { getAuthedUser } from '@/lib/require-admin'
 import { logAudit } from './audit'
 
 // ─── Create Tenant ───────────────────────────────────────────
@@ -11,6 +12,7 @@ export async function createTenant(
   state: TenantFormState,
   formData: FormData
 ): Promise<TenantFormState> {
+  if (!(await getAuthedUser())) return { message: 'กรุณายืนยันตัวตน 2 ชั้นก่อนทำรายการ' }
   const raw = {
     full_name:         formData.get('full_name'),
     phone:             formData.get('phone'),
@@ -49,6 +51,7 @@ export async function updateTenant(
   state: TenantFormState,
   formData: FormData
 ): Promise<TenantFormState> {
+  if (!(await getAuthedUser())) return { message: 'กรุณายืนยันตัวตน 2 ชั้นก่อนทำรายการ' }
   const raw = {
     full_name:         formData.get('full_name'),
     phone:             formData.get('phone'),
@@ -83,6 +86,7 @@ export async function updateTenant(
 
 // ─── Delete Tenant ───────────────────────────────────────────
 export async function deleteTenant(id: string): Promise<{ error?: string }> {
+  if (!(await getAuthedUser())) return { error: 'กรุณายืนยันตัวตน 2 ชั้นก่อนทำรายการ' }
   const supabase = await createClient()
   const { error } = await supabase.from('tenants').delete().eq('id', id)
   if (error) {
@@ -101,6 +105,7 @@ export async function createContract(
   state: ContractFormState,
   formData: FormData
 ): Promise<ContractFormState> {
+  if (!(await getAuthedUser())) return { message: 'กรุณายืนยันตัวตน 2 ชั้นก่อนทำรายการ' }
   const raw = {
     room_id:      formData.get('room_id'),
     tenant_id:    formData.get('tenant_id'),
@@ -149,6 +154,7 @@ export async function uploadContractImages(
   tenantId: string,
   formData: FormData
 ): Promise<{ success: boolean; message: string; urls?: string[] }> {
+  if (!(await getAuthedUser())) return { success: false, message: 'กรุณายืนยันตัวตน 2 ชั้นก่อนทำรายการ' }
   const supabase = await createClient()
 
   const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10 MB
@@ -212,6 +218,7 @@ export async function deleteContractImage(
   tenantId: string,
   url: string
 ): Promise<void> {
+  if (!(await getAuthedUser())) return
   const supabase = await createClient()
 
   // Remove from DB array
@@ -241,6 +248,7 @@ export async function deleteContractImage(
 
 // ─── Terminate Contract ───────────────────────────────────────
 export async function terminateContract(contractId: string, tenantId: string): Promise<{ error?: string }> {
+  if (!(await getAuthedUser())) return { error: 'กรุณายืนยันตัวตน 2 ชั้นก่อนทำรายการ' }
   const supabase = await createClient()
 
   const { data: contractData } = await supabase

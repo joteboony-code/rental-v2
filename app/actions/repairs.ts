@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { RepairSchema, type RepairFormState, type RepairStatus } from '@/lib/definitions'
+import { getAuthedUser } from '@/lib/require-admin'
 
 const MAX_PHOTO_SIZE = 10 * 1024 * 1024
 const ALLOWED_PHOTO_TYPES: Record<string, string> = {
@@ -17,6 +18,7 @@ export async function createRepair(
   state: RepairFormState,
   formData: FormData
 ): Promise<RepairFormState> {
+  if (!(await getAuthedUser())) return { message: 'กรุณายืนยันตัวตน 2 ชั้นก่อนทำรายการ' }
   const raw = {
     room_id:     formData.get('room_id'),
     tenant_id:   formData.get('tenant_id') || undefined,
@@ -78,6 +80,7 @@ export async function updateRepairStatus(
   status: RepairStatus,
   adminNote: string
 ): Promise<{ success: boolean; message: string }> {
+  if (!(await getAuthedUser())) return { success: false, message: 'กรุณายืนยันตัวตน 2 ชั้นก่อนทำรายการ' }
   const supabase = await createClient()
   const { error } = await supabase
     .from('repair_requests')
@@ -92,9 +95,8 @@ export async function updateRepairStatus(
 
 // ─── Delete Repair Request ────────────────────────────────────
 export async function deleteRepair(id: string): Promise<void> {
+  if (!(await getAuthedUser())) return
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return
 
   // Remove photo from storage
   const { data } = await supabase
