@@ -128,9 +128,14 @@ export async function updatePaymentSettings(
 
   if (!currentPassword) return { message: 'กรุณายืนยันรหัสผ่านก่อนบันทึก' }
 
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  // PromptPay ID: เบอร์มือถือ 10 หลัก (0xxxxxxxxx) หรือเลขบัตร/นิติบุคคล 13 หลัก หรือเว้นว่างได้
+  if (promptpayId && !/^(0\d{9}|\d{13})$/.test(promptpayId)) {
+    return { message: 'รหัส PromptPay ต้องเป็นเบอร์มือถือ 10 หลัก (0xxxxxxxxx) หรือเลขบัตรประชาชน/นิติบุคคล 13 หลัก' }
+  }
+
+  const user = await getAuthedUser()
   if (!user?.email) return { message: 'ไม่มีสิทธิ์ใช้งาน' }
+  const supabase = await createClient()
 
   const { error: verifyError } = await createPasswordVerificationClient().auth.signInWithPassword({
     email: user.email, password: currentPassword,
