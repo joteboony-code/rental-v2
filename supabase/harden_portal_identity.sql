@@ -1,5 +1,5 @@
 -- Portal routines accept a LINE user ID, so they must never be callable by
--- browser roles. Server Actions verify the LINE ID token, then use service_role.
+-- browser roles. Server Actions verify a signed portal session, then use service_role.
 REVOKE ALL ON FUNCTION public.get_tenant_portal_by_line_user(text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.get_tenant_portal_by_line_user(text, text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.get_tenant_portal_by_line_user(text) FROM anon, authenticated;
@@ -11,9 +11,10 @@ REVOKE ALL ON FUNCTION public.pair_tenant_line(text, text, text, text) FROM PUBL
 REVOKE ALL ON FUNCTION public.pair_tenant_line(text, text, text, text) FROM anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.pair_tenant_line(text, text, text, text) TO service_role;
 
-CREATE TABLE IF NOT EXISTS public.line_webhook_events (
+-- LINE retries must be claimed atomically before a webhook is handled.
+CREATE TABLE IF NOT EXISTS public.processed_line_events (
   event_id text PRIMARY KEY,
-  received_at timestamptz NOT NULL DEFAULT now()
+  processed_at timestamptz NOT NULL DEFAULT now()
 );
 
-ALTER TABLE public.line_webhook_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.processed_line_events ENABLE ROW LEVEL SECURITY;

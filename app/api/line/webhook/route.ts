@@ -886,31 +886,21 @@ export async function POST(req: NextRequest) {
   const supabase = createServiceClient()
 
   for (const event of payload.events ?? []) {
-    // Idempotency: skip events already processed (guards against LINE retry delivery)
+    // Claim the event atomically before handling it. A duplicate-key error means
+    // another delivery already owns (or completed) this event.
     if (event.webhookEventId) {
-      const { data: existing } = await supabase
+      const { error } = await supabase
         .from('processed_line_events')
-        .select('event_id')
-        .eq('event_id', event.webhookEventId)
-        .maybeSingle()
-      if (existing) continue
-      await supabase.from('processed_line_events').insert({ event_id: event.webhookEventId })
+        .insert({ event_id: event.webhookEventId })
+      if (error) {
+        if (error.code === '23505') continue
+        console.error('[webhook] could not claim event', error)
+        return NextResponse.json({ ok: false }, { status: 500 })
+      }
     }
 
     try {
       const lineUserId = event.source.userId
-
-      if (event.webhookEventId) {
-        const { error } = await supabase
-          .from('line_webhook_events')
-          .insert({ event_id: event.webhookEventId })
-        if (error) {
-          // LINE retries use the same event ID. Treat unique violations as an
-          // already-completed event rather than repeating payment processing.
-          if (error.code === '23505') continue
-          throw error
-        }
-      }
 
       if (event.type === 'follow' && event.replyToken) {
         await handleFollow(event.replyToken, cfg)
