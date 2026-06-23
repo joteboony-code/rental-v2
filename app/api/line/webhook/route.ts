@@ -900,6 +900,18 @@ export async function POST(req: NextRequest) {
     try {
       const lineUserId = event.source.userId
 
+      if (event.webhookEventId) {
+        const { error } = await supabase
+          .from('line_webhook_events')
+          .insert({ event_id: event.webhookEventId })
+        if (error) {
+          // LINE retries use the same event ID. Treat unique violations as an
+          // already-completed event rather than repeating payment processing.
+          if (error.code === '23505') continue
+          throw error
+        }
+      }
+
       if (event.type === 'follow' && event.replyToken) {
         await handleFollow(event.replyToken, cfg)
         continue

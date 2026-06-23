@@ -12,6 +12,7 @@ const ALLOWED_REPAIR_PHOTO_TYPES: Record<string, string> = {
 }
 import { decryptSecret } from '@/lib/crypto-secrets'
 import { signPortalToken, verifyPortalToken } from '@/lib/portal-session'
+import { isRateLimited } from '@/lib/rate-limit'
 
 export type TenantPortalData = {
   tenant: {
@@ -224,6 +225,9 @@ export async function submitPortalRepair(
 ): Promise<{ success: boolean; message: string }> {
   const lineUserId = verifyPortalToken(portalToken)
   if (!lineUserId) return { success: false, message: 'Session หมดอายุ กรุณาเปิดใหม่อีกครั้ง' }
+  if (await isRateLimited(`portal-repair:${lineUserId}`, 5, 3600)) {
+    return { success: false, message: 'ส่งแจ้งซ่อมบ่อยเกินไป กรุณาลองใหม่ภายหลัง' }
+  }
   const supabase = createServiceClient()
 
   const { data: tenant } = await supabase
