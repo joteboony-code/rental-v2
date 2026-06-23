@@ -338,23 +338,39 @@ export async function markBillPaid(billId: string): Promise<{ success: boolean; 
   const supabase = await createClient()
   const { data: bill } = await supabase
     .from('bills')
-    .select('id, tenant_id, room_id, status')
+    .select('id, tenant_id, room_id, total_amount, payments(amount)')
     .eq('id', billId)
     .single()
 
-  const { error } = await supabase
-    .from('bills')
-    .update({ status: 'paid' })
-    .eq('id', billId)
+  if (!bill) return { success: false, message: 'ไม่พบบิล' }
 
+  // คำนวณยอดค้างจริง แล้วสร้าง payment record เสมอ
+  type BillWithPayments = typeof bill & { payments: { amount: number }[] | null }
+  const b = bill as unknown as BillWithPayments
+  const alreadyPaid = (b.payments ?? []).reduce((s, p) => s + Number(p.amount), 0)
+  const remaining   = Math.max(0, Number(b.total_amount) - alreadyPaid)
+
+  if (remaining > 0) {
+    const { error: pe } = await supabase.from('payments').insert({
+      bill_id:        billId,
+      amount:         remaining,
+      payment_method: 'cash',
+      note:           'รับเงินสด (บันทึกโดยเจ้าของ)',
+      paid_at:        new Date().toISOString(),
+    })
+    if (pe) return { success: false, message: `บันทึกรายการชำระไม่สำเร็จ: ${pe.message}` }
+  }
+
+  const { error } = await supabase.from('bills').update({ status: 'paid' }).eq('id', billId)
   if (error) return { success: false, message: error.message }
+
   logAudit({
     action: 'bill_mark_paid',
     entityType: 'bill',
     entityId: billId,
     tenantId: bill?.tenant_id ?? null,
     roomId: bill?.room_id ?? null,
-    description: `ทำเครื่องหมายชำระแล้ว`,
+    description: `รับเงินสด ฿${remaining.toFixed(2)} (ทำเครื่องหมายชำระแล้ว)`,
   }).catch(() => {})
 
   revalidatePath('/bills')

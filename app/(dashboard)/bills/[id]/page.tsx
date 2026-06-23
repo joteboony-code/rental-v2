@@ -244,9 +244,9 @@ export default async function BillDetailPage({
                 {payments.map((p) => (
                   <div key={p.id} className="flex items-start gap-3 py-3 border-b border-slate-50 last:border-0">
                     {p.slip_url && (
-                      <a href={p.slip_url} target="_blank" rel="noreferrer" className="shrink-0">
+                      <a href={`/api/slip/${p.id}`} target="_blank" rel="noreferrer" className="shrink-0">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={p.slip_url} alt="slip" className="size-12 object-cover rounded-xl border border-slate-100" />
+                        <img src={`/api/slip/${p.id}`} alt="slip" className="size-12 object-cover rounded-xl border border-slate-100" />
                       </a>
                     )}
                     <div className="flex-1 min-w-0">

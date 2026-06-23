@@ -82,8 +82,8 @@ export default async function ReviewDetailPage({
             {slip.slip_url ? (
               <div className="relative">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={slip.slip_url} alt="สลิป" className="w-full max-h-80 object-contain bg-slate-50" />
-                <a href={slip.slip_url} target="_blank" rel="noreferrer"
+                <img src={`/api/pending-slip/${slip.id}`} alt="สลิป" className="w-full max-h-80 object-contain bg-slate-50" />
+                <a href={`/api/pending-slip/${slip.id}`} target="_blank" rel="noreferrer"
                   className="absolute top-2 right-2 bg-white rounded-lg px-2 py-1 text-xs flex items-center gap-1 text-slate-600 shadow border border-slate-100 hover:bg-slate-50">
                   <ExternalLink className="size-3" /> ขยาย
                 </a>

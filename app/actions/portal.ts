@@ -134,10 +134,25 @@ export async function getTenantPortalDashboard(lineUserId: string, roomId?: stri
   const svc2 = createServiceClient()
   const { data: settings } = await svc2.from('settings').select('promptpay_id, promptpay_name').eq('id', 1).maybeSingle()
 
+  // Generate short-lived signed URLs for payment slips (bucket เป็น private)
+  const portalData = data as TenantPortalData
+  const svc3 = createServiceClient()
+  for (const bill of portalData.bills ?? []) {
+    for (const payment of bill.payments ?? []) {
+      if (payment.slip_url) {
+        const path = payment.slip_url.split('/payment-slips/')[1]
+        if (path) {
+          const { data: signed } = await svc3.storage.from('payment-slips').createSignedUrl(path, 3600)
+          payment.slip_url = signed?.signedUrl ?? null
+        }
+      }
+    }
+  }
+
   return {
     success: true,
     data: {
-      ...(data as TenantPortalData),
+      ...portalData,
       promptpay: {
         id:   (settings as { promptpay_id?: string | null } | null)?.promptpay_id   ?? null,
         name: (settings as { promptpay_name?: string | null } | null)?.promptpay_name ?? null,

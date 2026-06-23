@@ -121,7 +121,7 @@ export function CheckoutForm({
     startSave(async () => {
       const res = await saveCheckout({
         contractId, roomId, tenantId, moveOutDate, note,
-        paidBills: unpaidBills.map((b) => ({ id: b.id, amount: b.total_amount })),
+        billIds: unpaidBills.map((b) => b.id),
       })
       setSaveResult(res)
       if (res.success) {
