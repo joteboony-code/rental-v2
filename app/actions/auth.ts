@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import { getClientIp, isRateLimited } from '@/lib/rate-limit'
 import { getAuthedUser } from '@/lib/require-admin'
-import { sendOwnerTelegramMessage } from '@/lib/telegram'
+import { notifyOwner } from '@/lib/notify-owner'
 
 export type LoginState =
   | { error: string }
@@ -38,7 +38,7 @@ async function sendLoginNotification() {
     day: 'numeric', month: 'long', year: 'numeric',
     hour: '2-digit', minute: '2-digit',
   })
-  await sendOwnerTelegramMessage(`🔐 มีการเข้าสู่ระบบ\nเวลา: ${now}\n\nถ้าไม่ใช่คุณ → เข้าตั้งค่าและเปลี่ยนรหัสผ่านทันที`)
+  await notifyOwner(`🔐 มีการเข้าสู่ระบบ\nเวลา: ${now}\n\nถ้าไม่ใช่คุณ → เข้าตั้งค่าและเปลี่ยนรหัสผ่านทันที`)
 }
 
 export async function login(_: unknown, formData: FormData): Promise<LoginState> {

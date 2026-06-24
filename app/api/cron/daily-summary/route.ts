@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import { getLineMessagingConfig } from '@/lib/line-integration'
-import { sendOwnerTelegramMessage } from '@/lib/telegram'
+import { notifyOwner } from '@/lib/notify-owner'
 
 function isAuthorized(req: NextRequest) {
   const secret = process.env.CRON_SECRET
@@ -169,7 +169,7 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    await sendOwnerTelegramMessage(lines.join('\n'))
+    await notifyOwner(lines.join('\n'))
   } catch (err) {
     return NextResponse.json({ ok: false, error: String(err) })
   }

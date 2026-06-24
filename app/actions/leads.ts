@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import { getAuthedUser } from '@/lib/require-admin'
 import { isRateLimited, getClientIp } from '@/lib/rate-limit'
-import { sendOwnerTelegramMessage } from '@/lib/telegram'
+import { notifyOwner } from '@/lib/notify-owner'
 
 async function notifyOwnerNewLead(name: string, phone: string, note: string | null) {
   const text = [
@@ -16,7 +16,7 @@ async function notifyOwnerNewLead(name: string, phone: string, note: string | nu
     '\nดูรายชื่อได้ที่หน้า "คนสนใจห้อง"',
   ].filter(Boolean).join('\n')
 
-  await sendOwnerTelegramMessage(text)
+  await notifyOwner(text)
 }
 
 export async function submitLead(

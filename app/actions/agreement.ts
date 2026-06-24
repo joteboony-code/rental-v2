@@ -4,7 +4,7 @@ import { createServiceClient } from '@/lib/supabase/service'
 import { DEFAULT_DORM_ID } from '@/lib/line-integration'
 import { decryptSecret } from '@/lib/crypto-secrets'
 import { getAuthedUser } from '@/lib/require-admin'
-import { sendOwnerTelegramMessage } from '@/lib/telegram'
+import { notifyOwner } from '@/lib/notify-owner'
 import { verifyPortalToken } from '@/lib/portal-session'
 import { logAudit } from './audit'
 
@@ -266,7 +266,7 @@ async function notifyOwnerAgreementSigned({
   const tenantName = tenantRes.data?.full_name ?? '-'
   const roomNumber = (contractRes.data?.rooms as unknown as { room_number: string } | null)?.room_number ?? '-'
 
-  await sendOwnerTelegramMessage(`✅ ผู้เช่าลงนามสัญญาแล้ว\nห้อง: ${roomNumber}  ผู้เช่า: ${tenantName}`)
+  await notifyOwner(`✅ ผู้เช่าลงนามสัญญาแล้ว\nห้อง: ${roomNumber}  ผู้เช่า: ${tenantName}`)
 }
 
 // ──────────────────────────────────────────────

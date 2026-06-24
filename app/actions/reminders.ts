@@ -7,7 +7,7 @@ import { parseReminderDays } from '@/lib/reminder-utils'
 import { getLineMessagingConfig } from '@/lib/line-integration'
 import { buildBillPortalUrl } from '@/lib/portal-url'
 import { getAuthedUser } from '@/lib/require-admin'
-import { sendOwnerTelegramMessage } from '@/lib/telegram'
+import { notifyOwner } from '@/lib/notify-owner'
 
 function fmt(n: number) {
   return n.toLocaleString('th-TH', { maximumFractionDigits: 0 })
@@ -384,7 +384,7 @@ export async function sendOverdueReminders(
     ]
     if (sentRooms.length > 0) { ownerLines.push(SEP); ownerLines.push(...sentRooms) }
     try {
-      await sendOwnerTelegramMessage(ownerLines.join('\n'))
+      await notifyOwner(ownerLines.join('\n'))
     } catch { /* silent */ }
   }
 
