@@ -330,8 +330,13 @@ export async function GET(req: NextRequest) {
       `💰 ยอดค้างรวม: ${fmt(totalAmt)} บาท`,
     ]
     if (sentRooms.length > 0) { ownerLines.push(SEP); ownerLines.push(...sentRooms) }
+    const appUrl = (lineConfig?.appUrl ?? '').replace(/\/$/, '')
     try {
-      await notifyOwner(ownerLines.join('\n'), 'reminder_summary')
+      await notifyOwner(
+        ownerLines.join('\n'),
+        'reminder_summary',
+        appUrl ? { label: 'ดูบิล', url: `${appUrl}/bills` } : undefined
+      )
     } catch { /* silent */ }
   }
 
