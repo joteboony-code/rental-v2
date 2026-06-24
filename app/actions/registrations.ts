@@ -320,7 +320,7 @@ export async function submitRegistration(formData: FormData): Promise<SubmitRegi
     const ownerMsg = status === 'auto_approved'
       ? `✅ มีผู้เช่าลงทะเบียนใหม่สำเร็จ\nห้อง: ${roomNumber}\nชื่อ: ${fullName}\nเบอร์: ${phone}`
       : `📋 มีคำขอลงทะเบียนรอตรวจ\nห้อง: ${roomNumber}\nชื่อ: ${fullName}\nเบอร์: ${phone}\nเหตุผล: ${pendingReasons.join(', ')}${linkLine}`
-    notifyOwner(ownerMsg, 'registration').catch(() => {})
+    notifyOwner(ownerMsg, 'registration').catch((e) => { console.error('[notify registration]', e) })
   }
 
   return {

@@ -10,7 +10,7 @@ export default async function LineSettingsPage() {
   const [{ data: settings }, lineIntegration] = await Promise.all([
     supabase
       .from('settings')
-      .select('owner_name, owner_id_card, owner_address, telegram_chat_id, owner_notify_channel, notify_slip_enabled, notify_repair_enabled, notify_registration_enabled, notify_contract_enabled, notify_lead_enabled, notify_daily_summary_enabled, notify_reminder_summary_enabled, notify_expiring_contract_enabled')
+      .select('owner_name, owner_id_card, owner_address, telegram_chat_id, telegram_bot_token_last4, owner_notify_channel, notify_slip_enabled, notify_repair_enabled, notify_registration_enabled, notify_contract_enabled, notify_lead_enabled, notify_daily_summary_enabled, notify_reminder_summary_enabled, notify_expiring_contract_enabled')
       .eq('id', 1)
       .single(),
     getLineIntegrationPublic(),
@@ -40,6 +40,8 @@ export default async function LineSettingsPage() {
         lineIntegration={lineIntegration ?? undefined}
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         telegramChatId={(settings as any)?.telegram_chat_id ?? null}
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        telegramBotTokenLast4={(settings as any)?.telegram_bot_token_last4 ?? null}
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         ownerNotifyChannel={(settings as any)?.owner_notify_channel ?? 'telegram'}
         // eslint-disable-next-line @typescript-eslint/no-explicit-any

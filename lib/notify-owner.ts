@@ -1,6 +1,7 @@
 import { createServiceClient } from '@/lib/supabase/service'
 import { getLineMessagingConfig } from '@/lib/line-integration'
 import { sendOwnerTelegramMessage } from '@/lib/telegram'
+import { maybeDecryptSecret } from '@/lib/crypto-secrets'
 
 export type OwnerNotifyType =
   | 'slip'
@@ -41,9 +42,10 @@ async function sendOwnerLineMessage(text: string): Promise<void> {
 
 export async function notifyOwner(text: string, type?: OwnerNotifyType): Promise<void> {
   const supabase = createServiceClient()
+  // Single DB read: fetch channel setting, toggles, AND telegram credentials together
   const { data: rawData } = await supabase
     .from('settings')
-    .select('owner_notify_channel, notify_slip_enabled, notify_repair_enabled, notify_registration_enabled, notify_contract_enabled, notify_lead_enabled, notify_daily_summary_enabled, notify_reminder_summary_enabled, notify_expiring_contract_enabled')
+    .select('owner_notify_channel, telegram_bot_token, telegram_chat_id, notify_slip_enabled, notify_repair_enabled, notify_registration_enabled, notify_contract_enabled, notify_lead_enabled, notify_daily_summary_enabled, notify_reminder_summary_enabled, notify_expiring_contract_enabled')
     .eq('id', 1)
     .maybeSingle()
 
@@ -58,8 +60,22 @@ export async function notifyOwner(text: string, type?: OwnerNotifyType): Promise
   const channel = (data?.owner_notify_channel as string | null) ?? 'telegram'
 
   const tasks: Promise<void>[] = []
-  if (channel === 'telegram' || channel === 'both') tasks.push(sendOwnerTelegramMessage(text))
-  if (channel === 'line' || channel === 'both') tasks.push(sendOwnerLineMessage(text))
+
+  if (channel === 'telegram' || channel === 'both') {
+    const rawToken = data?.telegram_bot_token as string | null
+    const chatId = data?.telegram_chat_id as string | null
+    if (rawToken && chatId) {
+      tasks.push(
+        maybeDecryptSecret(rawToken)
+          .then((token) => sendOwnerTelegramMessage(text, token, chatId))
+          .catch((e) => { console.error('[telegram decrypt]', e) })
+      )
+    }
+  }
+
+  if (channel === 'line' || channel === 'both') {
+    tasks.push(sendOwnerLineMessage(text))
+  }
 
   await Promise.allSettled(tasks)
 }
