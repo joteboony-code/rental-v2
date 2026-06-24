@@ -174,9 +174,9 @@ async function push(to: string | null, token: string, messages: object[]) {
   }
 }
 
-async function notifyOwner(_cfg: LineConfig, text: string) {
+async function notifyOwner(_cfg: LineConfig, text: string, type: import('@/lib/notify-owner').OwnerNotifyType = 'slip') {
   try {
-    await notifyOwnerChannel(text)
+    await notifyOwnerChannel(text, type)
   } catch (error) {
     console.error('[line notify owner]', error)
   }

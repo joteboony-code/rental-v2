@@ -169,7 +169,7 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    await notifyOwner(lines.join('\n'))
+    await notifyOwner(lines.join('\n'), 'daily_summary')
   } catch (err) {
     return NextResponse.json({ ok: false, error: String(err) })
   }

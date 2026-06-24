@@ -344,7 +344,7 @@ async function notifyOwnerNewRepairFromPortal({
   if (description) lines.push(`รายละเอียด: ${description}`)
   if (repairUrl) lines.push('', `เปิดดูรายการ: ${repairUrl}`)
 
-  await notifyOwner(lines.join('\n'))
+  await notifyOwner(lines.join('\n'), 'repair')
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -366,5 +366,5 @@ async function notifyOwnerNewRepair(
 
   const text = `🔧 มีแจ้งซ่อมใหม่ครับ\n🏠 ห้อง ${roomNumber}\n📝 ${title}\n⚡ ความเร่งด่วน: ${priorityLabel[priority] ?? priority}`
 
-  await notifyOwner(text)
+  await notifyOwner(text, 'repair')
 }

@@ -16,7 +16,7 @@ async function notifyOwnerNewLead(name: string, phone: string, note: string | nu
     '\nดูรายชื่อได้ที่หน้า "คนสนใจห้อง"',
   ].filter(Boolean).join('\n')
 
-  await notifyOwner(text)
+  await notifyOwner(text, 'lead')
 }
 
 export async function submitLead(

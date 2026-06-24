@@ -335,7 +335,7 @@ export async function GET(req: NextRequest) {
     ]
     if (sentRooms.length > 0) { ownerLines.push(SEP); ownerLines.push(...sentRooms) }
     try {
-      await notifyOwner(ownerLines.join('\n'))
+      await notifyOwner(ownerLines.join('\n'), 'reminder_summary')
     } catch { /* silent */ }
   }
 

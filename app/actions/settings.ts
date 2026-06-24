@@ -287,9 +287,17 @@ export async function updateLineAndOwnerSettings(
 
   const supabase = await createClient()
 
-  const settingsUpdate: Record<string, string | null> = {
+  const settingsUpdate: Record<string, string | boolean | null> = {
     owner_name: ownerName, owner_id_card: ownerIdCard, owner_address: ownerAddress,
     owner_notify_channel: ['line', 'telegram', 'both'].includes(ownerNotifyChannel) ? ownerNotifyChannel : 'telegram',
+    notify_slip_enabled:              formData.get('notify_slip_enabled')              === 'on',
+    notify_repair_enabled:            formData.get('notify_repair_enabled')            === 'on',
+    notify_registration_enabled:      formData.get('notify_registration_enabled')      === 'on',
+    notify_contract_enabled:          formData.get('notify_contract_enabled')          === 'on',
+    notify_lead_enabled:              formData.get('notify_lead_enabled')              === 'on',
+    notify_daily_summary_enabled:     formData.get('notify_daily_summary_enabled')     === 'on',
+    notify_reminder_summary_enabled:  formData.get('notify_reminder_summary_enabled')  === 'on',
+    notify_expiring_contract_enabled: formData.get('notify_expiring_contract_enabled') === 'on',
   }
   if (telegramChatId !== null) settingsUpdate.telegram_chat_id = telegramChatId
   if (telegramBotToken) settingsUpdate.telegram_bot_token = telegramBotToken

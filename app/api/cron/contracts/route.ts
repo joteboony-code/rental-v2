@@ -55,7 +55,7 @@ export async function GET(req: NextRequest) {
     `รวม ${contracts.length} ห้อง`,
   ]
 
-  await notifyOwner(lines.join('\n'))
+  await notifyOwner(lines.join('\n'), 'expiring_contract')
 
   return NextResponse.json({ ok: true, expiring: contracts.length })
 }
