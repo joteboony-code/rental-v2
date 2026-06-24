@@ -290,17 +290,19 @@ export async function updateLineAndOwnerSettings(
     .eq('id', 1)
   if (ownerError) return { message: `เกิดข้อผิดพลาด: ${ownerError.message}` }
 
-  const loginNotifyEnabled = formData.get('login_notify_enabled') === 'on'
+  const loginNotifyEnabled        = formData.get('login_notify_enabled') === 'on'
+  const billReminderNotifyEnabled = formData.get('bill_reminder_notify_enabled') === 'on'
 
   const lineData = parsedLine.data
   const lineUpdate: Record<string, string | boolean | null> = {
-    dorm_id:                DEFAULT_DORM_ID,
-    line_oa_basic_id:       lineData.line_oa_basic_id || null,
-    line_liff_id:           lineData.line_liff_id || null,
-    line_liff_id_pairing:   lineData.line_liff_id_pairing || null,
-    app_url:                lineData.app_url || null,
-    owner_line_user_id:     lineData.owner_line_user_id || null,
-    login_notify_enabled:   loginNotifyEnabled,
+    dorm_id:                          DEFAULT_DORM_ID,
+    line_oa_basic_id:                 lineData.line_oa_basic_id || null,
+    line_liff_id:                     lineData.line_liff_id || null,
+    line_liff_id_pairing:             lineData.line_liff_id_pairing || null,
+    app_url:                          lineData.app_url || null,
+    owner_line_user_id:               lineData.owner_line_user_id || null,
+    login_notify_enabled:             loginNotifyEnabled,
+    bill_reminder_notify_enabled:     billReminderNotifyEnabled,
   }
   if (lineData.line_channel_access_token) {
     lineUpdate.encrypted_channel_access_token = await encryptSecret(lineData.line_channel_access_token)

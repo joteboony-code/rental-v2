@@ -106,14 +106,24 @@ export async function GET(req: NextRequest) {
 
   const supabase = createServiceClient()
 
-  const { data: settings } = await supabase
-    .from('settings')
-    .select('reminder_enabled, reminder_days, bank_accounts_text, water_unit_price, electricity_unit_price')
-    .eq('id', 1)
-    .maybeSingle()
+  const [{ data: settings }, { data: lineSettings }] = await Promise.all([
+    supabase
+      .from('settings')
+      .select('reminder_enabled, reminder_days, bank_accounts_text, water_unit_price, electricity_unit_price')
+      .eq('id', 1)
+      .maybeSingle(),
+    supabase
+      .from('line_integrations')
+      .select('bill_reminder_notify_enabled')
+      .maybeSingle(),
+  ])
 
   if (!settings?.reminder_enabled) {
     return NextResponse.json({ ok: true, skipped: 'reminders disabled' })
+  }
+
+  if (lineSettings?.bill_reminder_notify_enabled === false) {
+    return NextResponse.json({ ok: true, skipped: 'bill reminder LINE notification disabled' })
   }
 
   const todayDay = new Date().getDate()
