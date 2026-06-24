@@ -288,38 +288,53 @@ export default async function BillsPage({ searchParams }: Props) {
             </table>
 
             {/* Mobile Cards */}
-            <div className="md:hidden divide-y divide-slate-100">
-              {bills.map((bill) => {
-                const room   = bill.rooms   as { room_number: string; floor: number | null } | null
-                const tenant = bill.tenants as { full_name: string } | null
-                return (
-                  <Link key={bill.id} href={`/bills/${bill.id}`}
-                    className="flex items-center gap-4 p-4 hover:bg-slate-50 transition-colors">
-                    <div className="size-11 rounded-xl bg-slate-100 flex items-center justify-center text-sm font-bold text-slate-700 shrink-0">
-                      {room?.room_number ?? '—'}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-slate-800 text-sm truncate">{tenant?.full_name ?? '—'}</p>
-                      <p className="text-xs text-slate-400 mt-0.5">
-                        <span className="text-blue-500">น้ำ {Number(bill.water_amount).toLocaleString()}</span>
-                        <span className="mx-1">·</span>
-                        <span className="text-amber-500">ไฟ {Number(bill.electricity_amount).toLocaleString()}</span>
-                      </p>
-                    </div>
-                    <div className="text-right shrink-0 space-y-1">
-                      <p className="font-bold text-slate-950 text-sm">฿{Number(bill.total_amount).toLocaleString()}</p>
-                      <BillStatusBadge status={bill.status} />
-                    </div>
-                  </Link>
-                )
-              })}
-              <div className="px-4 py-3 flex justify-between items-center bg-slate-50">
-                <span className="text-xs text-slate-500">{bills.length} รายการ</span>
-                <span className="text-sm font-bold text-slate-900">
-                  ฿{bills.reduce((s, b) => s + Number(b.total_amount), 0).toLocaleString('th-TH', { maximumFractionDigits: 0 })}
-                </span>
-              </div>
-            </div>
+            {(() => {
+              const BILL_STRIP: Record<string, string> = {
+                paid:      'bg-emerald-500',
+                pending:   'bg-amber-500',
+                overdue:   'bg-rose-500',
+                cancelled: 'bg-slate-300',
+              }
+              return (
+                <div className="md:hidden">
+                  <div className="grid grid-cols-1 gap-3 p-3">
+                    {bills.map((bill) => {
+                      const room   = bill.rooms   as { room_number: string; floor: number | null } | null
+                      const tenant = bill.tenants as { full_name: string } | null
+                      return (
+                        <Link key={bill.id} href={`/bills/${bill.id}`}
+                          className="group flex flex-col rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-lg hover:border-slate-300 transition-all duration-200 overflow-hidden">
+                          <div className={`h-1 w-full ${BILL_STRIP[bill.status] ?? 'bg-slate-300'}`} />
+                          <div className="flex items-center gap-4 p-4">
+                            <div className="size-11 rounded-xl bg-slate-100 flex items-center justify-center text-sm font-bold text-slate-700 shrink-0">
+                              {room?.room_number ?? '—'}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-semibold text-slate-800 text-sm truncate">{tenant?.full_name ?? '—'}</p>
+                              <p className="text-xs text-slate-400 mt-0.5">
+                                <span className="text-blue-500">น้ำ {Number(bill.water_amount).toLocaleString()}</span>
+                                <span className="mx-1">·</span>
+                                <span className="text-amber-500">ไฟ {Number(bill.electricity_amount).toLocaleString()}</span>
+                              </p>
+                            </div>
+                            <div className="text-right shrink-0 space-y-1">
+                              <p className="font-bold text-slate-950 text-sm">฿{Number(bill.total_amount).toLocaleString()}</p>
+                              <BillStatusBadge status={bill.status} />
+                            </div>
+                          </div>
+                        </Link>
+                      )
+                    })}
+                  </div>
+                  <div className="border-t border-slate-100 px-4 py-3 flex justify-between items-center bg-slate-50/60">
+                    <span className="text-xs text-slate-500">{bills.length} รายการ</span>
+                    <span className="text-sm font-bold text-slate-900">
+                      ฿{bills.reduce((s, b) => s + Number(b.total_amount), 0).toLocaleString('th-TH', { maximumFractionDigits: 0 })}
+                    </span>
+                  </div>
+                </div>
+              )
+            })()}
           </>
         )}
       </div>

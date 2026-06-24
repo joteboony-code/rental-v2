@@ -284,7 +284,7 @@ export function MeterForm({ rooms, billingMonth, waterRate, electricityRate, ano
       </div>
 
       {/* ── Mobile: Cards ── */}
-      <div className="md:hidden divide-y divide-slate-100">
+      <div className="md:hidden grid grid-cols-1 gap-3 p-3">
         {rooms.map((room) => {
           const { wUnits, eUnits, wAmt, eAmt, total } = calcRow(room.room_id, room.water_prev, room.electricity_prev, room.rent)
           const status    = saveStatus[room.room_id] ?? 'idle'
@@ -296,7 +296,9 @@ export function MeterForm({ rooms, billingMonth, waterRate, electricityRate, ano
           const proRated  = room.is_first_month && room.start_date
                           ? calcProRated(room.rent, room.start_date, billingMonth) : null
           return (
-            <div key={room.room_id} className={`p-4 transition-colors ${status === 'saved' ? 'bg-emerald-50/40' : ''}`}>
+            <div key={room.room_id} className={`group flex flex-col rounded-2xl border shadow-sm overflow-hidden transition-all duration-200 ${status === 'saved' ? 'border-emerald-200 shadow-emerald-50' : 'border-slate-200 hover:shadow-md hover:border-slate-300'}`}>
+              <div className={`h-1 w-full ${status === 'saved' ? 'bg-emerald-500' : status === 'error' ? 'bg-rose-500' : 'bg-teal-400'}`} />
+              <div className={`p-4 ${status === 'saved' ? 'bg-emerald-50/30' : ''}`}>
 
               {/* Room header */}
               <div className="flex items-center justify-between mb-3">
@@ -431,6 +433,7 @@ export function MeterForm({ rooms, billingMonth, waterRate, electricityRate, ano
                   )}
                 </div>
                 <SaveButton status={status} onClick={() => saveRoom(room)} />
+              </div>
               </div>
             </div>
           )
