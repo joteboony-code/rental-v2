@@ -6,6 +6,7 @@ import { getAuthedUser } from '@/lib/require-admin'
 import { getLineMessagingConfig } from '@/lib/line-integration'
 import { revalidatePath } from 'next/cache'
 import { isRateLimited, getClientIp } from '@/lib/rate-limit'
+import { sendOwnerTelegramMessage } from '@/lib/telegram'
 
 export type SubmitRegistrationResult = {
   success: boolean
@@ -312,14 +313,14 @@ export async function submitRegistration(formData: FormData): Promise<SubmitRegi
     await logAudit('registration_auto_approved', roomId, tenantId, req.id)
   }
 
-  const config = await getLineMessagingConfig()
-  if (config?.ownerLineUserId && config?.channelAccessToken) {
-    const appUrl = config.appUrl ?? ''
+  {
+    const config = await getLineMessagingConfig()
+    const appUrl = config?.appUrl ?? ''
     const linkLine = appUrl ? `\n🔗 ${appUrl}/tenant-registrations` : ''
     const ownerMsg = status === 'auto_approved'
       ? `✅ มีผู้เช่าลงทะเบียนใหม่สำเร็จ\nห้อง: ${roomNumber}\nชื่อ: ${fullName}\nเบอร์: ${phone}`
       : `📋 มีคำขอลงทะเบียนรอตรวจ\nห้อง: ${roomNumber}\nชื่อ: ${fullName}\nเบอร์: ${phone}\nเหตุผล: ${pendingReasons.join(', ')}${linkLine}`
-    await pushLine(config.ownerLineUserId, ownerMsg, config.channelAccessToken)
+    sendOwnerTelegramMessage(ownerMsg).catch(() => {})
   }
 
   return {

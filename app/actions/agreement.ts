@@ -4,6 +4,7 @@ import { createServiceClient } from '@/lib/supabase/service'
 import { DEFAULT_DORM_ID } from '@/lib/line-integration'
 import { decryptSecret } from '@/lib/crypto-secrets'
 import { getAuthedUser } from '@/lib/require-admin'
+import { sendOwnerTelegramMessage } from '@/lib/telegram'
 import { verifyPortalToken } from '@/lib/portal-session'
 import { logAudit } from './audit'
 
@@ -246,7 +247,6 @@ async function notifyTenantAgreementSigned({
 async function notifyOwnerAgreementSigned({
   contractId,
   tenantId,
-  pdfUrl,
 }: {
   contractId: string
   tenantId: string
@@ -254,12 +254,7 @@ async function notifyOwnerAgreementSigned({
 }) {
   const supabase = createServiceClient()
 
-  const [cfgRes, tenantRes, contractRes] = await Promise.all([
-    supabase
-      .from('line_integrations')
-      .select('encrypted_channel_access_token, owner_line_user_id, app_url')
-      .eq('dorm_id', DEFAULT_DORM_ID)
-      .maybeSingle(),
+  const [tenantRes, contractRes] = await Promise.all([
     supabase.from('tenants').select('full_name').eq('id', tenantId).maybeSingle(),
     supabase
       .from('contracts')
@@ -268,66 +263,10 @@ async function notifyOwnerAgreementSigned({
       .maybeSingle(),
   ])
 
-  const cfg = cfgRes.data
-  if (!cfg?.encrypted_channel_access_token || !cfg.owner_line_user_id) return
-
-  const token = await decryptSecret(cfg.encrypted_channel_access_token)
   const tenantName = tenantRes.data?.full_name ?? '-'
   const roomNumber = (contractRes.data?.rooms as unknown as { room_number: string } | null)?.room_number ?? '-'
-  const appUrl = (cfg.app_url ?? process.env.NEXT_PUBLIC_APP_URL ?? '').replace(/\/$/, '')
-  const tenantUrl = appUrl ? `${appUrl}/tenants` : null
 
-  const footerContents: object[] = [
-    {
-      type: 'button',
-      style: 'primary',
-      action: { type: 'uri', label: 'ดาวน์โหลด PDF', uri: pdfUrl },
-    },
-  ]
-  if (tenantUrl) {
-    footerContents.push({
-      type: 'button',
-      style: 'secondary',
-      margin: 'sm',
-      action: { type: 'uri', label: 'จัดการผู้เช่า', uri: tenantUrl },
-    })
-  }
-
-  const flexMessage = {
-    type: 'flex',
-    altText: `✅ ${tenantName} ลงนามสัญญาห้อง ${roomNumber} แล้ว`,
-    contents: {
-      type: 'bubble',
-      body: {
-        type: 'box',
-        layout: 'vertical',
-        contents: [
-          { type: 'text', text: '✅ ผู้เช่าลงนามสัญญาแล้ว', weight: 'bold', size: 'md' },
-          {
-            type: 'text',
-            text: `ห้อง ${roomNumber}  •  ${tenantName}`,
-            size: 'sm',
-            color: '#555555',
-            margin: 'sm',
-          },
-        ],
-      },
-      footer: {
-        type: 'box',
-        layout: 'vertical',
-        contents: footerContents,
-      },
-    },
-  }
-
-  await fetch('https://api.line.me/v2/bot/message/push', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify({
-      to: cfg.owner_line_user_id,
-      messages: [flexMessage],
-    }),
-  })
+  await sendOwnerTelegramMessage(`✅ ผู้เช่าลงนามสัญญาแล้ว\nห้อง: ${roomNumber}  ผู้เช่า: ${tenantName}`)
 }
 
 // ──────────────────────────────────────────────
