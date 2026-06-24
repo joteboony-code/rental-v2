@@ -31,6 +31,13 @@ const fmt = (n: number) => Number(n).toLocaleString('th-TH', { maximumFractionDi
 // แสดง tab เรียงตามลำดับนี้ (เฉพาะสถานะที่มีห้องอยู่จริง)
 const STATUS_ORDER = ['occupied', 'available', 'reserved', 'maintenance']
 
+const STATUS_ACCENT: Record<string, { strip: string; numBg: string; numText: string; numRing: string }> = {
+  occupied:    { strip: 'bg-emerald-500', numBg: 'bg-emerald-50',  numText: 'text-emerald-700', numRing: 'ring-1 ring-emerald-200' },
+  available:   { strip: 'bg-sky-500',     numBg: 'bg-sky-50',      numText: 'text-sky-700',     numRing: 'ring-1 ring-sky-200' },
+  reserved:    { strip: 'bg-violet-500',  numBg: 'bg-violet-50',   numText: 'text-violet-700',  numRing: 'ring-1 ring-violet-200' },
+  maintenance: { strip: 'bg-amber-500',   numBg: 'bg-amber-50',    numText: 'text-amber-700',   numRing: 'ring-1 ring-amber-200' },
+}
+
 export function RoomsBrowser({ rooms }: { rooms: RoomRow[] }) {
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState<string>('all')
@@ -114,62 +121,70 @@ export function RoomsBrowser({ rooms }: { rooms: RoomRow[] }) {
           />
         )
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-          {filtered.map((room) => (
-            <div key={room.id} className="flex flex-col gap-3 rounded-2xl bg-white p-4 ring-1 ring-slate-100 shadow-sm transition-shadow hover:shadow-md">
-              {/* Header */}
-              <div className="flex items-start gap-3">
-                <Link
-                  href={`/rooms/${room.id}`}
-                  className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-base font-bold text-slate-700 transition-colors hover:bg-slate-200"
-                >
-                  {room.room_number}
-                </Link>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <Link href={`/rooms/${room.id}`} className="text-sm font-semibold text-slate-900 hover:underline">
-                      ห้อง {room.room_number}
-                    </Link>
-                    <span className="text-xs text-slate-400">แถวที่ {roomRow(room.room_number)}</span>
-                  </div>
-                  <div className="mt-1">
-                    <RoomStatusBadge status={room.status} />
-                  </div>
-                </div>
-              </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+          {filtered.map((room) => {
+            const accent = STATUS_ACCENT[room.status] ?? { strip: 'bg-slate-400', numBg: 'bg-slate-100', numText: 'text-slate-700', numRing: 'ring-1 ring-slate-200' }
+            return (
+            <div key={room.id} className="group flex flex-col rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-lg hover:border-slate-300 transition-all duration-200 overflow-hidden">
+              {/* Status strip */}
+              <div className={`h-1 w-full ${accent.strip}`} />
 
-              {/* Tenant + rent */}
-              <div className="flex items-end justify-between border-t border-slate-50 pt-3">
-                <div className="min-w-0">
-                  <p className="text-xs text-slate-400">ผู้เช่า</p>
-                  {room.tenantId && room.tenantName ? (
-                    <Link href={`/tenants/${room.tenantId}`} className="mt-0.5 flex items-center gap-1.5 text-sm font-medium text-slate-700 hover:text-indigo-600 hover:underline">
-                      <LineAvatar name={room.tenantName} pictureUrl={room.tenantPicture} className="size-5 rounded-md text-[9px]" />
-                      <span className="truncate">{room.tenantName}</span>
-                    </Link>
-                  ) : (
-                    <p className="text-sm text-slate-400">— ว่าง —</p>
-                  )}
+              <div className="flex flex-col gap-3 p-4 flex-1">
+                {/* Header */}
+                <div className="flex items-start gap-3">
+                  <Link
+                    href={`/rooms/${room.id}`}
+                    className={`flex size-12 shrink-0 items-center justify-center rounded-xl text-base font-bold transition-opacity hover:opacity-80 ${accent.numBg} ${accent.numText} ${accent.numRing}`}
+                  >
+                    {room.room_number}
+                  </Link>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <Link href={`/rooms/${room.id}`} className="text-sm font-semibold text-slate-900 hover:underline">
+                        ห้อง {room.room_number}
+                      </Link>
+                      <span className="text-xs text-slate-400">แถวที่ {roomRow(room.room_number)}</span>
+                    </div>
+                    <div className="mt-1">
+                      <RoomStatusBadge status={room.status} />
+                    </div>
+                  </div>
                 </div>
-                <div className="text-right shrink-0">
-                  <p className="text-xs text-slate-400">ค่าเช่า</p>
-                  <p className="text-lg font-bold text-slate-900 leading-tight">฿{fmt(room.monthly_rent)}</p>
-                </div>
-              </div>
 
-              {/* Actions */}
-              <div className="flex items-center justify-end gap-1 border-t border-slate-50 pt-2">
-                <RoomPairQrButton roomNumber={room.room_number} registrationUrl={room.registrationUrl} pairUrl={room.pairUrl} />
-                <Link href={`/rooms/${room.id}/usage`} className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-teal-50 hover:text-teal-600" title="กราฟการใช้น้ำ-ไฟ">
-                  <BarChart2 className="size-4" />
-                </Link>
-                <Link href={`/rooms/${room.id}/edit`} className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700" title="แก้ไข">
-                  <Pencil className="size-4" />
-                </Link>
-                <DeleteRoomButton id={room.id} roomNumber={room.room_number} />
+                {/* Tenant + rent */}
+                <div className="flex items-end justify-between border-t border-slate-100 pt-3">
+                  <div className="min-w-0">
+                    <p className="text-xs text-slate-400 mb-0.5">ผู้เช่า</p>
+                    {room.tenantId && room.tenantName ? (
+                      <Link href={`/tenants/${room.tenantId}`} className="flex items-center gap-1.5 text-sm font-medium text-slate-700 hover:text-indigo-600 hover:underline">
+                        <LineAvatar name={room.tenantName} pictureUrl={room.tenantPicture} className="size-5 rounded-md text-[9px]" />
+                        <span className="truncate">{room.tenantName}</span>
+                      </Link>
+                    ) : (
+                      <p className="text-sm text-slate-400">— ว่าง —</p>
+                    )}
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-xs text-slate-400 mb-0.5">ค่าเช่า</p>
+                    <p className="text-xl font-bold text-slate-900 leading-tight">฿{fmt(room.monthly_rent)}</p>
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="flex items-center justify-end gap-1 border-t border-slate-100 pt-2">
+                  <RoomPairQrButton roomNumber={room.room_number} registrationUrl={room.registrationUrl} pairUrl={room.pairUrl} />
+                  <Link href={`/rooms/${room.id}/usage`} className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-teal-50 hover:text-teal-600" title="กราฟการใช้น้ำ-ไฟ">
+                    <BarChart2 className="size-4" />
+                  </Link>
+                  <Link href={`/rooms/${room.id}/edit`} className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700" title="แก้ไข">
+                    <Pencil className="size-4" />
+                  </Link>
+                  <DeleteRoomButton id={room.id} roomNumber={room.room_number} />
+                </div>
               </div>
             </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>
