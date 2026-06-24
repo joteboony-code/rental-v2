@@ -1,9 +1,9 @@
 'use client'
 
-import QRCode from 'react-qr-code'
 import { Copy, Check } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
+import { StyledQR } from '@/components/ui/styled-qr'
 
 type PairQrCodeProps = {
   value: string
@@ -21,13 +21,8 @@ export function PairQrCode({ value }: PairQrCodeProps) {
 
   return (
     <div className="space-y-3">
-      <div className="flex justify-center rounded-xl bg-white p-3 ring-1 ring-slate-100">
-        <QRCode
-          value={value}
-          size={184}
-          className="h-auto w-full max-w-[184px]"
-          viewBox="0 0 256 256"
-        />
+      <div className="flex justify-center">
+        <StyledQR value={value} size={220} />
       </div>
       <div className="rounded-lg bg-slate-50 px-3 py-2">
         <p className="break-all text-center text-[11px] leading-relaxed text-slate-500">
@@ -46,3 +41,4 @@ export function PairQrCode({ value }: PairQrCodeProps) {
     </div>
   )
 }
+
