@@ -281,13 +281,15 @@ export async function updateLineAndOwnerSettings(
   const ownerName        = String(formData.get('owner_name') ?? '').trim()
   const ownerIdCard      = String(formData.get('owner_id_card') ?? '').trim()
   const ownerAddress     = String(formData.get('owner_address') ?? '').trim()
-  const telegramBotToken = (formData.get('telegram_bot_token') as string | null)?.trim() || null
-  const telegramChatId   = (formData.get('telegram_chat_id')   as string | null)?.trim() || null
+  const telegramBotToken    = (formData.get('telegram_bot_token')    as string | null)?.trim() || null
+  const telegramChatId      = (formData.get('telegram_chat_id')      as string | null)?.trim() || null
+  const ownerNotifyChannel  = (formData.get('owner_notify_channel')  as string | null)?.trim() || 'telegram'
 
   const supabase = await createClient()
 
   const settingsUpdate: Record<string, string | null> = {
     owner_name: ownerName, owner_id_card: ownerIdCard, owner_address: ownerAddress,
+    owner_notify_channel: ['line', 'telegram', 'both'].includes(ownerNotifyChannel) ? ownerNotifyChannel : 'telegram',
   }
   if (telegramChatId !== null) settingsUpdate.telegram_chat_id = telegramChatId
   if (telegramBotToken) settingsUpdate.telegram_bot_token = telegramBotToken

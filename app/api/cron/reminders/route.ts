@@ -3,7 +3,7 @@ import { createServiceClient } from '@/lib/supabase/service'
 import { getLineMessagingConfig } from '@/lib/line-integration'
 import { buildBillPortalUrl } from '@/lib/portal-url'
 import { parseReminderDays } from '@/lib/reminder-utils'
-import { sendOwnerTelegramMessage } from '@/lib/telegram'
+import { notifyOwner } from '@/lib/notify-owner'
 
 function isAuthorized(req: NextRequest) {
   const secret = process.env.CRON_SECRET
@@ -335,7 +335,7 @@ export async function GET(req: NextRequest) {
     ]
     if (sentRooms.length > 0) { ownerLines.push(SEP); ownerLines.push(...sentRooms) }
     try {
-      await sendOwnerTelegramMessage(ownerLines.join('\n'))
+      await notifyOwner(ownerLines.join('\n'))
     } catch { /* silent */ }
   }
 

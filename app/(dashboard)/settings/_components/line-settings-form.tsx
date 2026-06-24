@@ -1,6 +1,6 @@
 'use client'
 
-import { useActionState } from 'react'
+import { useActionState, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -14,6 +14,7 @@ interface Props {
   lineIntegration?: LineIntegrationPublic
   telegramBotTokenLast4?: string | null
   telegramChatId?: string | null
+  ownerNotifyChannel?: string | null
 }
 
 function Section({ title, icon, badge, children }: {
@@ -50,8 +51,9 @@ function Field({ label, hint, error, children }: {
   )
 }
 
-export function LineSettingsForm({ action, settings, lineIntegration, telegramBotTokenLast4, telegramChatId }: Props) {
+export function LineSettingsForm({ action, settings, lineIntegration, telegramBotTokenLast4, telegramChatId, ownerNotifyChannel }: Props) {
   const [state, formAction, isPending] = useActionState(action, undefined)
+  const [notifyChannel, setNotifyChannel] = useState(ownerNotifyChannel ?? 'telegram')
   const lineConnected = Boolean(lineIntegration?.token_last4)
 
   return (
@@ -170,7 +172,34 @@ export function LineSettingsForm({ action, settings, lineIntegration, telegramBo
       </Section>
 
       {/* ── แจ้งเตือน ── */}
-      <Section title="การแจ้งเตือน LINE" icon={<Bell className="size-4 text-rose-500" />}>
+      <Section title="การแจ้งเตือนเจ้าของหอ" icon={<Bell className="size-4 text-rose-500" />}>
+        <div className="space-y-2">
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">ช่องทางแจ้งเตือนเจ้าของหอ</p>
+          <div className="grid grid-cols-3 gap-2">
+            {[
+              { value: 'telegram', label: 'Telegram', desc: 'เฉพาะ Telegram' },
+              { value: 'line',     label: 'LINE',     desc: 'เฉพาะ LINE OA' },
+              { value: 'both',     label: 'ทั้งสองช่องทาง', desc: 'LINE + Telegram' },
+            ].map(({ value, label, desc }) => (
+              <label key={value} className={`relative flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 cursor-pointer transition-colors ${
+                notifyChannel === value
+                  ? 'border-rose-500 bg-rose-50'
+                  : 'border-slate-200 bg-slate-50 hover:border-slate-300'
+              }`}>
+                <input
+                  type="radio"
+                  name="owner_notify_channel"
+                  value={value}
+                  checked={notifyChannel === value}
+                  onChange={() => setNotifyChannel(value)}
+                  className="sr-only"
+                />
+                <span className="text-sm font-semibold text-slate-800">{label}</span>
+                <span className="text-xs text-slate-400 text-center">{desc}</span>
+              </label>
+            ))}
+          </div>
+        </div>
         <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
           <input
             type="checkbox"

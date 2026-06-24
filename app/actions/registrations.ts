@@ -6,7 +6,7 @@ import { getAuthedUser } from '@/lib/require-admin'
 import { getLineMessagingConfig } from '@/lib/line-integration'
 import { revalidatePath } from 'next/cache'
 import { isRateLimited, getClientIp } from '@/lib/rate-limit'
-import { sendOwnerTelegramMessage } from '@/lib/telegram'
+import { notifyOwner } from '@/lib/notify-owner'
 
 export type SubmitRegistrationResult = {
   success: boolean
@@ -320,7 +320,7 @@ export async function submitRegistration(formData: FormData): Promise<SubmitRegi
     const ownerMsg = status === 'auto_approved'
       ? `✅ มีผู้เช่าลงทะเบียนใหม่สำเร็จ\nห้อง: ${roomNumber}\nชื่อ: ${fullName}\nเบอร์: ${phone}`
       : `📋 มีคำขอลงทะเบียนรอตรวจ\nห้อง: ${roomNumber}\nชื่อ: ${fullName}\nเบอร์: ${phone}\nเหตุผล: ${pendingReasons.join(', ')}${linkLine}`
-    sendOwnerTelegramMessage(ownerMsg).catch(() => {})
+    notifyOwner(ownerMsg).catch(() => {})
   }
 
   return {

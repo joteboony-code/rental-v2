@@ -11,7 +11,7 @@ const ALLOWED_REPAIR_PHOTO_TYPES: Record<string, string> = {
 }
 import { signPortalToken, verifyPortalToken } from '@/lib/portal-session'
 import { isRateLimited } from '@/lib/rate-limit'
-import { sendOwnerTelegramMessage } from '@/lib/telegram'
+import { notifyOwner } from '@/lib/notify-owner'
 
 export type TenantPortalData = {
   tenant: {
@@ -344,7 +344,7 @@ async function notifyOwnerNewRepairFromPortal({
   if (description) lines.push(`รายละเอียด: ${description}`)
   if (repairUrl) lines.push('', `เปิดดูรายการ: ${repairUrl}`)
 
-  await sendOwnerTelegramMessage(lines.join('\n'))
+  await notifyOwner(lines.join('\n'))
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -366,5 +366,5 @@ async function notifyOwnerNewRepair(
 
   const text = `🔧 มีแจ้งซ่อมใหม่ครับ\n🏠 ห้อง ${roomNumber}\n📝 ${title}\n⚡ ความเร่งด่วน: ${priorityLabel[priority] ?? priority}`
 
-  await sendOwnerTelegramMessage(text)
+  await notifyOwner(text)
 }
