@@ -25,7 +25,7 @@ export default async function ReceiptPage({
       .order('paid_at', { ascending: true }),
     supabase
       .from('settings')
-      .select('promptpay_name, promptpay_id, owner_name')
+      .select('promptpay_name, promptpay_id, owner_name, owner_signature_url')
       .eq('id', 1)
       .single(),
   ])
@@ -219,7 +219,17 @@ export default async function ReceiptPage({
           {/* ── Signature ── */}
           <div style={{ marginTop: 28, borderTop: '1px solid #e2e8f0', paddingTop: 20, display: 'flex', justifyContent: 'flex-end' }}>
             <div style={{ textAlign: 'center', width: 160 }}>
-              <div style={{ borderBottom: '1px solid #94a3b8', height: 44, marginBottom: 6 }} />
+              {settings?.owner_signature_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={settings.owner_signature_url as string}
+                  alt="ลายเซ็นผู้รับเงิน"
+                  style={{ width: 140, height: 56, objectFit: 'contain', display: 'block', margin: '0 auto 4px' }}
+                />
+              ) : (
+                <div style={{ height: 60, marginBottom: 4 }} />
+              )}
+              <div style={{ borderBottom: '1px solid #94a3b8', marginBottom: 6 }} />
               <p style={{ fontSize: 12, color: '#475569', margin: 0 }}>ผู้รับเงิน</p>
               {settings?.owner_name && (
                 <p style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>{settings.owner_name as string}</p>
