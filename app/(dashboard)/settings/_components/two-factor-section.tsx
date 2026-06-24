@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { createClient } from '@/lib/supabase/client'
 import { cleanupStaleMfaFactors, logMfaSecurityEvent } from '@/app/actions/auth'
+import { StyledQR } from '@/components/ui/styled-qr'
 
 type Status = 'loading' | 'enabled' | 'disabled'
 
@@ -15,6 +16,7 @@ export function TwoFactorSection() {
   const [factorId, setFactorId]   = useState<string | null>(null)
   const [step, setStep]           = useState<'idle' | 'enroll' | 'unenroll'>('idle')
   const [qrSvg, setQrSvg]         = useState<string | null>(null)
+  const [totpUri, setTotpUri]     = useState<string | null>(null)
   const [totpSecret, setTotpSecret] = useState<string | null>(null)
   const [enrollId, setEnrollId]   = useState<string | null>(null)
   const [code, setCode]           = useState('')
@@ -47,6 +49,7 @@ export function TwoFactorSection() {
       return
     }
     setQrSvg(data.totp.qr_code)
+    setTotpUri(data.totp.uri)
     setTotpSecret(data.totp.secret)
     setEnrollId(data.id)
     setStep('enroll')
@@ -61,7 +64,7 @@ export function TwoFactorSection() {
     setBusy(false)
     if (err) { setError('รหัสไม่ถูกต้อง ลองอีกครั้ง'); return }
     await logMfaSecurityEvent('mfa_enabled')
-    setStatus('enabled'); setFactorId(enrollId); setStep('idle'); setQrSvg(null); setTotpSecret(null); setCode('')
+    setStatus('enabled'); setFactorId(enrollId); setStep('idle'); setQrSvg(null); setTotpUri(null); setTotpSecret(null); setCode('')
   }
 
   async function confirmUnenroll() {
@@ -125,7 +128,7 @@ export function TwoFactorSection() {
           </>
         )}
 
-        {step === 'enroll' && qrSvg && (
+        {step === 'enroll' && (totpUri || qrSvg) && (
           <div className="space-y-4">
             <p className="text-xs text-slate-500">
               1. เปิด <span className="font-semibold">Google Authenticator</span> หรือ <span className="font-semibold">Authy</span><br />
@@ -134,15 +137,20 @@ export function TwoFactorSection() {
             </p>
 
             {/* QR code */}
-            <div className="flex justify-center p-4 rounded-xl border border-slate-200" style={{ background: '#ffffff' }}>
-              {/* แปลง SVG เป็น data URI เสมอ เพื่อป้องกัน dark-mode CSS เปลี่ยนสี QR */}
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={qrSvg.startsWith('data:') ? qrSvg : `data:image/svg+xml;charset=utf-8,${encodeURIComponent(qrSvg)}`}
-                alt="QR code สำหรับ 2FA"
-                className="size-48"
-                style={{ imageRendering: 'pixelated' }}
-              />
+            <div className="flex justify-center">
+              {totpUri
+                ? <StyledQR value={totpUri} size={220} />
+                : /* fallback: Supabase SVG via data URI (ไม่ควรเกิด) */
+                  <div className="flex justify-center p-4 rounded-xl border border-slate-200" style={{ background: '#ffffff' }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={qrSvg!.startsWith('data:') ? qrSvg! : `data:image/svg+xml;charset=utf-8,${encodeURIComponent(qrSvg!)}`}
+                      alt="QR code สำหรับ 2FA"
+                      className="size-48"
+                      style={{ imageRendering: 'pixelated' }}
+                    />
+                  </div>
+              }
             </div>
 
             {/* Manual entry toggle */}
