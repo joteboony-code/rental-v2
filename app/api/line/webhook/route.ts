@@ -174,9 +174,9 @@ async function push(to: string | null, token: string, messages: object[]) {
   }
 }
 
-async function notifyOwner(_cfg: LineConfig, text: string, type: import('@/lib/notify-owner').OwnerNotifyType = 'slip') {
+async function notifyOwner(_cfg: LineConfig, text: string, type: import('@/lib/notify-owner').OwnerNotifyType = 'slip', link?: { label: string; url: string }) {
   try {
-    await notifyOwnerChannel(text, type)
+    await notifyOwnerChannel(text, type, link)
   } catch (error) {
     console.error('[line notify owner]', error)
   }
@@ -446,8 +446,8 @@ async function handleSlipImage(
 
   if (!settings?.slipok_api_key || !settings?.slipok_branch_id) {
     await reply(replyToken, token, [{ type: 'text', text: RECEIVED_REPLY }])
-    const reviewLink = cfg.appUrl ? `${cfg.appUrl}/payment-reviews` : ''
-    await notifyOwner(cfg, `🧾 มีสลิปเข้ามาครับ\n🏠 ห้อง ${roomNumber} — ${tenant.full_name}\n⚠️ ยังไม่ได้ตั้งค่า SlipOK${reviewLink ? `\n🔗 ${reviewLink}` : ''}`)
+    const reviewUrl = cfg.appUrl ? `${cfg.appUrl}/payment-reviews` : null
+    await notifyOwner(cfg, `🧾 มีสลิปเข้ามาครับ\n🏠 ห้อง ${roomNumber} — ${tenant.full_name}\n⚠️ ยังไม่ได้ตั้งค่า SlipOK`, 'slip', reviewUrl ? { label: 'ตรวจสลิป', url: reviewUrl } : undefined)
     await savePendingSlip(supabase, { tenantId: tenant.id, lineUserId, slipUrl, amount: null, paidAt: null, slipRef: null, senderName: null, slipokStatus: 'not_configured' })
     return
   }
@@ -459,8 +459,8 @@ async function handleSlipImage(
     slipResult = await verifySlipOk(image.blob, image.contentType, settings.slipok_branch_id, slipokApiKey)
   } catch (error) {
     await reply(replyToken, token, [{ type: 'text', text: RECEIVED_REPLY }])
-    const reviewLink = cfg.appUrl ? `${cfg.appUrl}/payment-reviews` : ''
-    await notifyOwner(cfg, `🧾 มีสลิปเข้ามาครับ\n🏠 ห้อง ${roomNumber} — ${tenant.full_name}\n⚠️ ติดต่อ SlipOK ไม่ได้\nสาเหตุ: ${String(error)}${reviewLink ? `\n🔗 ${reviewLink}` : ''}`)
+    const reviewUrl = cfg.appUrl ? `${cfg.appUrl}/payment-reviews` : null
+    await notifyOwner(cfg, `🧾 มีสลิปเข้ามาครับ\n🏠 ห้อง ${roomNumber} — ${tenant.full_name}\n⚠️ ติดต่อ SlipOK ไม่ได้\nสาเหตุ: ${String(error)}`, 'slip', reviewUrl ? { label: 'ตรวจสลิป', url: reviewUrl } : undefined)
     await savePendingSlip(supabase, { tenantId: tenant.id, lineUserId, slipUrl, amount: null, paidAt: null, slipRef: null, senderName: null, slipokStatus: 'failed', slipokMessage: String(error) })
     return
   }
@@ -487,8 +487,8 @@ async function handleSlipImage(
       return
     }
 
-    const reviewLink = cfg.appUrl ? `${cfg.appUrl}/payment-reviews` : ''
-    await notifyOwner(cfg, `🧾 มีรูปเข้ามาครับ\n🏠 ห้อง ${roomNumber} — ${tenant.full_name}\n⚠️ SlipOK ตรวจไม่ผ่าน\nสาเหตุ: ${reason}${reviewLink ? `\n🔗 ${reviewLink}` : ''}`)
+    const reviewUrl = cfg.appUrl ? `${cfg.appUrl}/payment-reviews` : null
+    await notifyOwner(cfg, `🧾 มีรูปเข้ามาครับ\n🏠 ห้อง ${roomNumber} — ${tenant.full_name}\n⚠️ SlipOK ตรวจไม่ผ่าน\nสาเหตุ: ${reason}`, 'slip', reviewUrl ? { label: 'ตรวจสลิป', url: reviewUrl } : undefined)
     await savePendingSlip(supabase, { tenantId: tenant.id, lineUserId, slipUrl, amount: null, paidAt: null, slipRef: null, senderName: null, slipokStatus: 'failed', slipokCode: slipResult.code, slipokMessage: slipResult.message })
     return
   }
@@ -601,7 +601,7 @@ async function handleSlipImage(
     .filter((b) => b.remainingAmount >= 1)
     .sort((a, b) => billSortKey(a).localeCompare(billSortKey(b)))
 
-  const reviewLink      = cfg.appUrl ? `\n🔗 ${cfg.appUrl}/payment-reviews` : ''
+  const reviewLink      = cfg.appUrl ? { label: 'ตรวจสลิป', url: `${cfg.appUrl}/payment-reviews` } : undefined
   const totalOutstanding = outstandingBills.reduce((s, b) => s + b.remainingAmount, 0)
 
   // Shared UUID for all payments created from this one slip action
@@ -840,7 +840,7 @@ async function handleSlipImage(
       .map((b) => ({ room: (b.rooms as unknown as RJ | null)?.room_number ?? '-', month: b.billing_month, remaining: b.remainingAmount }))
     await reply(replyToken, token, [{ type: 'text', text: RECEIVED_REPLY }])
     const candidateText = candidates.map((c) => `- ห้อง ${c.room} / ${thaiMonth(c.month)} / ค้าง ${fmt(c.remaining)} บาท`).join('\n')
-    await notifyOwner(cfg, `🧾 ยอดตรงกับหลายบิล\n🏠 ${tenant.full_name}\n💰 ${fmt(amount)} บาท\n🔢 Ref: ${slipRef ?? '-'}\n\n${candidateText}${reviewLink}`)
+    await notifyOwner(cfg, `🧾 ยอดตรงกับหลายบิล\n🏠 ${tenant.full_name}\n💰 ${fmt(amount)} บาท\n🔢 Ref: ${slipRef ?? '-'}\n\n${candidateText}`, 'slip', reviewLink)
     await savePendingSlip(supabase, { tenantId: tenant.id, lineUserId, slipUrl, amount, paidAt, slipRef, senderName, slipokStatus: 'ambiguous', matchRule: 'ambiguous', matchCandidates: candidates })
     return
   }
@@ -848,14 +848,14 @@ async function handleSlipImage(
   // ── Overpay too large → pending_slips ─────────────────────────────────────
   if (totalOutstanding > 0 && amount > totalOutstanding + OVERPAY_MAX) {
     await reply(replyToken, token, [{ type: 'text', text: RECEIVED_REPLY }])
-    await notifyOwner(cfg, `🧾 ยอดโอนเกินกว่ายอดค้างมาก\n🏠 ${tenant.full_name}\n💰 โอน ฿${fmt(amount)} ค้างรวม ฿${fmt(totalOutstanding)} เกิน ฿${fmt(amount - totalOutstanding)}\n🔢 Ref: ${slipRef ?? '-'}${reviewLink}`)
+    await notifyOwner(cfg, `🧾 ยอดโอนเกินกว่ายอดค้างมาก\n🏠 ${tenant.full_name}\n💰 โอน ฿${fmt(amount)} ค้างรวม ฿${fmt(totalOutstanding)} เกิน ฿${fmt(amount - totalOutstanding)}\n🔢 Ref: ${slipRef ?? '-'}`, 'slip', reviewLink)
     await savePendingSlip(supabase, { tenantId: tenant.id, lineUserId, slipUrl, amount, paidAt, slipRef, senderName, slipokStatus: 'no_match', matchRule: 'overpaid' })
     return
   }
 
   // ── Rule 5: no match ───────────────────────────────────────────────────────
   await reply(replyToken, token, [{ type: 'text', text: RECEIVED_REPLY }])
-  await notifyOwner(cfg, `🧾 ตรวจสลิปสำเร็จ แต่ไม่พบบิลที่ตรงยอด\n🏠 ห้อง ${roomNumber} — ${tenant.full_name}\n💰 ${fmt(amount)} บาท\n📅 ${thDate} ${transTime}\n${senderName ? `ผู้โอน: ${senderName}\n` : ''}🔢 Ref: ${slipRef ?? '-'}${reviewLink}`)
+  await notifyOwner(cfg, `🧾 ตรวจสลิปสำเร็จ แต่ไม่พบบิลที่ตรงยอด\n🏠 ห้อง ${roomNumber} — ${tenant.full_name}\n💰 ${fmt(amount)} บาท\n📅 ${thDate} ${transTime}\n${senderName ? `ผู้โอน: ${senderName}\n` : ''}🔢 Ref: ${slipRef ?? '-'}`, 'slip', reviewLink)
   await savePendingSlip(supabase, { tenantId: tenant.id, lineUserId, slipUrl, amount, paidAt, slipRef, senderName, slipokStatus: 'no_match', matchRule: 'no_match' })
 }
 
