@@ -3,9 +3,9 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
-import { decryptSecret } from '@/lib/crypto-secrets'
 import { getClientIp, isRateLimited } from '@/lib/rate-limit'
 import { getAuthedUser } from '@/lib/require-admin'
+import { sendOwnerTelegramMessage } from '@/lib/telegram'
 
 export type LoginState =
   | { error: string }
@@ -29,25 +29,16 @@ async function sendLoginNotification() {
   const supabase = createServiceClient()
   const { data } = await supabase
     .from('line_integrations')
-    .select('encrypted_channel_access_token, owner_line_user_id, login_notify_enabled')
+    .select('login_notify_enabled')
     .maybeSingle()
   if (!data?.login_notify_enabled) return
-  if (!data?.encrypted_channel_access_token || !data?.owner_line_user_id) return
 
-  const token = await decryptSecret(data.encrypted_channel_access_token)
   const now = new Date().toLocaleString('th-TH', {
     timeZone: 'Asia/Bangkok',
     day: 'numeric', month: 'long', year: 'numeric',
     hour: '2-digit', minute: '2-digit',
   })
-  await fetch('https://api.line.me/v2/bot/message/push', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify({
-      to: data.owner_line_user_id,
-      messages: [{ type: 'text', text: `🔐 มีการเข้าสู่ระบบ\nเวลา: ${now}\n\nถ้าไม่ใช่คุณ → เข้าตั้งค่าและเปลี่ยนรหัสผ่านทันที` }],
-    }),
-  })
+  await sendOwnerTelegramMessage(`🔐 มีการเข้าสู่ระบบ\nเวลา: ${now}\n\nถ้าไม่ใช่คุณ → เข้าตั้งค่าและเปลี่ยนรหัสผ่านทันที`)
 }
 
 export async function login(_: unknown, formData: FormData): Promise<LoginState> {

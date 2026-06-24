@@ -3,6 +3,7 @@ import { createServiceClient } from '@/lib/supabase/service'
 import { getLineMessagingConfig } from '@/lib/line-integration'
 import { buildBillPortalUrl } from '@/lib/portal-url'
 import { parseReminderDays } from '@/lib/reminder-utils'
+import { sendOwnerTelegramMessage } from '@/lib/telegram'
 
 function isAuthorized(req: NextRequest) {
   const secret = process.env.CRON_SECRET
@@ -318,7 +319,7 @@ export async function GET(req: NextRequest) {
   }
 
   // Summary to owner — ส่งเฉพาะเมื่อมีการแจ้งเตือนจริง (sent > 0)
-  if (lineConfig.ownerLineUserId && sent > 0) {
+  if (sent > 0) {
     const totalAmt = totalReminded
     const overdueCount = [...byTenant.values()].filter((bs) => bs.some((b) => b.status === 'overdue')).length
     const ownerLines = [
@@ -334,9 +335,7 @@ export async function GET(req: NextRequest) {
     ]
     if (sentRooms.length > 0) { ownerLines.push(SEP); ownerLines.push(...sentRooms) }
     try {
-      await pushMessage(lineConfig.ownerLineUserId, lineConfig.channelAccessToken, [
-        { type: 'text', text: ownerLines.join('\n') },
-      ])
+      await sendOwnerTelegramMessage(ownerLines.join('\n'))
     } catch { /* silent */ }
   }
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import { getLineMessagingConfig } from '@/lib/line-integration'
+import { sendOwnerTelegramMessage } from '@/lib/telegram'
 
 function isAuthorized(req: NextRequest) {
   const secret = process.env.CRON_SECRET
@@ -35,9 +36,6 @@ export async function GET(req: NextRequest) {
 
   const supabase = createServiceClient()
   const lineConfig = await getLineMessagingConfig()
-  if (!lineConfig?.ownerLineUserId) {
-    return NextResponse.json({ ok: true, skipped: 'no owner LINE configured' })
-  }
 
   const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' }) // YYYY-MM-DD
 
@@ -171,9 +169,7 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    await pushMessage(lineConfig.ownerLineUserId, lineConfig.channelAccessToken, [
-      { type: 'text', text: lines.join('\n') },
-    ])
+    await sendOwnerTelegramMessage(lines.join('\n'))
   } catch (err) {
     return NextResponse.json({ ok: false, error: String(err) })
   }

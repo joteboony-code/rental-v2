@@ -7,6 +7,7 @@ import { parseReminderDays } from '@/lib/reminder-utils'
 import { getLineMessagingConfig } from '@/lib/line-integration'
 import { buildBillPortalUrl } from '@/lib/portal-url'
 import { getAuthedUser } from '@/lib/require-admin'
+import { sendOwnerTelegramMessage } from '@/lib/telegram'
 
 function fmt(n: number) {
   return n.toLocaleString('th-TH', { maximumFractionDigits: 0 })
@@ -371,7 +372,7 @@ export async function sendOverdueReminders(
   }
 
   // Owner summary
-  if (lineConfig.ownerLineUserId && sent > 0) {
+  if (sent > 0) {
     const ownerLines = [
       `📋 สรุปแจ้งเตือนอัตโนมัติ`,
       `วันที่ ${todayThai}`,
@@ -383,9 +384,7 @@ export async function sendOverdueReminders(
     ]
     if (sentRooms.length > 0) { ownerLines.push(SEP); ownerLines.push(...sentRooms) }
     try {
-      await pushMessage(lineConfig.ownerLineUserId, lineConfig.channelAccessToken, [
-        { type: 'text', text: ownerLines.join('\n') },
-      ])
+      await sendOwnerTelegramMessage(ownerLines.join('\n'))
     } catch { /* silent */ }
   }
 

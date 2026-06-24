@@ -3,20 +3,11 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
-import { decryptSecret } from '@/lib/crypto-secrets'
 import { getAuthedUser } from '@/lib/require-admin'
 import { isRateLimited, getClientIp } from '@/lib/rate-limit'
+import { sendOwnerTelegramMessage } from '@/lib/telegram'
 
 async function notifyOwnerNewLead(name: string, phone: string, note: string | null) {
-  const supabase = createServiceClient()
-  const { data } = await supabase
-    .from('line_integrations')
-    .select('encrypted_channel_access_token, owner_line_user_id')
-    .maybeSingle()
-
-  if (!data?.encrypted_channel_access_token || !data?.owner_line_user_id) return
-
-  const token = await decryptSecret(data.encrypted_channel_access_token)
   const text = [
     '📬 มีคนสนใจเช่าห้องใหม่',
     `ชื่อ: ${name}`,
@@ -25,17 +16,7 @@ async function notifyOwnerNewLead(name: string, phone: string, note: string | nu
     '\nดูรายชื่อได้ที่หน้า "คนสนใจห้อง"',
   ].filter(Boolean).join('\n')
 
-  await fetch('https://api.line.me/v2/bot/message/push', {
-    method: 'POST',
-    headers: {
-      'Content-Type':  'application/json',
-      'Authorization': `Bearer ${token}`,
-    },
-    body: JSON.stringify({
-      to:       data.owner_line_user_id,
-      messages: [{ type: 'text', text }],
-    }),
-  })
+  await sendOwnerTelegramMessage(text)
 }
 
 export async function submitLead(

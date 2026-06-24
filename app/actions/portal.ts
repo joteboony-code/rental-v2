@@ -2,7 +2,6 @@
 
 import { createServiceClient } from '@/lib/supabase/service'
 import { revalidatePath } from 'next/cache'
-import { DEFAULT_DORM_ID } from '@/lib/line-integration'
 
 const MAX_REPAIR_PHOTO_SIZE = 10 * 1024 * 1024
 const ALLOWED_REPAIR_PHOTO_TYPES: Record<string, string> = {
@@ -10,9 +9,9 @@ const ALLOWED_REPAIR_PHOTO_TYPES: Record<string, string> = {
   'image/png': 'png',
   'image/webp': 'webp',
 }
-import { decryptSecret } from '@/lib/crypto-secrets'
 import { signPortalToken, verifyPortalToken } from '@/lib/portal-session'
 import { isRateLimited } from '@/lib/rate-limit'
+import { sendOwnerTelegramMessage } from '@/lib/telegram'
 
 export type TenantPortalData = {
   tenant: {
@@ -311,7 +310,6 @@ async function notifyOwnerNewRepairFromPortal({
   title,
   description,
   priority,
-  photoUrl,
 }: {
   repairId: string
   roomId: string
@@ -324,16 +322,6 @@ async function notifyOwnerNewRepairFromPortal({
 }) {
   const supabase = createServiceClient()
 
-  const { data: cfg } = await supabase
-    .from('line_integrations')
-    .select('encrypted_channel_access_token, owner_line_user_id, app_url')
-    .eq('dorm_id', DEFAULT_DORM_ID)
-    .maybeSingle()
-
-  if (!cfg?.encrypted_channel_access_token || !cfg.owner_line_user_id) return
-
-  const token = await decryptSecret(cfg.encrypted_channel_access_token)
-
   const { data: room } = await supabase
     .from('rooms').select('room_number').eq('id', roomId).maybeSingle()
   const roomNumber = (room as { room_number: string } | null)?.room_number ?? '-'
@@ -344,7 +332,7 @@ async function notifyOwnerNewRepairFromPortal({
     high: 'สูง',
     urgent: 'ด่วนมาก',
   }
-  const appUrl = (cfg.app_url ?? process.env.NEXT_PUBLIC_APP_URL ?? '').replace(/\/$/, '')
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? '').replace(/\/$/, '')
   const repairUrl = appUrl ? `${appUrl}/repairs/${repairId}` : null
   const lines = [
     'มีแจ้งซ่อมใหม่จาก Portal',
@@ -356,20 +344,7 @@ async function notifyOwnerNewRepairFromPortal({
   if (description) lines.push(`รายละเอียด: ${description}`)
   if (repairUrl) lines.push('', `เปิดดูรายการ: ${repairUrl}`)
 
-  const messages: object[] = [{ type: 'text', text: lines.join('\n') }]
-  if (photoUrl) {
-    messages.push({ type: 'image', originalContentUrl: photoUrl, previewImageUrl: photoUrl })
-  }
-
-  const res = await fetch('https://api.line.me/v2/bot/message/push', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ to: cfg.owner_line_user_id, messages }),
-  })
-  if (!res.ok) {
-    const body = await res.text()
-    throw new Error(`LINE owner repair notification failed ${res.status}: ${body}`)
-  }
+  await sendOwnerTelegramMessage(lines.join('\n'))
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -377,19 +352,9 @@ async function notifyOwnerNewRepair(
   roomId: string,
   title: string,
   priority: string,
-  photoUrl: string | null
+  _photoUrl: string | null
 ) {
   const supabase = createServiceClient()
-
-  const { data: cfg } = await supabase
-    .from('line_integrations')
-    .select('encrypted_channel_access_token, owner_line_user_id')
-    .eq('dorm_id', DEFAULT_DORM_ID)
-    .maybeSingle()
-
-  if (!cfg?.encrypted_channel_access_token || !cfg.owner_line_user_id) return
-
-  const token = await decryptSecret(cfg.encrypted_channel_access_token)
 
   const { data: room } = await supabase
     .from('rooms').select('room_number').eq('id', roomId).maybeSingle()
@@ -401,14 +366,5 @@ async function notifyOwnerNewRepair(
 
   const text = `🔧 มีแจ้งซ่อมใหม่ครับ\n🏠 ห้อง ${roomNumber}\n📝 ${title}\n⚡ ความเร่งด่วน: ${priorityLabel[priority] ?? priority}`
 
-  const messages: object[] = [{ type: 'text', text }]
-  if (photoUrl) {
-    messages.push({ type: 'image', originalContentUrl: photoUrl, previewImageUrl: photoUrl })
-  }
-
-  await fetch('https://api.line.me/v2/bot/message/push', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ to: cfg.owner_line_user_id, messages }),
-  })
+  await sendOwnerTelegramMessage(text)
 }
