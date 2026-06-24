@@ -55,7 +55,12 @@ export async function GET(req: NextRequest) {
     `รวม ${contracts.length} ห้อง`,
   ]
 
-  await notifyOwner(lines.join('\n'), 'expiring_contract')
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? '').replace(/\/$/, '')
+  await notifyOwner(
+    lines.join('\n'),
+    'expiring_contract',
+    appUrl ? { label: 'ดูผู้เช่า', url: `${appUrl}/tenants` } : undefined
+  )
 
   return NextResponse.json({ ok: true, expiring: contracts.length })
 }

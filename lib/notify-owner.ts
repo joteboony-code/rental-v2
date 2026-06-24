@@ -68,11 +68,13 @@ async function sendOwnerLineMessage(text: string, link?: { label: string; url: s
 export async function notifyOwner(text: string, type?: OwnerNotifyType, link?: { label: string; url: string }): Promise<void> {
   const supabase = createServiceClient()
   // Single DB read: fetch channel setting, toggles, AND telegram credentials together
-  const { data: rawData } = await supabase
+  const { data: rawData, error: dbErr } = await supabase
     .from('settings')
     .select('owner_notify_channel, telegram_bot_token, telegram_chat_id, notify_slip_enabled, notify_repair_enabled, notify_registration_enabled, notify_contract_enabled, notify_lead_enabled, notify_daily_summary_enabled, notify_reminder_summary_enabled, notify_expiring_contract_enabled')
     .eq('id', 1)
     .maybeSingle()
+
+  if (dbErr) console.error('[notify-owner] settings fetch failed', dbErr.message)
 
   const data = rawData as unknown as SettingsRow | null
 
@@ -82,7 +84,7 @@ export async function notifyOwner(text: string, type?: OwnerNotifyType, link?: {
     if (data[col] === false) return
   }
 
-  const channel = (data?.owner_notify_channel as string | null) ?? 'telegram'
+  const channel = (data?.owner_notify_channel as string | null) ?? 'line'
 
   const tasks: Promise<void>[] = []
 

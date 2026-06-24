@@ -315,12 +315,13 @@ export async function submitRegistration(formData: FormData): Promise<SubmitRegi
 
   {
     const config = await getLineMessagingConfig()
-    const appUrl = config?.appUrl ?? ''
-    const linkLine = appUrl ? `\n🔗 ${appUrl}/tenant-registrations` : ''
+    const appUrl = (config?.appUrl ?? '').replace(/\/$/, '')
+    const registrationUrl = appUrl ? `${appUrl}/tenant-registrations` : null
     const ownerMsg = status === 'auto_approved'
       ? `✅ มีผู้เช่าลงทะเบียนใหม่สำเร็จ\nห้อง: ${roomNumber}\nชื่อ: ${fullName}\nเบอร์: ${phone}`
-      : `📋 มีคำขอลงทะเบียนรอตรวจ\nห้อง: ${roomNumber}\nชื่อ: ${fullName}\nเบอร์: ${phone}\nเหตุผล: ${pendingReasons.join(', ')}${linkLine}`
-    notifyOwner(ownerMsg, 'registration').catch((e) => { console.error('[notify registration]', e) })
+      : `📋 มีคำขอลงทะเบียนรอตรวจ\nห้อง: ${roomNumber}\nชื่อ: ${fullName}\nเบอร์: ${phone}\nเหตุผล: ${pendingReasons.join(', ')}`
+    const link = status !== 'auto_approved' && registrationUrl ? { label: 'ดูคำขอ', url: registrationUrl } : undefined
+    notifyOwner(ownerMsg, 'registration', link).catch((e) => { console.error('[notify registration]', e) })
   }
 
   return {
