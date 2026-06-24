@@ -154,7 +154,7 @@ export async function GET(req: NextRequest) {
 
   if (lineConfig?.appUrl) {
     lines.push(SEP)
-    if ((pendingSlipCount ?? 0) > 0) lines.push(`🔗 ตรวจสลิป: ${lineConfig.appUrl}/payment-reviews`)
+    if ((pendingSlipCount ?? 0) > 0) lines.push(`🔗 ตรวจสลิป: ${lineConfig?.appUrl}/payment-reviews`)
   }
 
   // Claim via audit log BEFORE sending — unique index on (date, action) rejects concurrent duplicates
