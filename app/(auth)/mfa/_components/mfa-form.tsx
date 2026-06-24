@@ -24,7 +24,7 @@ export function MfaForm({ factorId }: { factorId: string }) {
           autoComplete="one-time-code"
           pattern="[0-9]{6}"
           maxLength={6}
-          placeholder="123456"
+          placeholder="••••••"
           className="text-center font-mono text-lg"
           required
           autoFocus

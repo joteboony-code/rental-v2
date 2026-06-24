@@ -70,6 +70,9 @@ export function TwoFactorSection() {
   async function confirmUnenroll() {
     if (!factorId) return
     setBusy(true); setError(null)
+    // Verify OTP before unenrolling — prevents disabling 2FA without the authenticator app
+    const { error: verifyErr } = await supabase.auth.mfa.challengeAndVerify({ factorId, code })
+    if (verifyErr) { setBusy(false); setError('รหัส OTP ไม่ถูกต้อง ลองอีกครั้ง'); return }
     const { error: err } = await supabase.auth.mfa.unenroll({ factorId })
     setBusy(false)
     if (err) { setError('เกิดข้อผิดพลาด: ' + err?.message); return }
@@ -213,15 +216,23 @@ export function TwoFactorSection() {
         {step === 'unenroll' && (
           <div className="space-y-4">
             <p className="text-xs text-red-600 font-medium">
-              ⚠️ การปิด 2FA จะทำให้บัญชีปลอดภัยน้อยลง — แน่ใจหรือไม่?
+              ⚠️ การปิด 2FA จะทำให้บัญชีปลอดภัยน้อยลง — กรุณายืนยันตัวตนก่อน
             </p>
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium text-slate-700">กรอกรหัส OTP จาก Authenticator</Label>
+              <Input
+                type="text" inputMode="numeric" pattern="[0-9]*" maxLength={6}
+                placeholder="000000" value={code} onChange={(e) => setCode(e.target.value)}
+                className="text-center font-mono text-lg tracking-widest" autoFocus
+              />
+            </div>
             {error && <p className="text-xs text-red-600">{error}</p>}
             <div className="flex gap-2">
               <Button variant="outline" className="flex-1"
-                onClick={() => { setStep('idle'); setError(null) }}>
+                onClick={() => { setStep('idle'); setError(null); setCode('') }}>
                 ยกเลิก
               </Button>
-              <Button variant="destructive" className="flex-1" onClick={confirmUnenroll} disabled={busy}>
+              <Button variant="destructive" className="flex-1" onClick={confirmUnenroll} disabled={busy || code.length !== 6}>
                 {busy ? <Loader2 className="size-4 animate-spin mr-2" /> : null}ปิด 2FA
               </Button>
             </div>
