@@ -88,42 +88,47 @@ export function TenantsBrowser({ tenants }: { tenants: TenantRow[] }) {
           description={query ? `ไม่มีผลลัพธ์สำหรับ "${query}"` : 'ลองเปลี่ยนตัวกรอง หรือเพิ่มผู้เช่าใหม่'}
         />
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
           {filtered.map((t) => (
             <Link
               key={t.id}
               href={`/tenants/${t.id}`}
-              className="flex flex-col gap-3 rounded-2xl bg-white p-4 ring-1 ring-slate-100 shadow-sm transition-shadow hover:shadow-md"
+              className="group flex flex-col rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-lg hover:border-slate-300 transition-all duration-200 overflow-hidden"
             >
-              <div className="flex items-start gap-3">
-                <LineAvatar name={t.full_name} pictureUrl={t.linePictureUrl} className="size-11 rounded-xl text-sm" />
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold text-slate-900 truncate">{t.full_name}</p>
-                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-slate-400">
-                    {t.roomNumber && (
-                      <span className="flex items-center gap-1">
-                        <Home className="size-3" /> ห้อง {t.roomNumber} · แถวที่ {roomRow(t.roomNumber)}
-                      </span>
-                    )}
-                    {t.phone && (
-                      <span className="flex items-center gap-1">
-                        <Phone className="size-3" /> {t.phone}
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <ArrowRight className="size-4 shrink-0 text-slate-300" />
-              </div>
+              {/* Status strip */}
+              <div className={`h-1 w-full ${t.hasActiveContract ? 'bg-violet-500' : 'bg-slate-300'}`} />
 
-              <div className="flex items-center gap-2 border-t border-slate-50 pt-3">
-                {t.hasActiveContract
-                  ? <StatusBadge label="เช่าอยู่" tone="violet" />
-                  : <StatusBadge label="ไม่มีสัญญา" tone="slate" />
-                }
-                {t.portalOpened
-                  ? <StatusBadge label="เปิด Portal แล้ว" tone="emerald" />
-                  : <span className="text-[11px] font-medium text-slate-300">ยังไม่เปิด Portal</span>
-                }
+              <div className="flex flex-col gap-3 p-4 flex-1">
+                <div className="flex items-start gap-3">
+                  <LineAvatar name={t.full_name} pictureUrl={t.linePictureUrl} className="size-12 rounded-xl text-sm shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-slate-900 truncate">{t.full_name}</p>
+                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-slate-400">
+                      {t.roomNumber && (
+                        <span className="flex items-center gap-1">
+                          <Home className="size-3" /> ห้อง {t.roomNumber} · แถวที่ {roomRow(t.roomNumber)}
+                        </span>
+                      )}
+                      {t.phone && (
+                        <span className="flex items-center gap-1">
+                          <Phone className="size-3" /> {t.phone}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <ArrowRight className="size-4 shrink-0 text-slate-300 group-hover:text-slate-500 transition-colors" />
+                </div>
+
+                <div className="flex items-center gap-2 border-t border-slate-100 pt-3">
+                  {t.hasActiveContract
+                    ? <StatusBadge label="เช่าอยู่" tone="violet" />
+                    : <StatusBadge label="ไม่มีสัญญา" tone="slate" />
+                  }
+                  {t.portalOpened
+                    ? <StatusBadge label="เปิด Portal แล้ว" tone="emerald" />
+                    : <span className="text-[11px] font-medium text-slate-300">ยังไม่เปิด Portal</span>
+                  }
+                </div>
               </div>
             </Link>
           ))}
