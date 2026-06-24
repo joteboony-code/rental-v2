@@ -186,7 +186,7 @@ export function LineSettingsForm({ action, settings, lineIntegration, telegramBo
       {/* ── แจ้งเตือน ── */}
       <Section title="การแจ้งเตือนเจ้าของหอ" icon={<Bell className="size-4 text-rose-500" />}>
         <div className="space-y-2">
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">ช่องทางแจ้งเตือนเจ้าของหอ</p>
+          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">ช่องทางแจ้งเตือนเจ้าของหอ</p>
           <div className="grid grid-cols-3 gap-2">
             {[
               { value: 'telegram', label: 'Telegram', desc: 'เฉพาะ Telegram' },
@@ -195,8 +195,8 @@ export function LineSettingsForm({ action, settings, lineIntegration, telegramBo
             ].map(({ value, label, desc }) => (
               <label key={value} className={`relative flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 cursor-pointer transition-colors ${
                 notifyChannel === value
-                  ? 'border-rose-500 bg-rose-50'
-                  : 'border-slate-200 bg-slate-50 hover:border-slate-300'
+                  ? 'border-rose-500 bg-rose-50 dark:bg-rose-500/20 dark:border-rose-400'
+                  : 'border-slate-200 bg-slate-50 hover:border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:hover:border-slate-400'
               }`}>
                 <input
                   type="radio"
@@ -206,13 +206,13 @@ export function LineSettingsForm({ action, settings, lineIntegration, telegramBo
                   onChange={() => setNotifyChannel(value)}
                   className="sr-only"
                 />
-                <span className="text-sm font-semibold text-slate-800">{label}</span>
-                <span className="text-xs text-slate-400 text-center">{desc}</span>
+                <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">{label}</span>
+                <span className="text-xs text-slate-500 dark:text-slate-400 text-center">{desc}</span>
               </label>
             ))}
           </div>
         </div>
-        <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
+        <div className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800 rounded-xl">
           <input
             type="checkbox"
             id="login_notify_enabled"
@@ -220,11 +220,11 @@ export function LineSettingsForm({ action, settings, lineIntegration, telegramBo
             defaultChecked={lineIntegration?.login_notify_enabled !== false}
             className="size-4 accent-rose-600 rounded"
           />
-          <label htmlFor="login_notify_enabled" className="text-sm font-medium text-slate-700 cursor-pointer flex-1">
+          <label htmlFor="login_notify_enabled" className="text-sm font-medium text-slate-700 dark:text-slate-200 cursor-pointer flex-1">
             แจ้งเตือนเมื่อมีการ login เข้าระบบ
           </label>
         </div>
-        <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
+        <div className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800 rounded-xl">
           <input
             type="checkbox"
             id="bill_reminder_notify_enabled"
@@ -232,12 +232,12 @@ export function LineSettingsForm({ action, settings, lineIntegration, telegramBo
             defaultChecked={lineIntegration?.bill_reminder_notify_enabled !== false}
             className="size-4 accent-rose-600 rounded"
           />
-          <label htmlFor="bill_reminder_notify_enabled" className="text-sm font-medium text-slate-700 cursor-pointer flex-1">
+          <label htmlFor="bill_reminder_notify_enabled" className="text-sm font-medium text-slate-700 dark:text-slate-200 cursor-pointer flex-1">
             แจ้งเตือนสรุปบิลค้างชำระให้เจ้าของหอ ตอน 9 โมงเช้า
           </label>
         </div>
         <div className="pt-1">
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">แจ้งเตือนแต่ละประเภท</p>
+          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">แจ้งเตือนแต่ละประเภท</p>
           <div className="space-y-2">
             {[
               { name: 'notify_slip_enabled',              label: 'สลิปและการชำระเงิน',           key: 'notify_slip_enabled' },
@@ -249,7 +249,7 @@ export function LineSettingsForm({ action, settings, lineIntegration, telegramBo
               { name: 'notify_reminder_summary_enabled',  label: 'สรุปการส่งแจ้งเตือนบิล',        key: 'notify_reminder_summary_enabled' },
               { name: 'notify_expiring_contract_enabled', label: 'สัญญาใกล้หมดอายุ (30 วัน)',     key: 'notify_expiring_contract_enabled' },
             ].map(({ name, label, key }) => (
-              <div key={name} className="flex items-center gap-3 p-2.5 bg-slate-50 rounded-lg">
+              <div key={name} className="flex items-center gap-3 p-2.5 bg-slate-50 dark:bg-slate-800 rounded-lg">
                 <input
                   type="checkbox"
                   id={name}
@@ -257,7 +257,7 @@ export function LineSettingsForm({ action, settings, lineIntegration, telegramBo
                   defaultChecked={notifyToggles?.[key as keyof NotifyToggles] !== false}
                   className="size-4 accent-rose-600 rounded"
                 />
-                <label htmlFor={name} className="text-sm text-slate-700 cursor-pointer flex-1">{label}</label>
+                <label htmlFor={name} className="text-sm text-slate-700 dark:text-slate-200 cursor-pointer flex-1">{label}</label>
               </div>
             ))}
           </div>
