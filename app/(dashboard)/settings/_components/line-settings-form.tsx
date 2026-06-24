@@ -209,7 +209,7 @@ export function LineSettingsForm({ action, settings, lineIntegration, telegramBo
             className="size-4 accent-rose-600 rounded"
           />
           <label htmlFor="login_notify_enabled" className="text-sm font-medium text-slate-700 cursor-pointer flex-1">
-            ส่งแจ้งเตือน LINE เมื่อมีการ login เข้าระบบ
+            แจ้งเตือนเมื่อมีการ login เข้าระบบ
           </label>
         </div>
         <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
@@ -221,11 +221,11 @@ export function LineSettingsForm({ action, settings, lineIntegration, telegramBo
             className="size-4 accent-rose-600 rounded"
           />
           <label htmlFor="bill_reminder_notify_enabled" className="text-sm font-medium text-slate-700 cursor-pointer flex-1">
-            ส่งแจ้งเตือนบิลค้างชำระทาง LINE ตอน 9 โมงเช้า
+            แจ้งเตือนสรุปบิลค้างชำระให้เจ้าของหอ ตอน 9 โมงเช้า
           </label>
         </div>
         <p className="text-xs text-slate-400">
-          ต้องเชื่อมต่อ LINE และตั้งค่า Owner LINE User ID ก่อน
+          แจ้งเตือน LINE ต้องตั้งค่า Owner LINE User ID · แจ้งเตือน Telegram ต้องตั้งค่า Bot Token และ Chat ID
         </p>
       </Section>
 
