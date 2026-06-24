@@ -152,7 +152,7 @@ export async function GET(req: NextRequest) {
     lines.push('กรุณาต่อสมาชิกที่ SlipOK Bot ด้วยครับ')
   }
 
-  if (lineConfig.appUrl) {
+  if (lineConfig?.appUrl) {
     lines.push(SEP)
     if ((pendingSlipCount ?? 0) > 0) lines.push(`🔗 ตรวจสลิป: ${lineConfig.appUrl}/payment-reviews`)
   }

@@ -6,12 +6,14 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { type SettingsFormState, type Settings } from '@/lib/definitions'
 import { type LineIntegrationPublic } from '@/lib/line-integration'
-import { Loader2, MessageCircle, Globe, UserCheck, Download, FileText, Bell } from 'lucide-react'
+import { Loader2, MessageCircle, Globe, UserCheck, Download, FileText, Bell, Send } from 'lucide-react'
 
 interface Props {
   action: (state: SettingsFormState, formData: FormData) => Promise<SettingsFormState>
   settings?: Settings
   lineIntegration?: LineIntegrationPublic
+  telegramBotTokenLast4?: string | null
+  telegramChatId?: string | null
 }
 
 function Section({ title, icon, badge, children }: {
@@ -48,7 +50,7 @@ function Field({ label, hint, error, children }: {
   )
 }
 
-export function LineSettingsForm({ action, settings, lineIntegration }: Props) {
+export function LineSettingsForm({ action, settings, lineIntegration, telegramBotTokenLast4, telegramChatId }: Props) {
   const [state, formAction, isPending] = useActionState(action, undefined)
   const lineConnected = Boolean(lineIntegration?.token_last4)
 
@@ -135,6 +137,36 @@ export function LineSettingsForm({ action, settings, lineIntegration }: Props) {
             defaultValue={settings?.owner_address ?? ''}
             placeholder="เช่น 58/10 ม.9 ถ.บางนโยม อ.พานทอง จ.ชลบุรี" />
         </Field>
+      </Section>
+
+      {/* ── Telegram แจ้งเตือนเจ้าของหอ ── */}
+      <Section title="Telegram แจ้งเตือนเจ้าของหอ" icon={<Send className="size-4 text-blue-500" />}>
+        <div className="grid grid-cols-1 gap-4">
+          <Field
+            label="Bot Token"
+            hint={telegramBotTokenLast4 ? `ตั้งค่าแล้ว (••••${telegramBotTokenLast4}) — กรอกใหม่เพื่อเปลี่ยน` : 'Bot Token จาก @BotFather • Chat ID จาก @userinfobot หรือ getUpdates'}
+          >
+            <Input
+              id="telegram_bot_token"
+              name="telegram_bot_token"
+              type="password"
+              placeholder="1234567890:ABCdef..."
+              className="font-mono text-xs"
+            />
+          </Field>
+          <Field label="Chat ID">
+            <Input
+              id="telegram_chat_id"
+              name="telegram_chat_id"
+              defaultValue={telegramChatId ?? ''}
+              placeholder="-100xxxxxxxxxx หรือ @username"
+              className="font-mono text-xs"
+            />
+          </Field>
+        </div>
+        <p className="text-xs text-slate-400">
+          Bot Token จาก @BotFather • Chat ID จาก @userinfobot หรือ getUpdates
+        </p>
       </Section>
 
       {/* ── แจ้งเตือน ── */}

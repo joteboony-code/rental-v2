@@ -10,7 +10,7 @@ export default async function LineSettingsPage() {
   const [{ data: settings }, lineIntegration] = await Promise.all([
     supabase
       .from('settings')
-      .select('owner_name, owner_id_card, owner_address')
+      .select('owner_name, owner_id_card, owner_address, telegram_chat_id')
       .eq('id', 1)
       .single(),
     getLineIntegrationPublic(),
@@ -38,6 +38,8 @@ export default async function LineSettingsPage() {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         settings={settings as any}
         lineIntegration={lineIntegration ?? undefined}
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        telegramChatId={(settings as any)?.telegram_chat_id ?? null}
       />
     </div>
   )

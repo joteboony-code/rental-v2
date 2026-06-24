@@ -3,6 +3,7 @@ import { createServiceClient } from '@/lib/supabase/service'
 import { decryptSecret, maybeDecryptSecret } from '@/lib/crypto-secrets'
 import { DEFAULT_DORM_ID } from '@/lib/line-integration'
 import { buildBillPortalUrl } from '@/lib/portal-url'
+import { sendOwnerTelegramMessage } from '@/lib/telegram'
 
 type SupabaseClient = ReturnType<typeof createServiceClient>
 
@@ -173,10 +174,9 @@ async function push(to: string | null, token: string, messages: object[]) {
   }
 }
 
-async function notifyOwner(cfg: LineConfig, text: string) {
-  if (!cfg.ownerLineUserId) return
+async function notifyOwner(_cfg: LineConfig, text: string) {
   try {
-    await push(cfg.ownerLineUserId, cfg.channelAccessToken, [{ type: 'text', text }])
+    await sendOwnerTelegramMessage(text)
   } catch (error) {
     console.error('[line notify owner]', error)
   }

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/service'
-import { decryptSecret } from '@/lib/crypto-secrets'
-import { DEFAULT_DORM_ID } from '@/lib/line-integration'
+import { sendOwnerTelegramMessage } from '@/lib/telegram'
 
 function isAuthorized(req: NextRequest) {
   const secret = process.env.CRON_SECRET
@@ -10,14 +9,6 @@ function isAuthorized(req: NextRequest) {
 }
 
 const SEP = '━━━━━━━━━━━━━━'
-
-async function push(to: string, token: string, text: string) {
-  await fetch('https://api.line.me/v2/bot/message/push', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ to, messages: [{ type: 'text', text }] }),
-  })
-}
 
 export async function GET(req: NextRequest) {
   if (!isAuthorized(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -44,20 +35,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: true, expiring: 0 })
   }
 
-  // Get LINE config (service role)
-  const { data: lineData } = await supabase
-    .from('line_integrations')
-    .select('encrypted_channel_access_token, owner_line_user_id')
-    .eq('dorm_id', DEFAULT_DORM_ID)
-    .maybeSingle()
-
-  if (!lineData?.encrypted_channel_access_token || !lineData?.owner_line_user_id) {
-    return NextResponse.json({ ok: true, expiring: contracts.length, note: 'LINE not configured' })
-  }
-
-  const token = await decryptSecret(lineData.encrypted_channel_access_token)
-  const owner = lineData.owner_line_user_id
-
   type RJ = { room_number: string }
   type TJ = { full_name: string }
 
@@ -78,7 +55,7 @@ export async function GET(req: NextRequest) {
     `รวม ${contracts.length} ห้อง`,
   ]
 
-  await push(owner, token, lines.join('\n'))
+  await sendOwnerTelegramMessage(lines.join('\n'))
 
   return NextResponse.json({ ok: true, expiring: contracts.length })
 }
