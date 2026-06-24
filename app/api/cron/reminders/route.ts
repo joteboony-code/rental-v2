@@ -123,10 +123,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: true, skipped: 'reminders disabled' })
   }
 
-  if (lineSettings?.bill_reminder_notify_enabled === false) {
-    return NextResponse.json({ ok: true, skipped: 'bill reminder LINE notification disabled' })
-  }
-
   const todayDay = new Date().getDate()
   const reminderDays = parseReminderDays(settings.reminder_days ?? '5,10,15,20,25')
   if (!reminderDays.includes(todayDay)) {
@@ -318,8 +314,8 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // Summary to owner — ส่งเฉพาะเมื่อมีการแจ้งเตือนจริง (sent > 0)
-  if (sent > 0) {
+  // Summary to owner — ส่งเฉพาะเมื่อมีการแจ้งเตือนจริง (sent > 0) และ toggle เปิด
+  if (sent > 0 && lineSettings?.bill_reminder_notify_enabled !== false) {
     const totalAmt = totalReminded
     const overdueCount = [...byTenant.values()].filter((bs) => bs.some((b) => b.status === 'overdue')).length
     const ownerLines = [

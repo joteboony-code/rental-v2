@@ -1,18 +1,10 @@
-import { createServiceClient } from '@/lib/supabase/service'
-
-export async function sendOwnerTelegramMessage(text: string): Promise<void> {
-  const supabase = createServiceClient()
-  const { data } = await supabase
-    .from('settings')
-    .select('telegram_bot_token, telegram_chat_id')
-    .eq('id', 1)
-    .maybeSingle()
-  if (!data?.telegram_bot_token || !data?.telegram_chat_id) return
+// Low-level send — caller provides pre-fetched and decrypted credentials
+export async function sendOwnerTelegramMessage(text: string, token: string, chatId: string): Promise<void> {
   try {
-    const res = await fetch(`https://api.telegram.org/bot${data.telegram_bot_token}/sendMessage`, {
+    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: data.telegram_chat_id, text }),
+      body: JSON.stringify({ chat_id: chatId, text }),
     })
     if (!res.ok) {
       const body = await res.text().catch(() => '')

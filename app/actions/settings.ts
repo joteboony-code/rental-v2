@@ -300,7 +300,10 @@ export async function updateLineAndOwnerSettings(
     notify_expiring_contract_enabled: formData.get('notify_expiring_contract_enabled') === 'on',
   }
   if (telegramChatId !== null) settingsUpdate.telegram_chat_id = telegramChatId
-  if (telegramBotToken) settingsUpdate.telegram_bot_token = telegramBotToken
+  if (telegramBotToken) {
+    settingsUpdate.telegram_bot_token      = await encryptSecret(telegramBotToken)
+    settingsUpdate.telegram_bot_token_last4 = secretLast4(telegramBotToken)
+  }
 
   const { error: ownerError } = await supabase.from('settings').update(settingsUpdate).eq('id', 1)
   if (ownerError) return { message: `เกิดข้อผิดพลาด: ${ownerError.message}` }
