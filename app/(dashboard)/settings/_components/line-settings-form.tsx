@@ -137,8 +137,8 @@ export function LineSettingsForm({ action, settings, lineIntegration }: Props) {
         </Field>
       </Section>
 
-      {/* ── แจ้งเตือน Login ── */}
-      <Section title="แจ้งเตือนการ Login" icon={<Bell className="size-4 text-rose-500" />}>
+      {/* ── แจ้งเตือน ── */}
+      <Section title="การแจ้งเตือน LINE" icon={<Bell className="size-4 text-rose-500" />}>
         <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
           <input
             type="checkbox"
@@ -149,6 +149,18 @@ export function LineSettingsForm({ action, settings, lineIntegration }: Props) {
           />
           <label htmlFor="login_notify_enabled" className="text-sm font-medium text-slate-700 cursor-pointer flex-1">
             ส่งแจ้งเตือน LINE เมื่อมีการ login เข้าระบบ
+          </label>
+        </div>
+        <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
+          <input
+            type="checkbox"
+            id="bill_reminder_notify_enabled"
+            name="bill_reminder_notify_enabled"
+            defaultChecked={lineIntegration?.bill_reminder_notify_enabled !== false}
+            className="size-4 accent-rose-600 rounded"
+          />
+          <label htmlFor="bill_reminder_notify_enabled" className="text-sm font-medium text-slate-700 cursor-pointer flex-1">
+            ส่งแจ้งเตือนบิลค้างชำระทาง LINE ตอน 9 โมงเช้า
           </label>
         </div>
         <p className="text-xs text-slate-400">
