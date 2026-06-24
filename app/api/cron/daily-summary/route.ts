@@ -152,9 +152,9 @@ export async function GET(req: NextRequest) {
     lines.push('กรุณาต่อสมาชิกที่ SlipOK Bot ด้วยครับ')
   }
 
-  if (lineConfig.appUrl) {
+  if (lineConfig?.appUrl) {
     lines.push(SEP)
-    if ((pendingSlipCount ?? 0) > 0) lines.push(`🔗 ตรวจสลิป: ${lineConfig.appUrl}/payment-reviews`)
+    if ((pendingSlipCount ?? 0) > 0) lines.push(`🔗 ตรวจสลิป: ${lineConfig?.appUrl}/payment-reviews`)
   }
 
   // Claim via audit log BEFORE sending — unique index on (date, action) rejects concurrent duplicates

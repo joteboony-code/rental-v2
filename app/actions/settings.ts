@@ -278,16 +278,21 @@ export async function updateLineAndOwnerSettings(
   const parsedLine = LineIntegrationSchema.safeParse(lineRaw)
   if (!parsedLine.success) return { errors: parsedLine.error.flatten().fieldErrors }
 
-  const ownerName    = String(formData.get('owner_name') ?? '').trim()
-  const ownerIdCard  = String(formData.get('owner_id_card') ?? '').trim()
-  const ownerAddress = String(formData.get('owner_address') ?? '').trim()
+  const ownerName        = String(formData.get('owner_name') ?? '').trim()
+  const ownerIdCard      = String(formData.get('owner_id_card') ?? '').trim()
+  const ownerAddress     = String(formData.get('owner_address') ?? '').trim()
+  const telegramBotToken = (formData.get('telegram_bot_token') as string | null)?.trim() || null
+  const telegramChatId   = (formData.get('telegram_chat_id')   as string | null)?.trim() || null
 
   const supabase = await createClient()
 
-  const { error: ownerError } = await supabase
-    .from('settings')
-    .update({ owner_name: ownerName, owner_id_card: ownerIdCard, owner_address: ownerAddress })
-    .eq('id', 1)
+  const settingsUpdate: Record<string, string | null> = {
+    owner_name: ownerName, owner_id_card: ownerIdCard, owner_address: ownerAddress,
+  }
+  if (telegramChatId !== null) settingsUpdate.telegram_chat_id = telegramChatId
+  if (telegramBotToken) settingsUpdate.telegram_bot_token = telegramBotToken
+
+  const { error: ownerError } = await supabase.from('settings').update(settingsUpdate).eq('id', 1)
   if (ownerError) return { message: `เกิดข้อผิดพลาด: ${ownerError.message}` }
 
   const loginNotifyEnabled        = formData.get('login_notify_enabled') === 'on'
