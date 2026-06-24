@@ -3,6 +3,7 @@
 import { Check, Copy, QrCode } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
+import { StyledQR } from '@/components/ui/styled-qr'
 import {
   Dialog,
   DialogContent,
@@ -29,10 +30,6 @@ export function RoomPairQrButton({ roomNumber, registrationUrl, pairUrl }: RoomP
 
   const displayUrl = registrationUrl || pairUrl || ''
   const isValid = isAbsoluteUrl(displayUrl)
-
-  const qrImgUrl = isValid
-    ? `https://api.qrserver.com/v1/create-qr-code/?size=256x256&ecc=M&data=${encodeURIComponent(displayUrl)}`
-    : null
 
   async function copyLink() {
     if (!navigator.clipboard || !displayUrl) return
@@ -71,15 +68,8 @@ export function RoomPairQrButton({ roomNumber, registrationUrl, pairUrl }: RoomP
           </div>
         ) : (
           <div className="space-y-3">
-            <div className="flex justify-center rounded-xl bg-white p-4 ring-1 ring-slate-100">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={qrImgUrl!}
-                alt="QR ลงทะเบียน"
-                width={208}
-                height={208}
-                className="rounded-lg"
-              />
+            <div className="flex justify-center">
+              <StyledQR value={displayUrl} size={220} />
             </div>
             <div className="rounded-lg bg-slate-50 px-3 py-2">
               <p className="break-all text-center text-[11px] leading-relaxed text-slate-500">

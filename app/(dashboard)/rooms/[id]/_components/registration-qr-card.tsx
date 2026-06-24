@@ -4,6 +4,7 @@ import { useState, useSyncExternalStore, useTransition } from 'react'
 import { regenerateRegistrationToken } from '@/app/actions/registrations'
 import { buildRegisterUrl, buildPairUrl } from '@/lib/pair-url'
 import { QrCode, RefreshCw, Copy, Check } from 'lucide-react'
+import { StyledQR } from '@/components/ui/styled-qr'
 
 export function RegistrationQrCard({
   roomId,
@@ -37,10 +38,6 @@ export function RegistrationQrCard({
   const pairUrl = buildPairUrl({ appOrigin, liffId, roomNumber })
 
   const activeUrl = tab === 'register' ? registerUrl : pairUrl
-
-  const qrUrl = activeUrl
-    ? `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(activeUrl)}`
-    : null
 
   function handleCopy() {
     if (!activeUrl) return
@@ -102,15 +99,10 @@ export function RegistrationQrCard({
         </button>
       </div>
 
-      {qrUrl && activeUrl ? (
+      {activeUrl ? (
         <>
           <div className="flex gap-4 items-start">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={qrUrl}
-              alt={tab === 'register' ? 'QR ลงทะเบียน' : 'QR จับคู่ LINE'}
-              className="size-32 rounded-xl border border-slate-100 shrink-0"
-            />
+            <StyledQR value={activeUrl} size={128} />
             <div className="flex-1 min-w-0 space-y-2">
               <p className="text-xs text-slate-500">
                 {tab === 'register'
