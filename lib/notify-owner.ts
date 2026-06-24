@@ -23,6 +23,8 @@ const TYPE_COLUMN: Record<OwnerNotifyType, string> = {
   expiring_contract:  'notify_expiring_contract_enabled',
 }
 
+type SettingsRow = Record<string, unknown>
+
 async function sendOwnerLineMessage(text: string): Promise<void> {
   const lineConfig = await getLineMessagingConfig()
   if (!lineConfig?.ownerLineUserId) return
@@ -39,19 +41,18 @@ async function sendOwnerLineMessage(text: string): Promise<void> {
 
 export async function notifyOwner(text: string, type?: OwnerNotifyType): Promise<void> {
   const supabase = createServiceClient()
-  const { data } = await supabase
+  const { data: rawData } = await supabase
     .from('settings')
-    .select([
-      'owner_notify_channel',
-      ...Object.values(TYPE_COLUMN),
-    ].join(', '))
+    .select('owner_notify_channel, notify_slip_enabled, notify_repair_enabled, notify_registration_enabled, notify_contract_enabled, notify_lead_enabled, notify_daily_summary_enabled, notify_reminder_summary_enabled, notify_expiring_contract_enabled')
     .eq('id', 1)
     .maybeSingle()
 
-  // Check type-specific toggle (default: enabled)
+  const data = rawData as unknown as SettingsRow | null
+
+  // Check type-specific toggle (default: enabled when column missing)
   if (type && data) {
     const col = TYPE_COLUMN[type]
-    if ((data as unknown as Record<string, unknown>)[col] === false) return
+    if (data[col] === false) return
   }
 
   const channel = (data?.owner_notify_channel as string | null) ?? 'telegram'
