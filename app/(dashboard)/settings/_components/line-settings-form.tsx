@@ -8,6 +8,17 @@ import { type SettingsFormState, type Settings } from '@/lib/definitions'
 import { type LineIntegrationPublic } from '@/lib/line-integration'
 import { Loader2, MessageCircle, Globe, UserCheck, Download, FileText, Bell, Send } from 'lucide-react'
 
+interface NotifyToggles {
+  notify_slip_enabled?: boolean | null
+  notify_repair_enabled?: boolean | null
+  notify_registration_enabled?: boolean | null
+  notify_contract_enabled?: boolean | null
+  notify_lead_enabled?: boolean | null
+  notify_daily_summary_enabled?: boolean | null
+  notify_reminder_summary_enabled?: boolean | null
+  notify_expiring_contract_enabled?: boolean | null
+}
+
 interface Props {
   action: (state: SettingsFormState, formData: FormData) => Promise<SettingsFormState>
   settings?: Settings
@@ -15,6 +26,7 @@ interface Props {
   telegramBotTokenLast4?: string | null
   telegramChatId?: string | null
   ownerNotifyChannel?: string | null
+  notifyToggles?: NotifyToggles | null
 }
 
 function Section({ title, icon, badge, children }: {
@@ -51,7 +63,7 @@ function Field({ label, hint, error, children }: {
   )
 }
 
-export function LineSettingsForm({ action, settings, lineIntegration, telegramBotTokenLast4, telegramChatId, ownerNotifyChannel }: Props) {
+export function LineSettingsForm({ action, settings, lineIntegration, telegramBotTokenLast4, telegramChatId, ownerNotifyChannel, notifyToggles }: Props) {
   const [state, formAction, isPending] = useActionState(action, undefined)
   const [notifyChannel, setNotifyChannel] = useState(ownerNotifyChannel ?? 'telegram')
   const lineConnected = Boolean(lineIntegration?.token_last4)
@@ -209,7 +221,7 @@ export function LineSettingsForm({ action, settings, lineIntegration, telegramBo
             className="size-4 accent-rose-600 rounded"
           />
           <label htmlFor="login_notify_enabled" className="text-sm font-medium text-slate-700 cursor-pointer flex-1">
-            ส่งแจ้งเตือน LINE เมื่อมีการ login เข้าระบบ
+            แจ้งเตือนเมื่อมีการ login เข้าระบบ
           </label>
         </div>
         <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
@@ -221,11 +233,37 @@ export function LineSettingsForm({ action, settings, lineIntegration, telegramBo
             className="size-4 accent-rose-600 rounded"
           />
           <label htmlFor="bill_reminder_notify_enabled" className="text-sm font-medium text-slate-700 cursor-pointer flex-1">
-            ส่งแจ้งเตือนบิลค้างชำระทาง LINE ตอน 9 โมงเช้า
+            แจ้งเตือนสรุปบิลค้างชำระให้เจ้าของหอ ตอน 9 โมงเช้า
           </label>
         </div>
+        <div className="pt-1">
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">แจ้งเตือนแต่ละประเภท</p>
+          <div className="space-y-2">
+            {[
+              { name: 'notify_slip_enabled',              label: 'สลิปและการชำระเงิน',           key: 'notify_slip_enabled' },
+              { name: 'notify_repair_enabled',            label: 'แจ้งซ่อมใหม่จากผู้เช่า',        key: 'notify_repair_enabled' },
+              { name: 'notify_registration_enabled',      label: 'ลงทะเบียนผู้เช่าใหม่',           key: 'notify_registration_enabled' },
+              { name: 'notify_contract_enabled',          label: 'ผู้เช่าลงนามสัญญา',             key: 'notify_contract_enabled' },
+              { name: 'notify_lead_enabled',              label: 'มีคนสนใจเช่าห้อง (Lead)',        key: 'notify_lead_enabled' },
+              { name: 'notify_daily_summary_enabled',     label: 'สรุปประจำวัน (daily summary)',   key: 'notify_daily_summary_enabled' },
+              { name: 'notify_reminder_summary_enabled',  label: 'สรุปการส่งแจ้งเตือนบิล',        key: 'notify_reminder_summary_enabled' },
+              { name: 'notify_expiring_contract_enabled', label: 'สัญญาใกล้หมดอายุ (30 วัน)',     key: 'notify_expiring_contract_enabled' },
+            ].map(({ name, label, key }) => (
+              <div key={name} className="flex items-center gap-3 p-2.5 bg-slate-50 rounded-lg">
+                <input
+                  type="checkbox"
+                  id={name}
+                  name={name}
+                  defaultChecked={notifyToggles?.[key as keyof NotifyToggles] !== false}
+                  className="size-4 accent-rose-600 rounded"
+                />
+                <label htmlFor={name} className="text-sm text-slate-700 cursor-pointer flex-1">{label}</label>
+              </div>
+            ))}
+          </div>
+        </div>
         <p className="text-xs text-slate-400">
-          ต้องเชื่อมต่อ LINE และตั้งค่า Owner LINE User ID ก่อน
+          แจ้งเตือน LINE ต้องตั้งค่า Owner LINE User ID · แจ้งเตือน Telegram ต้องตั้งค่า Bot Token และ Chat ID
         </p>
       </Section>
 

@@ -266,7 +266,7 @@ async function notifyOwnerAgreementSigned({
   const tenantName = tenantRes.data?.full_name ?? '-'
   const roomNumber = (contractRes.data?.rooms as unknown as { room_number: string } | null)?.room_number ?? '-'
 
-  await notifyOwner(`✅ ผู้เช่าลงนามสัญญาแล้ว\nห้อง: ${roomNumber}  ผู้เช่า: ${tenantName}`)
+  await notifyOwner(`✅ ผู้เช่าลงนามสัญญาแล้ว\nห้อง: ${roomNumber}  ผู้เช่า: ${tenantName}`, 'contract')
 }
 
 // ──────────────────────────────────────────────
