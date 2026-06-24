@@ -39,7 +39,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   return (
     <div className="flex min-h-screen bg-slate-50">
       {/* Sidebar (desktop) */}
-      <aside className="fixed inset-y-0 left-0 z-40 hidden w-16 flex-col border-r border-slate-100 bg-white md:flex">
+      <aside className="fixed inset-y-0 left-0 z-40 hidden w-16 flex-col border-r border-slate-100 bg-white md:flex print:hidden">
         <div className="px-2 py-3 border-b border-slate-100 text-center">
           <h1 className="text-sm font-bold text-slate-900 leading-tight">ห้องเช่า</h1>
         </div>
@@ -73,11 +73,13 @@ export default async function DashboardLayout({ children }: { children: React.Re
       </aside>
 
       {/* Main content */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-x-clip md:pl-16">
-        <div className="hidden md:flex items-center gap-3 border-b border-slate-100 bg-white px-5 py-2">
+      <div className="flex-1 flex flex-col min-w-0 overflow-x-clip md:pl-16 print:pl-0">
+        <div className="hidden md:flex print:hidden items-center gap-3 border-b border-slate-100 bg-white px-5 py-2">
           <GlobalSearch />
         </div>
-        <MobileBottomNav displayName={displayName} initials={initials} notifications={notifications} />
+        <div className="print:hidden">
+          <MobileBottomNav displayName={displayName} initials={initials} notifications={notifications} />
+        </div>
         <main className="flex-1 overflow-auto pb-20 md:pb-0">
           <PageTransition>{children}</PageTransition>
         </main>
