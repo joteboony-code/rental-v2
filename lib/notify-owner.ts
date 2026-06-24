@@ -51,7 +51,7 @@ export async function notifyOwner(text: string, type?: OwnerNotifyType): Promise
   // Check type-specific toggle (default: enabled)
   if (type && data) {
     const col = TYPE_COLUMN[type]
-    if ((data as Record<string, unknown>)[col] === false) return
+    if ((data as unknown as Record<string, unknown>)[col] === false) return
   }
 
   const channel = (data?.owner_notify_channel as string | null) ?? 'telegram'
