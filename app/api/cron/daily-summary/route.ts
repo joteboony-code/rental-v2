@@ -152,10 +152,10 @@ export async function GET(req: NextRequest) {
     lines.push('กรุณาต่อสมาชิกที่ SlipOK Bot ด้วยครับ')
   }
 
-  if (lineConfig?.appUrl) {
-    lines.push(SEP)
-    if ((pendingSlipCount ?? 0) > 0) lines.push(`🔗 ตรวจสลิป: ${lineConfig?.appUrl}/payment-reviews`)
-  }
+  const reviewUrl =
+    lineConfig?.appUrl && (pendingSlipCount ?? 0) > 0
+      ? `${lineConfig.appUrl}/payment-reviews`
+      : null
 
   // Claim via audit log BEFORE sending — unique index on (date, action) rejects concurrent duplicates
   const { error: auditErr } = await supabase.from('audit_logs').insert({
@@ -169,7 +169,11 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    await notifyOwner(lines.join('\n'), 'daily_summary')
+    await notifyOwner(
+      lines.join('\n'),
+      'daily_summary',
+      reviewUrl ? { label: 'ตรวจสลิป', url: reviewUrl } : undefined
+    )
   } catch (err) {
     return NextResponse.json({ ok: false, error: String(err) })
   }

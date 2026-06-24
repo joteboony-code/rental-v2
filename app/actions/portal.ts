@@ -342,9 +342,12 @@ async function notifyOwnerNewRepairFromPortal({
     `ความเร่งด่วน: ${priorityLabel[priority] ?? priority}`,
   ]
   if (description) lines.push(`รายละเอียด: ${description}`)
-  if (repairUrl) lines.push('', `เปิดดูรายการ: ${repairUrl}`)
 
-  await notifyOwner(lines.join('\n'), 'repair')
+  await notifyOwner(
+    lines.join('\n'),
+    'repair',
+    repairUrl ? { label: 'ดูรายการซ่อม', url: repairUrl } : undefined
+  )
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars

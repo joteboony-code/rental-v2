@@ -26,13 +26,38 @@ const TYPE_COLUMN: Record<OwnerNotifyType, string> = {
 
 type SettingsRow = Record<string, unknown>
 
-async function sendOwnerLineMessage(text: string): Promise<void> {
+function buildLineFlexMessage(text: string, link: { label: string; url: string }) {
+  return {
+    type: 'flex',
+    altText: text.slice(0, 400),
+    contents: {
+      type: 'bubble',
+      body: {
+        type: 'box',
+        layout: 'vertical',
+        contents: [{ type: 'text', text, wrap: true, size: 'sm' }],
+      },
+      footer: {
+        type: 'box',
+        layout: 'vertical',
+        contents: [{
+          type: 'button',
+          action: { type: 'uri', label: link.label, uri: link.url },
+          style: 'primary',
+        }],
+      },
+    },
+  }
+}
+
+async function sendOwnerLineMessage(text: string, link?: { label: string; url: string }): Promise<void> {
   const lineConfig = await getLineMessagingConfig()
   if (!lineConfig?.ownerLineUserId) return
+  const message = link ? buildLineFlexMessage(text, link) : { type: 'text', text }
   const res = await fetch('https://api.line.me/v2/bot/message/push', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${lineConfig.channelAccessToken}` },
-    body: JSON.stringify({ to: lineConfig.ownerLineUserId, messages: [{ type: 'text', text }] }),
+    body: JSON.stringify({ to: lineConfig.ownerLineUserId, messages: [message] }),
   })
   if (!res.ok) {
     const body = await res.text().catch(() => '')
@@ -40,7 +65,7 @@ async function sendOwnerLineMessage(text: string): Promise<void> {
   }
 }
 
-export async function notifyOwner(text: string, type?: OwnerNotifyType): Promise<void> {
+export async function notifyOwner(text: string, type?: OwnerNotifyType, link?: { label: string; url: string }): Promise<void> {
   const supabase = createServiceClient()
   // Single DB read: fetch channel setting, toggles, AND telegram credentials together
   const { data: rawData } = await supabase
@@ -67,14 +92,14 @@ export async function notifyOwner(text: string, type?: OwnerNotifyType): Promise
     if (rawToken && chatId) {
       tasks.push(
         maybeDecryptSecret(rawToken)
-          .then((token) => sendOwnerTelegramMessage(text, token, chatId))
+          .then((token) => sendOwnerTelegramMessage(text, token, chatId, link))
           .catch((e) => { console.error('[telegram decrypt]', e) })
       )
     }
   }
 
   if (channel === 'line' || channel === 'both') {
-    tasks.push(sendOwnerLineMessage(text))
+    tasks.push(sendOwnerLineMessage(text, link))
   }
 
   await Promise.allSettled(tasks)
