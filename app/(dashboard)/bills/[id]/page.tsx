@@ -6,7 +6,6 @@ import { PromptPayQR } from './_components/promptpay-qr'
 import { PaymentForm } from './_components/payment-form'
 import { DeletePaymentButton } from './_components/delete-payment-button'
 import { ChevronLeft, Droplets, Zap, Wifi, Trash2, Home, User, Receipt, CreditCard, MessageCircle, CalendarClock } from 'lucide-react'
-import { PrintButton } from './_components/print-button'
 import { roomRow } from '@/lib/room-utils'
 import { LineNotifyButton } from './_components/line-notify-button'
 import { SendPaymentConfirmedButton } from './_components/send-payment-confirmed-button'
@@ -89,7 +88,7 @@ export default async function BillDetailPage({
             </p>
           </div>
           <div className="flex items-center gap-3">
-            {bill.status !== 'cancelled' && (
+            {bill.status !== 'cancelled' && bill.status !== 'paid' && (
               <EditBillForm
                 billId={id}
                 rentAmount={Number(bill.rent_amount)}
@@ -105,7 +104,13 @@ export default async function BillDetailPage({
                 electricityRate={Number(settings?.electricity_unit_price ?? 8)}
               />
             )}
-            <PrintButton />
+            <Link
+              href={`/bills/${id}/receipt`}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 shadow-sm hover:bg-slate-50 transition-colors"
+            >
+              <Receipt className="size-3.5" />
+              พิมพ์ใบเสร็จ
+            </Link>
             <DeleteBillButton billId={id} roomNumber={room?.room_number ?? '—'} month={monthLabel} />
             {isOldBill && (
               <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-700 ring-1 ring-amber-200">
