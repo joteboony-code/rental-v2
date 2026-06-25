@@ -4,7 +4,7 @@ import { maybeDecryptSecret } from '@/lib/crypto-secrets'
 
 export async function GET(req: NextRequest) {
   const secret = process.env.CRON_SECRET
-  if (!secret || req.headers.get('x-cron-secret') !== secret) {
+  if (!secret || (req.headers.get('x-cron-secret') !== secret && new URL(req.url).searchParams.get('secret') !== secret)) {
     return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 })
   }
 
