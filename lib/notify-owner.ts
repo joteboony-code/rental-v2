@@ -84,7 +84,7 @@ export async function notifyOwner(text: string, type?: OwnerNotifyType, link?: {
     if (data[col] === false) return
   }
 
-  const channel = (data?.owner_notify_channel as string | null) ?? 'line'
+  const channel = (data?.owner_notify_channel as string | null) ?? 'telegram'
 
   const tasks: Promise<void>[] = []
 
@@ -97,11 +97,17 @@ export async function notifyOwner(text: string, type?: OwnerNotifyType, link?: {
           .then((token) => sendOwnerTelegramMessage(text, token, chatId, link))
           .catch((e) => { console.error('[telegram decrypt]', e) })
       )
+    } else {
+      console.warn('[notify-owner] Telegram credentials missing in settings')
     }
   }
 
   if (channel === 'line' || channel === 'both') {
     tasks.push(sendOwnerLineMessage(text, link))
+  }
+
+  if (tasks.length === 0) {
+    console.warn('[notify-owner] no channel configured — notification dropped')
   }
 
   await Promise.allSettled(tasks)
