@@ -7,6 +7,7 @@ import { MobileBottomNav } from './_components/mobile-bottom-nav'
 import { GlobalSearch } from './_components/global-search'
 import { ThemeToggle } from './_components/theme-toggle'
 import { PageTransition } from '@/components/ui/page-transition'
+import { InactivityLogout } from './_components/inactivity-logout'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
@@ -81,6 +82,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           <MobileBottomNav displayName={displayName} initials={initials} notifications={notifications} />
         </div>
         <main className="flex-1 overflow-auto pb-20 md:pb-0">
+          <InactivityLogout />
           <PageTransition>{children}</PageTransition>
         </main>
       </div>
