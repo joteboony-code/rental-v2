@@ -48,6 +48,7 @@ export default async function RoomsPage() {
       floor:           room.floor,
       status:          room.status,
       monthly_rent:    Number(room.monthly_rent),
+      wifi_fee:        Number(room.wifi_fee ?? 0),
       tenantId:        activeContract?.tenants?.id ?? null,
       tenantName:      activeContract?.tenants?.full_name ?? null,
       tenantPhone:     activeContract?.tenants?.phone ?? null,

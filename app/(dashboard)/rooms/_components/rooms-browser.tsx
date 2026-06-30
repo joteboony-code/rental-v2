@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Pencil, BarChart2, Building2 } from 'lucide-react'
+import { Pencil, BarChart2, Building2, Wifi } from 'lucide-react'
 import { roomRow } from '@/lib/room-utils'
 import { SearchInput } from '@/components/ui/search-input'
 import { EmptyState } from '@/components/ui/empty-state'
@@ -18,6 +18,7 @@ export type RoomRow = {
   floor: number | null
   status: string
   monthly_rent: number
+  wifi_fee: number
   tenantId: string | null
   tenantName: string | null
   tenantPhone: string | null
@@ -146,7 +147,15 @@ export function RoomsBrowser({ rooms }: { rooms: RoomRow[] }) {
                       <span className="text-xs text-slate-400">แถวที่ {roomRow(room.room_number)}</span>
                     </div>
                     <div className="mt-1">
-                      <RoomStatusBadge status={room.status} />
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <RoomStatusBadge status={room.status} />
+                        {room.wifi_fee > 0 && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-semibold text-indigo-700 ring-1 ring-indigo-200">
+                            <Wifi className="size-3" />
+                            WiFi ฿{fmt(room.wifi_fee)}/เดือน
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>

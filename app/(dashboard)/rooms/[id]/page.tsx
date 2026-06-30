@@ -5,7 +5,7 @@ import { RoomStatusBadge } from '../_components/room-status-badge'
 import { BillStatusBadge } from '../../bills/_components/bill-status-badge'
 import { RepairStatusBadge, RepairPriorityBadge } from '../../repairs/_components/repair-status-badge'
 import type { RepairPriority, RepairStatus } from '@/lib/definitions'
-import { ChevronLeft, Pencil, User, FileText, Wrench, Calendar } from 'lucide-react'
+import { ChevronLeft, Pencil, User, FileText, Wrench, Calendar, Wifi } from 'lucide-react'
 import { roomRow } from '@/lib/room-utils'
 import { ReservationActions } from '../_components/reservation-actions'
 import { RegistrationQrCard } from './_components/registration-qr-card'
@@ -86,6 +86,17 @@ export default async function RoomDetailPage({ params }: { params: Promise<{ id:
                 <span className="text-slate-500">ค่าเช่า</span>
                 <span className="font-semibold text-slate-800">฿{Number(room.monthly_rent).toLocaleString()}/เดือน</span>
               </div>
+              {Number(room.wifi_fee ?? 0) > 0 && (
+                <div className="flex justify-between">
+                  <span className="flex items-center gap-1.5 text-indigo-600">
+                    <Wifi className="size-3.5" />
+                    ค่า WiFi
+                  </span>
+                  <span className="font-semibold text-indigo-700">
+                    ฿{Number(room.wifi_fee).toLocaleString()}/เดือน
+                  </span>
+                </div>
+              )}
               {room.size_sqm && (
                 <div className="flex justify-between">
                   <span className="text-slate-500">ขนาด</span>
