@@ -4,8 +4,13 @@ import { createClient } from '@/lib/supabase/server'
 import { ChevronLeft, Droplets, Zap, TrendingUp } from 'lucide-react'
 import { UsageChart } from './_components/usage-chart'
 
-const monthFmt = (s: string) =>
-  new Date(s + '-01').toLocaleDateString('th-TH', { month: 'short', year: '2-digit' })
+const monthFmt = (s: string) => {
+  const [year, month] = s.slice(0, 7).split('-').map(Number)
+  return new Date(year, month - 1, 1).toLocaleDateString('th-TH', {
+    month: 'short',
+    year: '2-digit',
+  })
+}
 
 export default async function RoomUsagePage({
   params,
