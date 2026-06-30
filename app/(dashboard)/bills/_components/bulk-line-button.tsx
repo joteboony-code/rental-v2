@@ -1,18 +1,23 @@
 'use client'
 
 import { useState } from 'react'
-import { sendBulkLineBillNotification } from '@/app/actions/line'
-import { MessageCircle, Loader2, Check, AlertCircle, Send } from 'lucide-react'
+import {
+  sendBulkLineBillNotification,
+  type BulkLineResult,
+} from '@/app/actions/line'
+import { MessageCircle, Loader2, Check, AlertCircle, Send, RotateCcw } from 'lucide-react'
 
 export function BulkLineButton({ billingMonth }: { billingMonth: string }) {
   const [pending, setPending]   = useState<'text' | 'flex' | null>(null)
-  const [result,  setResult]    = useState<{ success: boolean; sent: number; failed: number; message: string } | null>(null)
+  const [result,  setResult]    = useState<BulkLineResult | null>(null)
+  const [lastMode, setLastMode] = useState<'text' | 'flex'>('flex')
   const [open,    setOpen]      = useState(false)
 
-  async function send(mode: 'text' | 'flex') {
+  async function send(mode: 'text' | 'flex', roomIds: string[] = []) {
     setPending(mode)
     setResult(null)
-    const res = await sendBulkLineBillNotification(billingMonth, mode)
+    setLastMode(mode)
+    const res = await sendBulkLineBillNotification(billingMonth, mode, roomIds)
     setResult(res)
     setPending(null)
   }
@@ -28,6 +33,10 @@ export function BulkLineButton({ billingMonth }: { billingMonth: string }) {
       </button>
     )
   }
+
+  const retryRoomIds = result?.failures
+    .filter((failure) => failure.retryable)
+    .flatMap((failure) => failure.roomIds) ?? []
 
   return (
     <div className="flex flex-col gap-2 items-end">
@@ -64,15 +73,45 @@ export function BulkLineButton({ billingMonth }: { billingMonth: string }) {
       </div>
 
       {result && (
-        <div className={`flex items-center gap-1.5 text-xs px-3 py-2 rounded-xl ${
-          result.success
-            ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
-            : 'bg-rose-50 text-rose-600 border border-rose-100'
+        <div className={`w-full max-w-xl space-y-2 text-xs px-3 py-2 rounded-xl ${
+          result.failed > 0
+            ? 'bg-amber-50 text-amber-800 border border-amber-200'
+            : result.success
+              ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+              : 'bg-rose-50 text-rose-600 border border-rose-100'
         }`}>
-          {result.success
-            ? <Check className="size-3.5 shrink-0" />
-            : <AlertCircle className="size-3.5 shrink-0" />}
-          {result.message}
+          <div className="flex items-center gap-1.5 font-medium">
+            {result.failed > 0
+              ? <AlertCircle className="size-3.5 shrink-0" />
+              : result.success
+                ? <Check className="size-3.5 shrink-0" />
+                : <AlertCircle className="size-3.5 shrink-0" />}
+            {result.message}
+          </div>
+
+          {result.failures.length > 0 && (
+            <ul className="space-y-1 pl-5">
+              {result.failures.map((failure) => (
+                <li key={`${failure.roomIds.join('-')}-${failure.reason}`} className="list-disc">
+                  ห้อง {failure.roomNumbers.join(', ')} — {failure.reason}
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {retryRoomIds.length > 0 && (
+            <button
+              type="button"
+              onClick={() => send(lastMode, retryRoomIds)}
+              disabled={!!pending}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-2.5 py-1.5 font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
+            >
+              {pending
+                ? <Loader2 className="size-3 animate-spin" />
+                : <RotateCcw className="size-3" />}
+              ลองส่งเฉพาะ {retryRoomIds.length} ห้องที่ล้มเหลว
+            </button>
+          )}
         </div>
       )}
     </div>

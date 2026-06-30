@@ -180,6 +180,87 @@ type RoomStatement = {
   overdueTotal: number
 }
 
+type StatementBill = {
+  id: string
+  tenant_id?: string
+  billing_month: string
+  due_date: string
+  rent_amount: number
+  water_amount: number
+  electricity_amount: number
+  wifi_amount: number
+  trash_amount: number
+  other_amount: number
+  other_note: string | null
+  total_amount: number
+  rooms: { room_number: string; floor: number | null } | null
+  meter_readings: { reading_date: string | null; created_at: string } | null
+  payments: { amount: number }[] | null
+}
+
+function buildRoomStatements(allBills: StatementBill[]): {
+  rooms: RoomStatement[]
+  grandTotal: number
+  earliestDueDate: string
+} {
+  // Group by room; bills must be sorted newest → oldest
+  const byRoom = new Map<string, StatementBill[]>()
+  for (const bill of allBills) {
+    const roomNumber = bill.rooms?.room_number ?? '?'
+    if (!byRoom.has(roomNumber)) byRoom.set(roomNumber, [])
+    byRoom.get(roomNumber)!.push(bill)
+  }
+
+  const rooms: RoomStatement[] = []
+  for (const [, roomBills] of byRoom) {
+    const main = roomBills[0]
+    const overdueBills = roomBills
+      .slice(1)
+      .reverse()
+      .map((bill) => {
+        const paid = (bill.payments ?? []).reduce((sum, payment) => sum + Number(payment.amount), 0)
+        return {
+          billId: bill.id,
+          billingMonth: bill.billing_month,
+          remaining: Math.max(0, Number(bill.total_amount) - paid),
+        }
+      })
+      .filter((bill) => bill.remaining >= 1)
+
+    rooms.push({
+      billId: main.id,
+      roomNumber: main.rooms?.room_number ?? '?',
+      floor: main.rooms?.floor ?? null,
+      billingMonth: main.billing_month,
+      dueDate: main.due_date,
+      rentAmt: Number(main.rent_amount),
+      waterAmt: Number(main.water_amount),
+      elecAmt: Number(main.electricity_amount),
+      wifiAmt: Number(main.wifi_amount),
+      trashAmt: Number(main.trash_amount),
+      otherAmt: Number(main.other_amount),
+      otherNote: main.other_note,
+      currentTotal: Number(main.total_amount),
+      meterRecordedAt: main.meter_readings?.reading_date ?? main.meter_readings?.created_at ?? null,
+      overdueBills,
+      overdueTotal: overdueBills.reduce((sum, bill) => sum + bill.remaining, 0),
+    })
+  }
+
+  rooms.sort((a, b) => {
+    const roomA = parseInt(a.roomNumber) || 0
+    const roomB = parseInt(b.roomNumber) || 0
+    return roomA - roomB || a.roomNumber.localeCompare(b.roomNumber)
+  })
+
+  const grandTotal = rooms.reduce((sum, room) => sum + room.currentTotal + room.overdueTotal, 0)
+  const earliestDueDate =
+    rooms.map((room) => room.dueDate).filter(Boolean).sort()[0] ??
+    new Date().toISOString().slice(0, 10)
+
+  return { rooms, grandTotal, earliestDueDate }
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function fetchRoomStatements(supabase: any, tenantId: string): Promise<{
   rooms: RoomStatement[]
@@ -200,72 +281,7 @@ async function fetchRoomStatements(supabase: any, tenantId: string): Promise<{
     .in('status', ['pending', 'overdue'])
     .order('billing_month', { ascending: false })
 
-  type PayJ = { amount: number }
-  type BillFull = {
-    id: string; billing_month: string; due_date: string
-    rent_amount: number; water_amount: number; electricity_amount: number
-    wifi_amount: number; trash_amount: number; other_amount: number; other_note: string | null
-    total_amount: number
-    rooms: { room_number: string; floor: number | null } | null
-    meter_readings: { reading_date: string | null; created_at: string } | null
-    payments: PayJ[] | null
-  }
-
-  const allBills = (rawBills ?? []) as unknown as BillFull[]
-
-  // Group by room; bills already sorted newest → oldest
-  const byRoom = new Map<string, BillFull[]>()
-  for (const b of allBills) {
-    const rn = b.rooms?.room_number ?? '?'
-    if (!byRoom.has(rn)) byRoom.set(rn, [])
-    byRoom.get(rn)!.push(b)
-  }
-
-  const rooms: RoomStatement[] = []
-  for (const [, roomBills] of byRoom) {
-    const main  = roomBills[0]
-    const older = roomBills.slice(1)
-
-    // Reverse older bills so overdue is listed oldest → newest
-    const overdueBills = [...older].reverse()
-      .map((b) => {
-        const paid      = (b.payments ?? []).reduce((s, p) => s + Number(p.amount), 0)
-        const remaining = Math.max(0, Number(b.total_amount) - paid)
-        return { billId: b.id, billingMonth: b.billing_month, remaining }
-      })
-      .filter((o) => o.remaining >= 1)
-
-    rooms.push({
-      billId:      main.id,
-      roomNumber:  main.rooms?.room_number ?? '?',
-      floor:       main.rooms?.floor ?? null,
-      billingMonth: main.billing_month,
-      dueDate:     main.due_date,
-      rentAmt:     Number(main.rent_amount),
-      waterAmt:    Number(main.water_amount),
-      elecAmt:     Number(main.electricity_amount),
-      wifiAmt:     Number(main.wifi_amount),
-      trashAmt:    Number(main.trash_amount),
-      otherAmt:    Number(main.other_amount),
-      otherNote:   main.other_note,
-      currentTotal: Number(main.total_amount),
-      meterRecordedAt: main.meter_readings?.reading_date ?? main.meter_readings?.created_at ?? null,
-      overdueBills,
-      overdueTotal: overdueBills.reduce((s, o) => s + o.remaining, 0),
-    })
-  }
-
-  rooms.sort((a, b) => {
-    const na = parseInt(a.roomNumber) || 0
-    const nb = parseInt(b.roomNumber) || 0
-    return na - nb || a.roomNumber.localeCompare(b.roomNumber)
-  })
-
-  const grandTotal      = rooms.reduce((s, r) => s + r.currentTotal + r.overdueTotal, 0)
-  const dueDates        = rooms.map((r) => r.dueDate).filter(Boolean).sort()
-  const earliestDueDate = dueDates[0] ?? new Date().toISOString().slice(0, 10)
-
-  return { rooms, grandTotal, earliestDueDate }
+  return buildRoomStatements((rawBills ?? []) as unknown as StatementBill[])
 }
 
 function buildCombinedFlexBubble(data: {
@@ -394,6 +410,30 @@ function buildCombinedFlexBubble(data: {
   }
 }
 
+function buildCombinedTextMessage(data: {
+  tenantName: string
+  rooms: RoomStatement[]
+  grandTotal: number
+  portalUrl: string
+}): string {
+  const lines = [`📋 แจ้งค่าเช่า — ${data.tenantName}  (${data.rooms.length} ห้อง)`, '']
+  for (const room of data.rooms) {
+    lines.push(`🏠 ห้อง ${room.roomNumber} แถวที่ ${roomRow(room.roomNumber)} — ${thaiMonth(room.billingMonth)}`)
+    lines.push(`   ค่าเช่า ฿${fmt(room.rentAmt)} · น้ำ ฿${fmt(room.waterAmt)} · ไฟ ฿${fmt(room.elecAmt)}`)
+    if (room.wifiAmt > 0) lines.push(`   WiFi ฿${fmt(room.wifiAmt)}`)
+    lines.push(`   ขยะ ฿${fmt(room.trashAmt)}`)
+    if (room.otherAmt > 0) lines.push(`   ${room.otherNote || 'ค่าอื่น ๆ'} ฿${fmt(room.otherAmt)}`)
+    lines.push(`   รวม ฿${fmt(room.currentTotal)}`)
+    for (const overdue of room.overdueBills) {
+      lines.push(`   ⚠️ ค้าง ${thaiMonth(overdue.billingMonth)} ฿${fmt(overdue.remaining)}`)
+    }
+    lines.push('')
+  }
+  lines.push(`💰 ยอดรวมทั้งหมด ฿${fmt(data.grandTotal)}`)
+  lines.push(`🔗 ${data.portalUrl}`)
+  return lines.join('\n')
+}
+
 // ── Main action ──────────────────────────────────────────────────────
 export async function sendLineBillNotification(
   billId: string,
@@ -441,8 +481,8 @@ export async function sendLineBillNotification(
   }
 
   // ── Multi-room: send combined statement ──────────────────────────────────────
-  const auditLineBillSent = (extra: Record<string, unknown> = {}) => {
-    logAudit({
+  const auditLineBillSent = async (extra: Record<string, unknown> = {}) => {
+    await logAudit({
       action: 'line_bill_sent',
       entityType: 'bill',
       entityId: billId,
@@ -459,7 +499,7 @@ export async function sendLineBillNotification(
         ...extra,
       },
       description: `ส่ง LINE แจ้งค่าเช่า ${thaiMonth(bill.billing_month)} ยอดค้าง ฿${fmt(remaining)}`,
-    }).catch(() => {})
+    })
   }
 
   const { rooms: allRooms, grandTotal: allTotal, earliestDueDate } =
@@ -472,22 +512,17 @@ export async function sendLineBillNotification(
           buildCombinedFlexBubble({ tenantName: tenant.full_name, rooms: allRooms, grandTotal: allTotal, earliestDueDate, portalUrl: combinedUrl }),
         ])
       } else {
-        const lines = [`📋 แจ้งค่าเช่า — ${tenant.full_name}  (${allRooms.length} ห้อง)`, '']
-        for (const r of allRooms) {
-          lines.push(`🏠 ห้อง ${r.roomNumber} แถวที่ ${roomRow(r.roomNumber)} — ${thaiMonth(r.billingMonth)}`)
-          lines.push(`   ค่าเช่า ฿${fmt(r.rentAmt)} · น้ำ ฿${fmt(r.waterAmt)} · ไฟ ฿${fmt(r.elecAmt)}`)
-          if (r.wifiAmt  > 0) lines.push(`   WiFi ฿${fmt(r.wifiAmt)}`)
-          lines.push(`   ขยะ ฿${fmt(r.trashAmt)}`)
-          if (r.otherAmt > 0) lines.push(`   ${r.otherNote || 'ค่าอื่น ๆ'} ฿${fmt(r.otherAmt)}`)
-          lines.push(`   รวม ฿${fmt(r.currentTotal)}`)
-          for (const od of r.overdueBills) lines.push(`   ⚠️ ค้าง ${thaiMonth(od.billingMonth)} ฿${fmt(od.remaining)}`)
-          lines.push('')
-        }
-        lines.push(`💰 ยอดรวมทั้งหมด ฿${fmt(allTotal)}`)
-        lines.push(`🔗 ${combinedUrl}`)
-        await pushMessage(tenant.line_user_id, lineConfig.channelAccessToken, [{ type: 'text', text: lines.join('\n') }])
+        await pushMessage(tenant.line_user_id, lineConfig.channelAccessToken, [{
+          type: 'text',
+          text: buildCombinedTextMessage({
+            tenantName: tenant.full_name,
+            rooms: allRooms,
+            grandTotal: allTotal,
+            portalUrl: combinedUrl,
+          }),
+        }])
       }
-      auditLineBillSent({ combined_room_count: allRooms.length })
+      await auditLineBillSent({ combined_room_count: allRooms.length })
       return { success: true, message: `ส่ง LINE ${mode === 'flex' ? 'Flex' : 'ข้อความ'} รวม ${allRooms.length} ห้อง สำเร็จ` }
     } catch (err) {
       return { success: false, message: String(err) }
@@ -540,7 +575,7 @@ export async function sendLineBillNotification(
       await pushMessage(tenant.line_user_id, lineConfig.channelAccessToken, [flexMsg])
     }
 
-    auditLineBillSent()
+    await auditLineBillSent()
     return { success: true, message: `ส่ง LINE ${mode === 'flex' ? 'Flex Message' : 'ข้อความ'} สำเร็จ` }
   } catch (err) {
     return { success: false, message: String(err) }
@@ -857,16 +892,58 @@ export async function sendBroadcast(
 
 // ── Bulk bill notification (all rooms in a month) ────────────────────────────
 
+export type BulkLineFailure = {
+  roomIds: string[]
+  roomNumbers: string[]
+  reason: string
+  retryable: boolean
+}
+
+export type BulkLineResult = {
+  success: boolean
+  sent: number
+  failed: number
+  recipients: number
+  message: string
+  failures: BulkLineFailure[]
+}
+
+function bulkLineFailureReason(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error)
+  if (/LINE API error 429/i.test(message)) return 'LINE จำกัดความถี่หรือโควตาส่งข้อความ'
+  if (/LINE API error 400/i.test(message)) return 'LINE ID หรือรูปแบบข้อความไม่ถูกต้อง'
+  if (/subrequest/i.test(message)) return 'คำขอภายนอกเกินขีดจำกัดของระบบ'
+  if (/fetch failed|network/i.test(message)) return 'เชื่อมต่อ LINE ไม่สำเร็จ'
+  return message.slice(0, 160) || 'ส่ง LINE ไม่สำเร็จ'
+}
+
 export async function sendBulkLineBillNotification(
   billingMonth: string,   // "YYYY-MM-DD"
-  mode: 'text' | 'flex'
-): Promise<{ success: boolean; sent: number; failed: number; message: string }> {
+  mode: 'text' | 'flex',
+  targetRoomIds: string[] = []
+): Promise<BulkLineResult> {
+  const emptyResult = (message: string): BulkLineResult => ({
+    success: false,
+    sent: 0,
+    failed: 0,
+    recipients: 0,
+    message,
+    failures: [],
+  })
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { success: false, sent: 0, failed: 0, message: 'ไม่มีสิทธิ์ใช้งาน' }
+  if (!user) return emptyResult('ไม่มีสิทธิ์ใช้งาน')
 
-  // Get all pending/overdue bills for this month with tenant LINE IDs
-  const { data: bills } = await supabase
+  const retryRoomIds = [...new Set(
+    targetRoomIds.filter((id) => /^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(id))
+  )].slice(0, 100)
+  if (targetRoomIds.length > 0 && retryRoomIds.length === 0) {
+    return emptyResult('ไม่พบห้องที่ต้องการส่งซ้ำ')
+  }
+
+  // Query current bills once. Retry mode narrows this same query to failed rooms only.
+  let currentBillsQuery = supabase
     .from('bills')
     .select(`
       id, tenant_id, room_id, status,
@@ -880,8 +957,13 @@ export async function sendBulkLineBillNotification(
     .eq('billing_month', billingMonth)
     .in('status', ['pending', 'overdue'])
 
+  if (retryRoomIds.length > 0) currentBillsQuery = currentBillsQuery.in('room_id', retryRoomIds)
+
+  const { data: bills, error: billsError } = await currentBillsQuery
+  if (billsError) return emptyResult(`โหลดข้อมูลบิลไม่สำเร็จ: ${billsError.message}`)
+
   if (!bills || bills.length === 0) {
-    return { success: false, sent: 0, failed: 0, message: 'ไม่มีบิลที่รอชำระในเดือนนี้' }
+    return emptyResult('ไม่มีบิลที่รอชำระในเดือนนี้')
   }
 
   const payableBills = bills.filter((bill) => {
@@ -890,51 +972,28 @@ export async function sendBulkLineBillNotification(
   })
 
   if (payableBills.length === 0) {
-    return { success: false, sent: 0, failed: 0, message: PAID_BILL_NOTIFY_BLOCK_MESSAGE }
+    return emptyResult(PAID_BILL_NOTIFY_BLOCK_MESSAGE)
   }
 
   const lineConfig = await getLineMessagingConfig()
   if (!lineConfig) {
-    return { success: false, sent: 0, failed: 0, message: 'ยังไม่ได้ตั้งค่า LINE Channel Access Token' }
+    return emptyResult('ยังไม่ได้ตั้งค่า LINE Channel Access Token')
   }
-
-  let sent = 0
-  let failed = 0
+  const activeLineConfig = lineConfig
 
   type TenantJ = { full_name: string; line_user_id: string | null }
   type RoomJ   = { room_number: string; floor: number | null }
   type MeterJ  = { reading_date: string | null; created_at: string } | null
-
-  const auditBulkLineBillSent = (bill: (typeof payableBills)[number], extra: Record<string, unknown> = {}) => {
-    const remaining = billRemaining(bill.total_amount, bill.payments as { amount: unknown }[] | null)
-    logAudit({
-      action: 'line_bill_sent',
-      entityType: 'bill',
-      entityId: bill.id as string,
-      tenantId: (bill.tenant_id as string | null) ?? null,
-      roomId: (bill.room_id as string | null) ?? null,
-      newValue: {
-        bill_id: bill.id,
-        room_id: (bill.room_id as string | null) ?? null,
-        tenant_id: (bill.tenant_id as string | null) ?? null,
-        billing_month: bill.billing_month,
-        remaining,
-        sent_by: user?.id ?? null,
-        mode,
-        bulk: true,
-        ...extra,
-      },
-      description: `LINE bill notification ${thaiMonth(bill.billing_month as string)} remaining ${fmt(remaining)}`,
-    }).catch(() => {})
-  }
-
-  // Group by line_user_id (fallback to tenant_id) — prevents duplicate sends for tenants with multiple rooms
-  const byLineUser = new Map<string, {
+  type CurrentBill = (typeof payableBills)[number]
+  type LineGroup = {
     lineUserId: string | null
     tenantName: string
     tenantIds: Set<string>
-    bills: (typeof payableBills)[number][]
-  }>()
+    bills: CurrentBill[]
+  }
+
+  // Group by line_user_id (fallback to tenant_id) — prevents duplicate sends for tenants with multiple rooms
+  const byLineUser = new Map<string, LineGroup>()
 
   for (const bill of payableBills) {
     const tenant     = bill.tenants as unknown as TenantJ | null
@@ -951,60 +1010,99 @@ export async function sendBulkLineBillNotification(
     if (tenant?.full_name) grp.tenantName = tenant.full_name
   }
 
-  for (const [, grp] of byLineUser) {
-    const { lineUserId } = grp
-    if (!lineUserId) { failed += grp.bills.length; continue }
+  // Fetch every outstanding statement in one query instead of one query per recipient.
+  const tenantIds = [...new Set(payableBills.map((bill) => bill.tenant_id as string))]
+  const { data: statementRows, error: statementError } = await supabase
+    .from('bills')
+    .select(`
+      id, tenant_id, billing_month, due_date,
+      rent_amount, water_amount, electricity_amount, wifi_amount, trash_amount, other_amount, other_note,
+      total_amount,
+      rooms ( room_number, floor ),
+      meter_readings ( reading_date, created_at ),
+      payments ( amount )
+    `)
+    .in('tenant_id', tenantIds)
+    .in('status', ['pending', 'overdue'])
+    .order('billing_month', { ascending: false })
 
-    // Merge outstanding room statements across all tenant IDs linked to this LINE user
+  if (statementError) return emptyResult(`โหลดรายละเอียดบิลไม่สำเร็จ: ${statementError.message}`)
+
+  const statementsByTenant = new Map<string, StatementBill[]>()
+  for (const row of (statementRows ?? []) as unknown as StatementBill[]) {
+    if (!row.tenant_id) continue
+    if (!statementsByTenant.has(row.tenant_id)) statementsByTenant.set(row.tenant_id, [])
+    statementsByTenant.get(row.tenant_id)!.push(row)
+  }
+
+  const failures: BulkLineFailure[] = []
+  const successful: Array<{ bills: CurrentBill[]; combinedRoomCount: number }> = []
+  let recipients = 0
+
+  function roomInfo(group: LineGroup) {
+    return {
+      roomIds: group.bills.map((bill) => bill.room_id as string),
+      roomNumbers: group.bills
+        .map((bill) => (bill.rooms as unknown as RoomJ | null)?.room_number ?? '—')
+        .sort((a, b) => (parseInt(a) || 0) - (parseInt(b) || 0)),
+    }
+  }
+
+  async function sendGroup(group: LineGroup): Promise<void> {
+    const rooms = roomInfo(group)
+    if (!group.lineUserId) {
+      failures.push({ ...rooms, reason: 'ผู้เช่าไม่มี LINE User ID', retryable: false })
+      return
+    }
+
     const allStmtRooms: RoomStatement[] = []
-    let allGrandTotal = 0
-    let allEarliestDue = ''
-    for (const tid of grp.tenantIds) {
-      const { rooms: stmtRooms, grandTotal, earliestDueDate } =
-        await fetchRoomStatements(supabase, tid)
-      allStmtRooms.push(...stmtRooms)
-      allGrandTotal += grandTotal
-      if (!allEarliestDue || (earliestDueDate && earliestDueDate < allEarliestDue)) {
-        allEarliestDue = earliestDueDate
-      }
+    for (const tenantId of group.tenantIds) {
+      allStmtRooms.push(...buildRoomStatements(statementsByTenant.get(tenantId) ?? []).rooms)
     }
     allStmtRooms.sort((a, b) => {
       const na = parseInt(a.roomNumber) || 0
       const nb = parseInt(b.roomNumber) || 0
       return na - nb || a.roomNumber.localeCompare(b.roomNumber)
     })
+    const allGrandTotal = allStmtRooms.reduce(
+      (sum, room) => sum + room.currentTotal + room.overdueTotal,
+      0
+    )
+    const allEarliestDue =
+      allStmtRooms.map((room) => room.dueDate).filter(Boolean).sort()[0] ??
+      new Date().toISOString().slice(0, 10)
 
-    if (mode === 'flex' && allStmtRooms.length >= 2) {
-      // Multi-room → one combined Flex
-      const portalUrl = buildTenantPortalUrl(lineConfig.liffId, lineConfig.appUrl)
-      try {
-        await pushMessage(lineUserId, lineConfig.channelAccessToken, [
-          buildCombinedFlexBubble({
-            tenantName: grp.tenantName,
+    try {
+      if (allStmtRooms.length >= 2) {
+        const portalUrl = buildTenantPortalUrl(activeLineConfig.liffId, activeLineConfig.appUrl)
+        const message = mode === 'flex'
+          ? buildCombinedFlexBubble({
+            tenantName: group.tenantName,
             rooms: allStmtRooms,
             grandTotal: allGrandTotal,
             earliestDueDate: allEarliestDue,
             portalUrl,
-          }),
-        ])
-        sent += grp.bills.length
-        grp.bills.forEach((bill) => auditBulkLineBillSent(bill, { combined_room_count: allStmtRooms.length }))
-      } catch {
-        failed += grp.bills.length
-      }
-      continue
-    }
+          })
+          : {
+              type: 'text',
+              text: buildCombinedTextMessage({
+                tenantName: group.tenantName,
+                rooms: allStmtRooms,
+                grandTotal: allGrandTotal,
+                portalUrl,
+              }),
+            }
+        await pushMessage(group.lineUserId, activeLineConfig.channelAccessToken, [message])
+      } else {
+        const bill = group.bills[0]
+        if (!bill) throw new Error('ไม่พบบิลสำหรับผู้รับ')
+        const room       = bill.rooms          as unknown as RoomJ | null
+        const meter      = bill.meter_readings as unknown as MeterJ
+        const month      = thaiMonth(bill.billing_month as string)
+        const portalUrl  = buildBillPortalUrl(bill.id, activeLineConfig.liffId, activeLineConfig.appUrl)
+        const roomNumber = room?.room_number ?? '—'
+        const floor      = room?.floor ?? null
 
-    // Single room (or text mode) → per-bill behavior
-    for (const bill of grp.bills) {
-      const room       = bill.rooms         as unknown as RoomJ  | null
-      const meter      = bill.meter_readings as unknown as MeterJ
-      const month      = thaiMonth(bill.billing_month as string)
-      const portalUrl  = buildBillPortalUrl(bill.id, lineConfig.liffId, lineConfig.appUrl)
-      const roomNumber = room?.room_number ?? '—'
-      const floor      = room?.floor ?? null
-
-      try {
         if (mode === 'text') {
           const lines = [
             `📋 แจ้งค่าเช่า — ห้อง ${roomNumber} แถวที่ ${roomRow(roomNumber)}`,
@@ -1020,12 +1118,12 @@ export async function sendBulkLineBillNotification(
           lines.push(``, `รวม: ฿${fmt(Number(bill.total_amount))}`)
           lines.push(`ครบกำหนด: ${new Date(bill.due_date as string).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })}`)
           lines.push(``, `🔗 ดูบิล: ${portalUrl}`)
-          await pushMessage(lineUserId, lineConfig.channelAccessToken, [{ type: 'text', text: lines.join('\n') }])
+          await pushMessage(group.lineUserId, activeLineConfig.channelAccessToken, [{ type: 'text', text: lines.join('\n') }])
         } else {
           const flexMsg = buildFlexBubble({
             roomNumber,
             floor,
-            tenantName:  grp.tenantName,
+            tenantName:  group.tenantName,
             month,
             dueDate:     bill.due_date as string,
             rentAmt:     Number(bill.rent_amount),
@@ -1037,18 +1135,81 @@ export async function sendBulkLineBillNotification(
             portalUrl,
             meterRecordedAt: meter?.reading_date ?? meter?.created_at ?? null,
           })
-          await pushMessage(lineUserId, lineConfig.channelAccessToken, [flexMsg])
+          await pushMessage(group.lineUserId, activeLineConfig.channelAccessToken, [flexMsg])
         }
-        sent++
-        auditBulkLineBillSent(bill)
-      } catch {
-        failed++
       }
+      recipients++
+      successful.push({ bills: group.bills, combinedRoomCount: allStmtRooms.length })
+    } catch (error) {
+      failures.push({ ...rooms, reason: bulkLineFailureReason(error), retryable: true })
     }
   }
 
-  const msg = `ส่งสำเร็จ ${sent} ห้อง${failed > 0 ? ` · ส่งไม่ได้ ${failed} ห้อง (ไม่มี LINE)` : ''}`
-  return { success: true, sent, failed, message: msg }
+  // Five concurrent LINE requests stay below Workers' six-connection limit.
+  const groups = [...byLineUser.values()]
+  for (let index = 0; index < groups.length; index += 5) {
+    await Promise.all(groups.slice(index, index + 5).map(sendGroup))
+  }
+
+  const sent = successful.reduce((sum, result) => sum + result.bills.length, 0)
+  const failed = failures.reduce((sum, failure) => sum + failure.roomIds.length, 0)
+
+  // One awaited batch insert replaces two floating subrequests per room.
+  let auditWarning = ''
+  const auditRows = successful.flatMap(({ bills: sentBills, combinedRoomCount }) =>
+    sentBills.map((bill) => {
+      const remaining = billRemaining(
+        bill.total_amount,
+        bill.payments as { amount: unknown }[] | null
+      )
+      return {
+        action: 'line_bill_sent',
+        entity_type: 'bill',
+        entity_id: bill.id,
+        tenant_id: bill.tenant_id,
+        room_id: bill.room_id,
+        new_value: {
+          bill_id: bill.id,
+          room_id: bill.room_id,
+          tenant_id: bill.tenant_id,
+          billing_month: bill.billing_month,
+          remaining,
+          sent_by: user.id,
+          mode,
+          bulk: true,
+          combined_room_count: combinedRoomCount,
+        },
+        description: `ส่ง LINE แจ้งค่าเช่า ${thaiMonth(bill.billing_month as string)} ยอดค้าง ฿${fmt(remaining)}`,
+        created_by: user.id,
+      }
+    })
+  )
+
+  if (auditRows.length > 0) {
+    const { error: auditError } = await supabase.from('audit_logs').insert(auditRows)
+    if (auditError) {
+      console.error('[line-bulk] audit insert failed', {
+        message: auditError.message,
+        sent,
+        recipients,
+      })
+      auditWarning = ' · แต่บันทึกประวัติไม่สำเร็จ'
+    }
+  }
+
+  const message =
+    `ส่งสำเร็จ ${sent} ห้อง (${recipients} LINE)` +
+    (failed > 0 ? ` · ส่งไม่ได้ ${failed} ห้อง` : '') +
+    auditWarning
+
+  return {
+    success: sent > 0,
+    sent,
+    failed,
+    recipients,
+    message,
+    failures,
+  }
 }
 
 export async function sendCheckoutLineNotification(
