@@ -9,7 +9,7 @@ export default async function GeneralSettingsPage() {
   const [{ data: settings }, { data: slipokRow }] = await Promise.all([
     supabase
       .from('settings')
-      .select('id, water_unit_price, electricity_unit_price, late_fee_per_day, billing_day, due_day, trash_fee, reminder_days, reminder_enabled, anomaly_threshold_pct, slipok_branch_id')
+      .select('id, water_unit_price, electricity_unit_price, late_fee_per_day, billing_day, due_day, trash_fee, reminder_days, reminder_enabled, meter_ocr_enabled, anomaly_threshold_pct, slipok_branch_id')
       .eq('id', 1)
       .single(),
     supabase.from('settings').select('slipok_api_key').eq('id', 1).single(),

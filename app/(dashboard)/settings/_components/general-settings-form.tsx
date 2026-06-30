@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { type SettingsFormState, type Settings } from '@/lib/definitions'
-import { Loader2, Droplets, Zap, Calendar, ShieldCheck, Bell } from 'lucide-react'
+import { Loader2, Droplets, Zap, Calendar, ShieldCheck, Bell, ScanLine } from 'lucide-react'
 
 interface Props {
   action: (state: SettingsFormState, formData: FormData) => Promise<SettingsFormState>
@@ -77,6 +77,25 @@ export function GeneralSettingsForm({ action, settings, hasSlipokKey }: Props) {
               defaultValue={settings?.late_fee_per_day ?? 50} />
           </Field>
         </div>
+      </Section>
+
+      {/* ── OCR มิเตอร์ ── */}
+      <Section title="OCR อ่านเลขมิเตอร์" icon={<ScanLine className="size-4 text-cyan-600" />}>
+        <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
+          <input
+            type="checkbox"
+            id="meter_ocr_enabled"
+            name="meter_ocr_enabled"
+            defaultChecked={settings?.meter_ocr_enabled !== false}
+            className="size-4 accent-cyan-600 rounded"
+          />
+          <label htmlFor="meter_ocr_enabled" className="text-sm font-medium text-slate-700 cursor-pointer">
+            เปิดใช้ OCR อ่านเลขมิเตอร์จากรูปอัตโนมัติ
+          </label>
+        </div>
+        <p className="text-xs text-slate-400">
+          เมื่อปิด ยังถ่ายและแนบรูปมิเตอร์ได้ตามปกติ แต่ระบบจะไม่ส่งรูปไปอ่านค่าด้วย Google Vision
+        </p>
       </Section>
 
       {/* ── รอบบิล ── */}

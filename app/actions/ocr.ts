@@ -1,6 +1,7 @@
 'use server'
 
 import { getAuthedUser } from '@/lib/require-admin'
+import { createClient } from '@/lib/supabase/server'
 
 export interface MeterOcrResult {
   value: number | null
@@ -86,6 +87,20 @@ function extractMeterValue(text: string): number | null {
 export async function readMeterOCR(formData: FormData): Promise<MeterOcrResult> {
   if (!(await getAuthedUser())) {
     return { value: null, rawText: '', error: 'กรุณายืนยันตัวตน 2 ชั้นก่อนใช้งาน OCR' }
+  }
+
+  const supabase = await createClient()
+  const { data: settings, error: settingsError } = await supabase
+    .from('settings')
+    .select('meter_ocr_enabled')
+    .eq('id', 1)
+    .single()
+
+  if (settingsError) {
+    return { value: null, rawText: '', error: 'ตรวจสอบสถานะ OCR ไม่สำเร็จ' }
+  }
+  if (settings?.meter_ocr_enabled === false) {
+    return { value: null, rawText: '', error: 'ระบบ OCR ถูกปิดอยู่ในการตั้งค่า' }
   }
 
   const saJson = process.env.GOOGLE_CLOUD_SERVICE_ACCOUNT_JSON

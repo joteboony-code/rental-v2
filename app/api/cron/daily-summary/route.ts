@@ -126,23 +126,55 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  const dueTodayCount = (dueToday ?? []).length
+  const slipCount = pendingSlipCount ?? 0
+  const repairCount = openRepairCount ?? 0
+  const expiringContractCount = (expiringContracts ?? []).length
+  const promisesTodayCount = (promisesToday ?? []).length
+
+  if (unpaidCount === 0) {
+    return NextResponse.json({
+      ok: true,
+      skipped: 'no unpaid bills',
+      unpaidCount,
+      totalOwed,
+      dueToday: dueTodayCount,
+      pendingSlips: slipCount,
+      openRepairs: repairCount,
+      expiringContracts: expiringContractCount,
+    })
+  }
+
   const lines: string[] = [
     '📌 สรุปประจำวัน',
     `🗓️ ${thaiDate(new Date())}`,
     SEP,
-    `💰 ค้างชำระ: ${unpaidCount} บิล รวม ${fmt(totalOwed)} บาท`,
-    ...roomLines,
-    `📅 ครบกำหนดวันนี้: ${(dueToday ?? []).length} บิล`,
-    `📥 สลิปรอตรวจ: ${pendingSlipCount ?? 0} รายการ`,
-    `🔧 แจ้งซ่อมค้าง: ${openRepairCount ?? 0} งาน`,
-    `📄 สัญญาใกล้หมดอายุ: ${(expiringContracts ?? []).length} ห้อง`,
   ]
 
-  if ((promisesToday ?? []).length > 0) {
+  lines.push(`💰 ค้างชำระ: ${unpaidCount} บิล รวม ${fmt(totalOwed)} บาท`)
+  lines.push(...roomLines)
+
+  if (dueTodayCount > 0) {
+    lines.push(`📅 ครบกำหนดวันนี้: ${dueTodayCount} บิล`)
+  }
+
+  if (slipCount > 0) {
+    lines.push(`📥 สลิปรอตรวจ: ${slipCount} รายการ`)
+  }
+
+  if (repairCount > 0) {
+    lines.push(`🔧 แจ้งซ่อมค้าง: ${repairCount} งาน`)
+  }
+
+  if (expiringContractCount > 0) {
+    lines.push(`📄 สัญญาใกล้หมดอายุ: ${expiringContractCount} ห้อง`)
+  }
+
+  if (promisesTodayCount > 0) {
     const rooms = (promisesToday ?? [])
       .map((p) => (p.rooms as unknown as { room_number: string } | null)?.room_number)
       .filter(Boolean).join(', ')
-    lines.push(`🤝 นัดจ่ายวันนี้: ${(promisesToday ?? []).length} ห้อง (${rooms})`)
+    lines.push(`🤝 นัดจ่ายวันนี้: ${promisesTodayCount} ห้อง (${rooms})`)
   }
 
   // แจ้งเตือนต่ออายุ SlipOK ทุกวันที่ 20
@@ -153,7 +185,7 @@ export async function GET(req: NextRequest) {
   }
 
   const reviewUrl =
-    lineConfig?.appUrl && (pendingSlipCount ?? 0) > 0
+    lineConfig?.appUrl && slipCount > 0
       ? `${lineConfig.appUrl}/payment-reviews`
       : null
 
@@ -181,9 +213,9 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     ok: true,
     unpaidCount, totalOwed,
-    dueToday: (dueToday ?? []).length,
-    pendingSlips: pendingSlipCount ?? 0,
-    openRepairs: openRepairCount ?? 0,
-    expiringContracts: (expiringContracts ?? []).length,
+    dueToday: dueTodayCount,
+    pendingSlips: slipCount,
+    openRepairs: repairCount,
+    expiringContracts: expiringContractCount,
   })
 }

@@ -35,6 +35,7 @@ interface Props {
   waterRate:          number
   electricityRate:    number
   anomalyThreshold:   number   // % increase to flag
+  ocrEnabled:          boolean
 }
 
 /** Pro-rated rent — ต้องตรงกับฝั่ง server (app/actions/bills.ts):
@@ -77,7 +78,7 @@ type RoomPhotos = { water: PhotoSlot; elec: PhotoSlot }
 type OcrSlotState = 'idle' | 'reading' | 'done' | 'failed'
 type RoomOcrState = { water: OcrSlotState; elec: OcrSlotState }
 
-export function MeterForm({ rooms, billingMonth, waterRate, electricityRate, anomalyThreshold }: Props) {
+export function MeterForm({ rooms, billingMonth, waterRate, electricityRate, anomalyThreshold, ocrEnabled }: Props) {
   const [, startTransition] = useTransition()
   const fileRefs = useRef<Record<string, { water: HTMLInputElement | null; elec: HTMLInputElement | null }>>({})
 
@@ -114,7 +115,9 @@ export function MeterForm({ rooms, billingMonth, waterRate, electricityRate, ano
       [roomId]: { ...prev[roomId], [slot]: { file: compressed, preview, existing: prev[roomId]?.[slot]?.existing ?? null } },
     }))
 
-    // OCR: read meter value automatically
+    // เก็บรูปหลักฐานได้เสมอ แต่เรียก OCR เฉพาะเมื่อเปิดใช้งาน
+    if (!ocrEnabled) return
+
     setOcrState(prev => ({
       ...prev,
       [roomId]: { ...(prev[roomId] ?? { water: 'idle', elec: 'idle' }), [slot]: 'reading' },

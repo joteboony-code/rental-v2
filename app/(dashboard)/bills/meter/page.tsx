@@ -19,12 +19,14 @@ export default async function MeterReadingPage({ searchParams }: Props) {
 
   const { data: settings } = await supabase
     .from('settings')
-    .select('water_unit_price, electricity_unit_price')
+    .select('water_unit_price, electricity_unit_price, anomaly_threshold_pct, meter_ocr_enabled')
     .eq('id', 1)
     .single()
 
   const waterRate       = Number(settings?.water_unit_price       ?? 18)
   const electricityRate = Number(settings?.electricity_unit_price  ?? 8)
+  const anomalyThreshold = Number(settings?.anomaly_threshold_pct ?? 50)
+  const ocrEnabled = settings?.meter_ocr_enabled !== false
 
   const { data: contracts } = await supabase
     .from('contracts')
@@ -61,14 +63,6 @@ export default async function MeterReadingPage({ searchParams }: Props) {
 
   const prevMonthDate = new Date(parseInt(yearStr), parseInt(monthStr) - 2, 1)
   const prevBillingMonth = `${prevMonthDate.getFullYear()}-${String(prevMonthDate.getMonth() + 1).padStart(2, '0')}-01`
-
-  // Also fetch anomaly threshold from settings
-  const { data: settingsForAnomaly } = await supabase
-    .from('settings')
-    .select('anomaly_threshold_pct')
-    .eq('id', 1)
-    .single()
-  const anomalyThreshold = Number(settingsForAnomaly?.anomaly_threshold_pct ?? 50)
 
   const { data: prevReadings } = await supabase
     .from('meter_readings')
@@ -187,6 +181,7 @@ export default async function MeterReadingPage({ searchParams }: Props) {
           waterRate={waterRate}
           electricityRate={electricityRate}
           anomalyThreshold={anomalyThreshold}
+          ocrEnabled={ocrEnabled}
         />
       </div>
     </div>

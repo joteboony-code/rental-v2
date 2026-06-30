@@ -261,6 +261,7 @@ export const SettingsSchema = z.object({
   trash_fee:                    z.coerce.number().min(0).default(50),
   reminder_days:                z.string().optional().default('5,10'),
   reminder_enabled:             z.boolean().default(true),
+  meter_ocr_enabled:            z.boolean().default(true),
   anomaly_threshold_pct:        z.coerce.number().int().min(10).max(500).default(50),
   slipok_branch_id:             z.string().optional().default(''),
   owner_name:                   z.string().optional().default(''),
@@ -315,6 +316,7 @@ export type Settings = {
   current_billing_month:          string | null
   reminder_days:                  string    // "5,10" format
   reminder_enabled:               boolean
+  meter_ocr_enabled:              boolean
   anomaly_threshold_pct:          number    // % increase to flag as anomaly
   slipok_branch_id:               string | null
   bank_accounts_text:             string | null

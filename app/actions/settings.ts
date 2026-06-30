@@ -40,6 +40,7 @@ export async function updateSettings(
     trash_fee:                  formData.get('trash_fee'),
     reminder_days:              formData.get('reminder_days'),
     reminder_enabled:           formData.get('reminder_enabled') === 'on',
+    meter_ocr_enabled:          formData.get('meter_ocr_enabled') === 'on',
     anomaly_threshold_pct:      formData.get('anomaly_threshold_pct'),
     slipok_branch_id:           formData.get('slipok_branch_id'),
     bank_accounts_text:         formData.get('bank_accounts_text'),
@@ -239,6 +240,7 @@ export async function updateGeneralSettings(
     trash_fee:              formData.get('trash_fee'),
     reminder_days:          formData.get('reminder_days'),
     reminder_enabled:       formData.get('reminder_enabled') === 'on',
+    meter_ocr_enabled:      formData.get('meter_ocr_enabled') === 'on',
     anomaly_threshold_pct:  formData.get('anomaly_threshold_pct'),
     slipok_branch_id:       formData.get('slipok_branch_id'),
   }
