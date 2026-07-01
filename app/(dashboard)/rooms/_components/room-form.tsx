@@ -195,7 +195,7 @@ export function RoomForm({ action, room, submitLabel = 'บันทึก', ten
       <div className="rounded-xl border border-violet-100 bg-violet-50/60 p-4 space-y-3">
         <div>
           <p className="text-sm font-semibold text-violet-800">ข้อมูลการจอง</p>
-          <p className="text-xs text-violet-500">กรอกเมื่อเลือกสถานะ "จอง" เพื่อเก็บข้อมูลผู้สนใจเช่า</p>
+          <p className="text-xs text-violet-500">กรอกเมื่อเลือกสถานะ &quot;จอง&quot; เพื่อเก็บข้อมูลผู้สนใจเช่า</p>
         </div>
 
         {/* hidden field เก็บ tenant id */}

@@ -4,6 +4,7 @@ import { useActionState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
 import { createExpense } from '@/app/actions/expenses'
+import { bangkokDateKey } from '@/lib/date-utils'
 
 type Room = { id: string; room_number: string }
 
@@ -47,7 +48,7 @@ export function ExpenseForm({ rooms }: { rooms: Room[] }) {
     }
   }, [state, router])
 
-  const today = new Date().toISOString().slice(0, 10)
+  const today = bangkokDateKey()
 
   return (
     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">

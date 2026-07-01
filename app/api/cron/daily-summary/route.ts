@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import { getLineMessagingConfig } from '@/lib/line-integration'
 import { notifyOwner } from '@/lib/notify-owner'
+import { bangkokDateKey } from '@/lib/date-utils'
 
 function isAuthorized(req: NextRequest) {
   const secret = process.env.CRON_SECRET
@@ -19,25 +20,13 @@ function thaiDate(d: Date) {
   return d.toLocaleDateString('th-TH', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
 }
 
-async function pushMessage(to: string, token: string, messages: object[]) {
-  const res = await fetch('https://api.line.me/v2/bot/message/push', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ to, messages }),
-  })
-  if (!res.ok) {
-    const body = await res.text().catch(() => '')
-    throw new Error(`LINE API ${res.status}: ${body}`)
-  }
-}
-
 export async function GET(req: NextRequest) {
   if (!isAuthorized(req)) return NextResponse.json({ ok: false }, { status: 401 })
 
   const supabase = createServiceClient()
   const lineConfig = await getLineMessagingConfig()
 
-  const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' }) // YYYY-MM-DD
+  const todayStr = bangkokDateKey()
 
   // Guard: ป้องกันส่งซ้ำในวันเดิม
   const { data: alreadySent } = await supabase
@@ -53,7 +42,7 @@ export async function GET(req: NextRequest) {
 
   const today = todayStr
   const in30 = new Date(); in30.setDate(in30.getDate() + 30)
-  const in30Str = in30.toISOString().split('T')[0]
+  const in30Str = bangkokDateKey(in30)
 
   const [
     { data: unpaidBills },

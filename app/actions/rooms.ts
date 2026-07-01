@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { RoomSchema, RoomFormState } from '@/lib/definitions'
 import { getAuthedUser } from '@/lib/require-admin'
+import { bangkokDateKey } from '@/lib/date-utils'
 import { logAudit } from './audit'
 
 async function getOwnerOrThrow() {
@@ -183,7 +184,7 @@ export async function convertReservationToTenant(
     tenantId = newTenant.id
   }
 
-  const today = new Date().toISOString().slice(0, 10)
+  const today = bangkokDateKey()
   const depositPaid = Number(room.reserved_deposit ?? 0) + (additionalDeposit ?? 0)
   const { error: contractError } = await supabase.from('contracts').insert({
     room_id: roomId,

@@ -5,6 +5,8 @@ import { createClient } from '@/lib/supabase/server'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { logAudit } from './audit'
 import { getAuthedUser } from '@/lib/require-admin'
+import { bangkokDateKey } from '@/lib/date-utils'
+import { dueDateForBillingMonth, prorateRent } from '@/lib/billing'
 
 async function uploadMeterPhoto(
   supabase: SupabaseClient,
@@ -22,13 +24,6 @@ async function uploadMeterPhoto(
     .upload(path, buf, { contentType: file.type, upsert: true })
   if (!up) return null
   return supabase.storage.from('meter-photos').getPublicUrl(up.path).data.publicUrl
-}
-
-function getDueDateForBillingMonth(billingMonth: string, dueDay: number) {
-  const [year, month] = billingMonth.split('-').map(Number)
-  const nextYear = month === 12 ? year + 1 : year
-  const nextMonth = month === 12 ? 1 : month + 1
-  return `${nextYear}-${String(nextMonth).padStart(2, '0')}-${String(dueDay).padStart(2, '0')}`
 }
 
 // ─── Save Meter Readings + Generate Bills ────────────────────
@@ -55,7 +50,7 @@ export async function saveMeterAndGenerateBills(
   const trash_fee        = Number(settings?.trash_fee               ?? 50)
 
   // A bill for a billing month is always due on the configured day of the following month.
-  const due_date = getDueDateForBillingMonth(billing_month, due_day)
+  const due_date = dueDateForBillingMonth(billing_month, due_day)
 
   const roomIds = formData.getAll('room_ids') as string[]
   if (roomIds.length === 0) return { success: false, message: 'ไม่มีห้องที่ต้องออกบิล' }
@@ -110,31 +105,6 @@ export async function saveMeterAndGenerateBills(
       elecImgFile  ? uploadMeterPhoto(supabase, elecImgFile,  roomId, billing_month, 'electricity') : Promise.resolve(null),
     ])
 
-    // Upsert meter reading
-    const meterPayload: Record<string, unknown> = {
-      room_id: roomId,
-      billing_month,
-      water_prev,
-      water_curr,
-      electricity_prev,
-      electricity_curr,
-      recorded_by: authedUser.id,
-      reading_date: new Date().toISOString().split('T')[0],
-    }
-    if (water_image_url)       meterPayload.water_image_url       = water_image_url
-    if (electricity_image_url) meterPayload.electricity_image_url = electricity_image_url
-
-    const { data: meter, error: meterError } = await supabase
-      .from('meter_readings')
-      .upsert(meterPayload, { onConflict: 'room_id,billing_month' })
-      .select('id')
-      .single()
-
-    if (meterError || !meter) {
-      errors.push(`บันทึกมิเตอร์ผิดพลาด: ${meterError?.message ?? 'unknown'}`)
-      continue
-    }
-
     const water_amount       = water_units * water_rate
     const electricity_amount = electricity_units * electricity_rate
     const wifi_amount        = Number(wifiMap[roomId] ?? 0)
@@ -142,39 +112,30 @@ export async function saveMeterAndGenerateBills(
 
     // Pro-rated rent: if first billing month, charge by days occupied / actual days in month
     const start_date  = formData.get(`room_${roomId}_start_date`) as string | null
-    let rent_amount   = rent
-    if (start_date && start_date.slice(0, 7) === billing_month.slice(0, 7)) {
-      const [sy, sm] = billing_month.split('-')
-      const startDay    = parseInt((start_date.split('-')[2]) ?? '1')
-      const daysInMonth = new Date(parseInt(sy), parseInt(sm), 0).getDate()
-      const daysOccupied = daysInMonth - startDay + 1
-      if (startDay > 1) {
-        rent_amount = Math.round(rent * daysOccupied / daysInMonth)
-      }
-    }
+    const rent_amount = prorateRent(rent, billing_month, start_date)
 
     const total_amount = rent_amount + water_amount + electricity_amount + wifi_amount + trash_amount
 
-    // Upsert bill
-    const { error: billError } = await supabase.from('bills').upsert(
-      {
-        contract_id,
-        room_id: roomId,
-        tenant_id,
-        meter_reading_id: meter.id,
-        billing_month,
-        due_date,
-        rent_amount: rent_amount,
-        water_amount,
-        electricity_amount,
-        wifi_amount,
-        trash_amount,
-        other_amount: 0,
-        total_amount,
-        status: 'pending',
-      },
-      { onConflict: 'contract_id,billing_month' }
-    )
+    const { error: billError } = await supabase.rpc('admin_upsert_meter_and_bill', {
+      p_room_id: roomId,
+      p_contract_id: contract_id,
+      p_tenant_id: tenant_id,
+      p_billing_month: billing_month,
+      p_due_date: due_date,
+      p_water_prev: water_prev,
+      p_water_curr: water_curr,
+      p_electricity_prev: electricity_prev,
+      p_electricity_curr: electricity_curr,
+      p_reading_date: bangkokDateKey(),
+      p_water_image_url: water_image_url,
+      p_electricity_image_url: electricity_image_url,
+      p_rent_amount: rent_amount,
+      p_water_amount: water_amount,
+      p_electricity_amount: electricity_amount,
+      p_wifi_amount: wifi_amount,
+      p_trash_amount: trash_amount,
+      p_total_amount: total_amount,
+    })
 
     if (billError) {
       errors.push(`ออกบิลผิดพลาด: ${billError.message}`)
@@ -250,21 +211,12 @@ export async function updateBill(
   const electricity_amount = electricity_units * electricity_rate
   const total_amount = rent_amount + water_amount + electricity_amount + wifi_amount + trash_amount + other_amount
 
-  // อัปเดตเลขมิเตอร์ (units เป็น generated column — set แค่ prev/curr)
-  if (bill.meter_reading_id) {
-    const { error: meterError } = await supabase
-      .from('meter_readings')
-      .update({ water_prev, water_curr, electricity_prev, electricity_curr })
-      .eq('id', bill.meter_reading_id)
-    if (meterError) return { success: false, message: `อัปเดตมิเตอร์ผิดพลาด: ${meterError.message}` }
-  }
-
   // คิดสถานะใหม่ตามยอดที่ชำระแล้ว (ยกเว้นบิลที่ยกเลิก)
   let status = bill.status as string
   if (status !== 'cancelled') {
     const { data: payments } = await supabase.from('payments').select('amount').eq('bill_id', billId)
     const totalPaid = (payments ?? []).reduce((s, p) => s + Number(p.amount), 0)
-    const today = new Date().toISOString().split('T')[0]
+    const today = bangkokDateKey()
     if (totalPaid >= total_amount && total_amount > 0) status = 'paid'
     else if (bill.due_date < today) status = 'overdue'
     else status = 'pending'
@@ -282,10 +234,22 @@ export async function updateBill(
     status,
   }
 
-  const { error } = await supabase
-    .from('bills')
-    .update(newBillValue)
-    .eq('id', billId)
+  const { error } = await supabase.rpc('admin_update_bill', {
+    p_bill_id: billId,
+    p_water_prev: water_prev,
+    p_water_curr: water_curr,
+    p_electricity_prev: electricity_prev,
+    p_electricity_curr: electricity_curr,
+    p_rent_amount: rent_amount,
+    p_water_amount: water_amount,
+    p_electricity_amount: electricity_amount,
+    p_wifi_amount: wifi_amount,
+    p_trash_amount: trash_amount,
+    p_other_amount: other_amount,
+    p_other_note: other_note,
+    p_total_amount: total_amount,
+    p_status: status,
+  })
 
   if (error) return { success: false, message: error.message }
 
@@ -316,11 +280,7 @@ export async function deleteBill(billId: string): Promise<{ success: boolean; me
     .eq('id', billId)
     .single()
 
-  // ลบประวัติชำระก่อน (FK payments → bills)
-  const { error: payErr } = await supabase.from('payments').delete().eq('bill_id', billId)
-  if (payErr) return { success: false, message: `ลบประวัติชำระไม่สำเร็จ: ${payErr.message}` }
-
-  const { error } = await supabase.from('bills').delete().eq('id', billId)
+  const { error } = await supabase.rpc('admin_delete_bill', { p_bill_id: billId })
   if (error) return { success: false, message: error.message }
 
   logAudit({
@@ -386,7 +346,7 @@ export async function markBillPaid(billId: string): Promise<{ success: boolean; 
 export async function markOverdueBills(): Promise<{ success: boolean; message: string }> {
   if (!(await getAuthedUser())) return { success: false, message: 'ไม่มีสิทธิ์ใช้งาน' }
   const supabase = await createClient()
-  const today = new Date().toISOString().split('T')[0]
+  const today = bangkokDateKey()
 
   const { error, count } = await supabase
     .from('bills')

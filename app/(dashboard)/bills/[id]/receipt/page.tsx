@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { ChevronLeft } from 'lucide-react'
 import { PrintReceiptButton } from './_components/print-receipt-button'
+import { createSignedStorageUrl } from '@/lib/storage-urls'
 
 export default async function ReceiptPage({
   params,
@@ -31,6 +32,14 @@ export default async function ReceiptPage({
   ])
 
   if (!bill) notFound()
+  if (settings?.owner_signature_url) {
+    settings.owner_signature_url = await createSignedStorageUrl(
+      supabase,
+      'tenant-documents',
+      settings.owner_signature_url,
+      900
+    )
+  }
 
   type RoomJoin   = { room_number: string; floor: number | null }
   type TenantJoin = { full_name: string; phone: string | null }

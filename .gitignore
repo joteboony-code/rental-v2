@@ -44,6 +44,12 @@ next-env.d.ts
 .open-next/
 .wrangler/
 
+# Android local/build artifacts
+android/.gradle/
+android/.idea/
+android/**/build/
+android/local.properties
+
 # Supabase CLI local artifacts
 supabase/.temp/
 supabase/.branches/

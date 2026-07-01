@@ -36,7 +36,6 @@ const statusLabel: Record<string, string> = {
 
 export function TenantPortal({ liffId }: TenantPortalProps) {
   const [scriptReady, setScriptReady]       = useState(false)
-  const [lineUserId, setLineUserId]         = useState('')
   const [linePictureUrl, setLinePictureUrl] = useState('')
   const [lineDisplayName, setLineDisplayName] = useState('')
   const [portalToken, setPortalToken]       = useState('')
@@ -80,7 +79,6 @@ export function TenantPortal({ liffId }: TenantPortalProps) {
         if (!liff.isLoggedIn()) { setStatus('กำลังเข้าสู่ระบบ LINE'); liff.login({ redirectUri: window.location.href }); return }
         const [profile, idToken] = await Promise.all([liff.getProfile(), Promise.resolve(liff.getIDToken())])
         if (cancelled) return
-        setLineUserId(profile.userId)
         setLinePictureUrl(profile.pictureUrl ?? '')
         setLineDisplayName(profile.displayName ?? '')
         setStatus('กำลังยืนยันตัวตน...')

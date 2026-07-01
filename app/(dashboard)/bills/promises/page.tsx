@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { ChevronLeft, CalendarClock, AlertTriangle, Clock } from 'lucide-react'
 import { CancelPromiseButton } from './_components/cancel-promise-button'
+import { bangkokDateKey } from '@/lib/date-utils'
 
 const dateFmt = (s: string) =>
   new Date(s).toLocaleDateString('th-TH', {
@@ -36,7 +37,7 @@ type PromiseRow = {
 
 export default async function PromisesPage() {
   const supabase = await createClient()
-  const today = new Date().toISOString().slice(0, 10)
+  const today = bangkokDateKey()
 
   const { data: rawPromises } = await supabase
     .from('payment_promises')

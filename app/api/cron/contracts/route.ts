@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import { notifyOwner } from '@/lib/notify-owner'
+import { bangkokDateKey } from '@/lib/date-utils'
 
 function isAuthorized(req: NextRequest) {
   const secret = process.env.CRON_SECRET
@@ -16,10 +17,10 @@ export async function GET(req: NextRequest) {
   const supabase = createServiceClient()
 
   const today         = new Date()
-  const todayStr      = today.toISOString().split('T')[0]
+  const todayStr      = bangkokDateKey(today)
   const in30          = new Date(today)
   in30.setDate(in30.getDate() + 30)
-  const in30Str       = in30.toISOString().split('T')[0]
+  const in30Str       = bangkokDateKey(in30)
 
   const { data: contracts } = await supabase
     .from('contracts')

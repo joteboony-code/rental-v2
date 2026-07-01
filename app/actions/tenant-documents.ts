@@ -1,7 +1,9 @@
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/service'
 import { type DocumentType, type TenantDocument } from '@/lib/tenant-documents'
+import { getAuthedUser } from '@/lib/require-admin'
+import { createSignedStorageUrl, storageObjectPath } from '@/lib/storage-urls'
 
 const MAX_DOC_SIZE = 10 * 1024 * 1024
 const ALLOWED_DOC_TYPES: Record<string, string> = {
@@ -13,21 +15,31 @@ const ALLOWED_DOC_TYPES: Record<string, string> = {
 const VALID_DOC_TYPES = ['id_card', 'contract', 'room_before', 'deposit_proof', 'other'] as const
 
 export async function getTenantDocuments(tenantId: string): Promise<TenantDocument[]> {
-  const supabase = await createClient()
+  if (!(await getAuthedUser())) return []
+  const supabase = createServiceClient()
   const { data } = await supabase
     .from('tenant_documents')
     .select('*')
     .eq('tenant_id', tenantId)
     .order('created_at', { ascending: false })
-  return (data ?? []) as unknown as TenantDocument[]
+  return Promise.all(
+    ((data ?? []) as unknown as TenantDocument[]).map(async (document) => ({
+      ...document,
+      file_url:
+        (await createSignedStorageUrl(supabase, 'tenant-documents', document.file_url)) ?? '',
+    }))
+  )
 }
 
 export async function uploadTenantDocument(
   tenantId: string,
   formData: FormData
 ): Promise<{ success: boolean; message: string; document?: TenantDocument }> {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getAuthedUser()
+  if (!user) {
+    return { success: false, message: 'Unauthorized' }
+  }
+  const supabase = createServiceClient()
 
   const file = formData.get('file') as File | null
   const rawDocType = String(formData.get('document_type') ?? 'other') || 'other'
@@ -56,8 +68,6 @@ export async function uploadTenantDocument(
     return { success: false, message: `อัพโหลดไม่สำเร็จ: ${uploadError?.message ?? 'unknown error'}` }
   }
 
-  const { data: urlData } = supabase.storage.from('tenant-documents').getPublicUrl(upload.path)
-
   const { data: inserted, error } = await supabase
     .from('tenant_documents')
     .insert({
@@ -65,9 +75,9 @@ export async function uploadTenantDocument(
       room_id:       roomId,
       contract_id:   contractId,
       document_type: documentType,
-      file_url:      urlData.publicUrl,
+      file_url:      upload.path,
       file_name:     file.name,
-      uploaded_by:   user?.id ?? null,
+      uploaded_by:   user.id,
     })
     .select('*')
     .single()
@@ -78,13 +88,20 @@ export async function uploadTenantDocument(
     return { success: false, message: `บันทึกไม่สำเร็จ: ${error.message}` }
   }
 
-  return { success: true, message: 'อัพโหลดเอกสารเรียบร้อยแล้ว', document: inserted as unknown as TenantDocument }
+  const document = inserted as unknown as TenantDocument
+  document.file_url =
+    (await createSignedStorageUrl(supabase, 'tenant-documents', document.file_url)) ?? ''
+
+  return { success: true, message: 'อัพโหลดเอกสารเรียบร้อยแล้ว', document }
 }
 
 export async function deleteTenantDocument(
   documentId: string
 ): Promise<{ success: boolean; message: string }> {
-  const supabase = await createClient()
+  if (!(await getAuthedUser())) {
+    return { success: false, message: 'Unauthorized' }
+  }
+  const supabase = createServiceClient()
 
   const { data: doc } = await supabase
     .from('tenant_documents')
@@ -94,14 +111,8 @@ export async function deleteTenantDocument(
 
   if (!doc) return { success: false, message: 'ไม่พบเอกสารนี้' }
 
-  // ลบไฟล์ออกจาก storage
-  try {
-    const urlObj = new URL(doc.file_url)
-    const parts = urlObj.pathname.split('/tenant-documents/')
-    if (parts[1]) {
-      await supabase.storage.from('tenant-documents').remove([decodeURIComponent(parts[1])])
-    }
-  } catch {}
+  const path = storageObjectPath(doc.file_url, 'tenant-documents')
+  if (path) await supabase.storage.from('tenant-documents').remove([path])
 
   const { error } = await supabase.from('tenant_documents').delete().eq('id', documentId)
   if (error) return { success: false, message: `ลบไม่สำเร็จ: ${error.message}` }

@@ -3,6 +3,7 @@ import { ChevronLeft, QrCode, PenLine } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { PaymentSettingsForm } from '../_components/payment-settings-form'
 import { OwnerSignatureUpload } from '../_components/owner-signature-upload'
+import { createSignedStorageUrl } from '@/lib/storage-urls'
 
 export default async function PaymentSettingsPage() {
   const supabase = await createClient()
@@ -14,6 +15,14 @@ export default async function PaymentSettingsPage() {
       .single(),
     supabase.auth.mfa.listFactors(),
   ])
+  if (settings?.owner_signature_url) {
+    settings.owner_signature_url = await createSignedStorageUrl(
+      supabase,
+      'tenant-documents',
+      settings.owner_signature_url,
+      900
+    )
+  }
   const mfaEnabled = !!factors?.totp?.some((f) => f.status === 'verified')
 
   return (

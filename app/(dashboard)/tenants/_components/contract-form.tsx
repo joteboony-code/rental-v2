@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { type ContractFormState, type Room } from '@/lib/definitions'
 import { Loader2 } from 'lucide-react'
 import { roomRow } from '@/lib/room-utils'
+import { bangkokDateKey } from '@/lib/date-utils'
 
 interface ContractFormProps {
   action: (state: ContractFormState, formData: FormData) => Promise<ContractFormState>
@@ -26,7 +27,7 @@ export function ContractForm({ action, tenantId, availableRooms }: ContractFormP
     if (state?.success) router.refresh()
   }, [state?.success, router])
 
-  const today = new Date().toISOString().split('T')[0]
+  const today = bangkokDateKey()
 
   // เมื่อเลือกห้อง → เติมค่าเช่า + ค่ามัดจำจากห้องให้อัตโนมัติ (แก้ได้)
   function handleRoomChange(e: React.ChangeEvent<HTMLSelectElement>) {

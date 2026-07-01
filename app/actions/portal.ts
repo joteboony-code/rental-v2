@@ -349,25 +349,3 @@ async function notifyOwnerNewRepairFromPortal({
     repairUrl ? { label: 'ดูรายการซ่อม', url: repairUrl } : undefined
   )
 }
-
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-async function notifyOwnerNewRepair(
-  roomId: string,
-  title: string,
-  priority: string,
-  _photoUrl: string | null
-) {
-  const supabase = createServiceClient()
-
-  const { data: room } = await supabase
-    .from('rooms').select('room_number').eq('id', roomId).maybeSingle()
-  const roomNumber = (room as { room_number: string } | null)?.room_number ?? '—'
-
-  const priorityLabel: Record<string, string> = {
-    low: '🟢 ต่ำ', normal: '🟡 ปกติ', high: '🟠 สูง', urgent: '🔴 ด่วนมาก'
-  }
-
-  const text = `🔧 มีแจ้งซ่อมใหม่ครับ\n🏠 ห้อง ${roomNumber}\n📝 ${title}\n⚡ ความเร่งด่วน: ${priorityLabel[priority] ?? priority}`
-
-  await notifyOwner(text, 'repair')
-}

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/service'
+import { bangkokDateKey } from '@/lib/date-utils'
 import { decryptSecret, maybeDecryptSecret } from '@/lib/crypto-secrets'
 import { DEFAULT_DORM_ID } from '@/lib/line-integration'
 import { buildBillPortalUrl } from '@/lib/portal-url'
@@ -56,7 +57,7 @@ function billSortKey(bill: { due_date?: string | null; billing_month: string }) 
 
 function isPastDue(dueDate?: string | null) {
   if (!dueDate) return false
-  return dueDate < new Date().toISOString().slice(0, 10)
+  return dueDate < bangkokDateKey()
 }
 
 // ── savePendingSlip ──────────────────────────────────────────────────────────
@@ -158,19 +159,6 @@ async function reply(replyToken: string, token: string, messages: object[]) {
   if (!res.ok) {
     const detail = await res.text().catch(() => '')
     throw new Error(`LINE reply failed: ${res.status} ${detail}`)
-  }
-}
-
-async function push(to: string | null, token: string, messages: object[]) {
-  if (!to) return
-  const res = await fetch('https://api.line.me/v2/bot/message/push', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ to, messages }),
-  })
-  if (!res.ok) {
-    const detail = await res.text().catch(() => '')
-    throw new Error(`LINE push failed: ${res.status} ${detail}`)
   }
 }
 

@@ -12,6 +12,7 @@ import { LinePairCard } from './_components/line-pair-card'
 import { SendAgreementButton } from './_components/send-agreement-button'
 import { createContract } from '@/app/actions/tenants'
 import { getTenantDocuments } from '@/app/actions/tenant-documents'
+import { createSignedStorageUrl } from '@/lib/storage-urls'
 
 export default async function TenantDetailPage({
   params,
@@ -36,6 +37,17 @@ export default async function TenantDetailPage({
   ])
 
   if (!tenant) notFound()
+
+  await Promise.all(
+    (contracts ?? []).map(async (contract) => {
+      contract.agreement_pdf_url = await createSignedStorageUrl(
+        supabase,
+        'tenant-documents',
+        contract.agreement_pdf_url,
+        900
+      )
+    })
+  )
 
   const documents = await getTenantDocuments(id)
 

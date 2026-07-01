@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { CalendarClock, Loader2, X, CheckCircle, AlertCircle } from 'lucide-react'
+import { bangkokDateKey } from '@/lib/date-utils'
 
 interface Props {
   billId: string
@@ -28,7 +29,7 @@ export function PromiseButton({ billId, tenantId, roomId, remainingAmount, activ
   const [open, setOpen] = useState(false)
   const [result, setResult] = useState<{ success: boolean; message: string } | null>(null)
 
-  const today = new Date().toISOString().slice(0, 10)
+  const today = bangkokDateKey()
   const [promiseDate, setPromiseDate] = useState(today)
   const [amount, setAmount] = useState(remainingAmount > 0 ? String(Math.round(remainingAmount)) : '')
   const [note, setNote] = useState('')

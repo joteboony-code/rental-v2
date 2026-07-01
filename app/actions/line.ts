@@ -8,6 +8,7 @@ import { getLineMessagingConfig } from '@/lib/line-integration'
 import { buildBillPortalUrl, buildTenantPortalUrl } from '@/lib/portal-url'
 import { getAuthedUser } from '@/lib/require-admin'
 import { logAudit } from './audit'
+import { bangkokDateKey } from '@/lib/date-utils'
 
 // ── helpers ──────────────────────────────────────────────────────────
 function thaiMonth(dateStr: string) {
@@ -256,7 +257,7 @@ function buildRoomStatements(allBills: StatementBill[]): {
   const grandTotal = rooms.reduce((sum, room) => sum + room.currentTotal + room.overdueTotal, 0)
   const earliestDueDate =
     rooms.map((room) => room.dueDate).filter(Boolean).sort()[0] ??
-    new Date().toISOString().slice(0, 10)
+    bangkokDateKey()
 
   return { rooms, grandTotal, earliestDueDate }
 }
@@ -1070,7 +1071,7 @@ export async function sendBulkLineBillNotification(
     )
     const allEarliestDue =
       allStmtRooms.map((room) => room.dueDate).filter(Boolean).sort()[0] ??
-      new Date().toISOString().slice(0, 10)
+      bangkokDateKey()
 
     try {
       if (allStmtRooms.length >= 2) {

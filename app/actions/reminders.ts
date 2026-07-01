@@ -7,6 +7,7 @@ import { parseReminderDays } from '@/lib/reminder-utils'
 import { getLineMessagingConfig } from '@/lib/line-integration'
 import { buildBillPortalUrl } from '@/lib/portal-url'
 import { getAuthedUser } from '@/lib/require-admin'
+import { bangkokDateKey } from '@/lib/date-utils'
 import { notifyOwner } from '@/lib/notify-owner'
 
 function fmt(n: number) {
@@ -235,7 +236,7 @@ export async function sendOverdueReminders(
   }
 
   const supabase = createServiceClient()
-  const today    = new Date().toISOString().split('T')[0]
+  const today    = bangkokDateKey()
   const todayThai = thaiDate(today)
 
   const { data: rawBills, error: billsError } = await supabase

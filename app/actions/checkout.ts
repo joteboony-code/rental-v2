@@ -1,6 +1,6 @@
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/service'
 import { getAuthedUser } from '@/lib/require-admin'
 import { logAudit } from './audit'
 
@@ -13,7 +13,8 @@ export async function saveCheckout(data: {
   billIds?:   string[]
 }): Promise<{ success: boolean; message: string }> {
   if (!(await getAuthedUser())) return { success: false, message: 'กรุณายืนยันตัวตน 2 ชั้นก่อนทำรายการ' }
-  const supabase = await createClient()
+  // The RPC is executable by service_role only. Authorization is enforced above.
+  const supabase = createServiceClient()
 
   const { data: result, error } = await supabase.rpc('checkout_tenant', {
     p_contract_id:   data.contractId,

@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react'
 import { snoozeBill, clearSnooze } from '@/app/actions/reminders'
 import { BellOff, Loader2, Check, X } from 'lucide-react'
+import { bangkokDateKey } from '@/lib/date-utils'
 
 interface Props {
   billId:      string
@@ -17,7 +18,7 @@ export function SnoozeButton({ billId, snoozeUntil, snoozeNote }: Props) {
   const [note,    setNote] = useState(snoozeNote ?? '')
   const [msg,     setMsg]  = useState('')
 
-  const today    = new Date().toISOString().slice(0, 10)
+  const today    = bangkokDateKey()
   const isActive = snoozeUntil && snoozeUntil >= today
 
   function save() {

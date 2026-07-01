@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { TenantSchema, ContractSchema, type TenantFormState, type ContractFormState } from '@/lib/definitions'
 import { getAuthedUser } from '@/lib/require-admin'
+import { bangkokDateKey } from '@/lib/date-utils'
 import { logAudit } from './audit'
 
 // ─── Create Tenant ───────────────────────────────────────────
@@ -255,7 +256,7 @@ export async function terminateContract(contractId: string, tenantId: string): P
 
   const { error } = await supabase
     .from('contracts')
-    .update({ status: 'terminated', end_date: new Date().toISOString().split('T')[0] })
+    .update({ status: 'terminated', end_date: bangkokDateKey() })
     .eq('id', contractId)
 
   if (error) return { error: error.message }

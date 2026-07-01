@@ -7,6 +7,7 @@ import { getLineMessagingConfig } from '@/lib/line-integration'
 import { revalidatePath } from 'next/cache'
 import { isRateLimited, getClientIp } from '@/lib/rate-limit'
 import { notifyOwner } from '@/lib/notify-owner'
+import { bangkokDateKey } from '@/lib/date-utils'
 
 export type SubmitRegistrationResult = {
   success: boolean
@@ -120,7 +121,7 @@ async function doApprove(opts: {
   // สร้าง contract ใหม่เฉพาะเมื่อห้องยังไม่มีผู้เช่า
   // ถ้า skipContract = true แปลว่าผู้เช่าเดิมแค่เพิ่ม LINE/เบอร์ → อัปเดต tenant เท่านั้น ไม่แตะ contract/ห้อง
   if (!opts.skipContract) {
-    const startDate = opts.moveInDate ?? new Date().toISOString().split('T')[0]
+    const startDate = opts.moveInDate ?? bangkokDateKey()
     const { error: contractErr } = await supabase.from('contracts').insert({
       room_id: opts.roomId,
       tenant_id: tenantId,

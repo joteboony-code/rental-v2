@@ -44,8 +44,8 @@ export default async function PortalPage({
   const sp = await searchParams
   const token = typeof sp.t === 'string' ? sp.t : ''
 
-  // If no token OR invalid token, show minimal page without PII
   const hasValidToken = token ? verifyBillToken(billId, token) : false
+  if (!hasValidToken) notFound()
 
   const supabase = createServiceClient()
 

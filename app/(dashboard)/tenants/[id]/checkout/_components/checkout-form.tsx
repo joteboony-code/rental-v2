@@ -12,6 +12,7 @@ import {
   MessageCircle, Loader2, Check, AlertCircle,
   CheckCircle, Lock, Unlock,
 } from 'lucide-react'
+import { bangkokDateKey } from '@/lib/date-utils'
 
 interface UnpaidBill {
   id:            string
@@ -39,7 +40,7 @@ interface Props {
 }
 
 const fmt = (n: number) => n.toLocaleString('th-TH', { minimumFractionDigits: 2 })
-const today = () => new Date().toISOString().slice(0, 10)
+const today = () => bangkokDateKey()
 
 export function CheckoutForm({
   tenantId, tenantName, lineUserId,

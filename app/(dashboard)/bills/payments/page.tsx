@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { ChevronLeft, Wallet, Receipt, ExternalLink, CreditCard, Smartphone, Banknote, HelpCircle } from 'lucide-react'
+import { bangkokDateKey } from '@/lib/date-utils'
 
 const fmt = (n: number) => n.toLocaleString('th-TH', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
 
@@ -76,7 +77,7 @@ export default async function PaymentHistoryPage({
 
   // Stats
   const totalAmount   = filtered.reduce((s, p) => s + Number(p.amount), 0)
-  const thisMonth     = new Date().toISOString().slice(0, 7)
+  const thisMonth     = bangkokDateKey().slice(0, 7)
   const thisMonthAmt  = payments
     .filter((p) => p.bill?.billing_month?.slice(0, 7) === thisMonth)
     .reduce((s, p) => s + Number(p.amount), 0)

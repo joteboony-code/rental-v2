@@ -4,6 +4,7 @@ import android.Manifest
 import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.pm.ApplicationInfo
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.net.ConnectivityManager
@@ -62,14 +63,18 @@ class MainActivity : AppCompatActivity() {
 
     private val cameraPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
-    ) { }
+    ) { granted ->
+        launchImageChooser(includeCamera = granted)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // จับ crash ที่เกิดนอก onCreate (เช่นใน WebView) แล้วแสดงบนหน้าจอ
-        Thread.setDefaultUncaughtExceptionHandler { _, throwable ->
-            runOnUiThread { showCrashScreen(throwable) }
+        // Stack traces may contain implementation details; expose them in debug builds only.
+        if ((applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
+            Thread.setDefaultUncaughtExceptionHandler { _, throwable ->
+                runOnUiThread { showCrashScreen(throwable) }
+            }
         }
 
         try {
@@ -110,7 +115,7 @@ class MainActivity : AppCompatActivity() {
         webView.settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
-            allowFileAccess = true
+            allowFileAccess = false
             allowContentAccess = true
             loadWithOverviewMode = true
             useWideViewPort = true
@@ -138,10 +143,10 @@ class MainActivity : AppCompatActivity() {
                 view: WebView,
                 request: WebResourceRequest
             ): Boolean {
-                val url = request.url.toString()
-                if (!url.startsWith("https://rental-v2.joteboony.workers.dev")) {
+                val url = request.url
+                if (!isTrustedOrigin(url)) {
                     try {
-                        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                        startActivity(Intent(Intent.ACTION_VIEW, url))
                     } catch (_: Exception) {}
                     return true
                 }
@@ -158,46 +163,65 @@ class MainActivity : AppCompatActivity() {
                 filePathCallback?.onReceiveValue(null)
                 filePathCallback = callback
 
-                var cameraIntent: Intent? = null
-                try {
-                    val imageFile = createTempImageFile()
-                    cameraImageUri = FileProvider.getUriForFile(
-                        this@MainActivity,
-                        "${packageName}.fileprovider",
-                        imageFile
-                    )
-                    cameraIntent = Intent(MediaStore.ACTION_IMAGE_CAPTURE).apply {
-                        putExtra(MediaStore.EXTRA_OUTPUT, cameraImageUri)
-                    }
-                } catch (_: Exception) {
-                    cameraImageUri = null
-                }
-
-                val galleryIntent = Intent(Intent.ACTION_GET_CONTENT).apply {
-                    type = "image/*"
-                }
-
-                val chooser = Intent.createChooser(galleryIntent, "เลือกรูปภาพ").apply {
-                    if (cameraIntent != null) {
-                        putExtra(Intent.EXTRA_INITIAL_INTENTS, arrayOf(cameraIntent))
-                    }
-                }
-
                 if (ContextCompat.checkSelfPermission(
                         this@MainActivity, Manifest.permission.CAMERA
                     ) != PackageManager.PERMISSION_GRANTED
                 ) {
                     cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                } else {
+                    launchImageChooser(includeCamera = true)
                 }
-
-                fileChooserLauncher.launch(chooser)
                 return true
             }
 
             override fun onPermissionRequest(request: PermissionRequest) {
-                request.grant(request.resources)
+                val cameraGranted = ContextCompat.checkSelfPermission(
+                    this@MainActivity,
+                    Manifest.permission.CAMERA
+                ) == PackageManager.PERMISSION_GRANTED
+                val cameraOnly = request.resources.all {
+                    it == PermissionRequest.RESOURCE_VIDEO_CAPTURE
+                }
+
+                if (isTrustedOrigin(request.origin) && cameraGranted && cameraOnly) {
+                    request.grant(arrayOf(PermissionRequest.RESOURCE_VIDEO_CAPTURE))
+                } else {
+                    request.deny()
+                }
             }
         }
+    }
+
+    private fun isTrustedOrigin(uri: Uri): Boolean =
+        uri.scheme == "https" && uri.host == Uri.parse(HOME_URL).host
+
+    private fun launchImageChooser(includeCamera: Boolean) {
+        var cameraIntent: Intent? = null
+        if (includeCamera) {
+            try {
+                val imageFile = createTempImageFile()
+                cameraImageUri = FileProvider.getUriForFile(
+                    this,
+                    "${packageName}.fileprovider",
+                    imageFile
+                )
+                cameraIntent = Intent(MediaStore.ACTION_IMAGE_CAPTURE).apply {
+                    putExtra(MediaStore.EXTRA_OUTPUT, cameraImageUri)
+                }
+            } catch (_: Exception) {
+                cameraImageUri = null
+            }
+        }
+
+        val galleryIntent = Intent(Intent.ACTION_GET_CONTENT).apply {
+            type = "image/*"
+        }
+        val chooser = Intent.createChooser(galleryIntent, "เลือกรูปภาพ").apply {
+            if (cameraIntent != null) {
+                putExtra(Intent.EXTRA_INITIAL_INTENTS, arrayOf(cameraIntent))
+            }
+        }
+        fileChooserLauncher.launch(chooser)
     }
 
     private fun setupBackHandler() {

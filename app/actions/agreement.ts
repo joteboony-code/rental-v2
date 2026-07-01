@@ -7,6 +7,7 @@ import { getAuthedUser } from '@/lib/require-admin'
 import { notifyOwner } from '@/lib/notify-owner'
 import { verifyPortalToken } from '@/lib/portal-session'
 import { logAudit } from './audit'
+import { createSignedStorageUrl } from '@/lib/storage-urls'
 
 export type AgreementData = {
   tenant: {
@@ -81,6 +82,15 @@ export async function getSignAgreementData(
     owner_signature_url?: string | null
   }
   const s = settings as SettingsRow | null
+  const [agreementPdfUrl, ownerSignatureUrl] = await Promise.all([
+    createSignedStorageUrl(
+      supabase,
+      'tenant-documents',
+      (contract as { agreement_pdf_url?: string | null }).agreement_pdf_url,
+      3600
+    ),
+    createSignedStorageUrl(supabase, 'tenant-documents', s?.owner_signature_url, 3600),
+  ])
 
   return {
     success: true,
@@ -98,7 +108,7 @@ export async function getSignAgreementData(
         end_date: contract.end_date,
         monthly_rent: Number(contract.monthly_rent),
         deposit_paid: Number(contract.deposit_paid),
-        agreement_pdf_url: (contract as { agreement_pdf_url?: string | null }).agreement_pdf_url ?? null,
+        agreement_pdf_url: agreementPdfUrl,
         signed_at: (contract as { signed_at?: string | null }).signed_at ?? null,
         room: contract.rooms as unknown as { room_number: string; floor: number | null } | null,
       },
@@ -109,7 +119,7 @@ export async function getSignAgreementData(
         owner_name: s?.owner_name || 'นายบุญรัตน์ อาส',
         owner_id_card: s?.owner_id_card ?? null,
         owner_address: s?.owner_address || '58/10 ม.9 ถ.บางนโยม อ.พานทอง จ.ชลบุรี',
-        owner_signature_url: s?.owner_signature_url ?? null,
+        owner_signature_url: ownerSignatureUrl,
       },
     },
   }
@@ -159,12 +169,21 @@ export async function submitSignedAgreement(
     return { success: false, message: `อัพโหลด PDF ไม่สำเร็จ: ${uploadError?.message ?? 'unknown'}` }
   }
 
-  const pdfUrl = supabase.storage.from('tenant-documents').getPublicUrl(upload.path).data.publicUrl
+  const pdfUrl = await createSignedStorageUrl(
+    supabase,
+    'tenant-documents',
+    upload.path,
+    7 * 24 * 60 * 60
+  )
+  if (!pdfUrl) {
+    await supabase.storage.from('tenant-documents').remove([upload.path])
+    return { success: false, message: 'ไม่สามารถสร้างลิงก์ดาวน์โหลด PDF ได้' }
+  }
 
   // บันทึก URL + วันที่เซ็น ใน contracts
   await supabase
     .from('contracts')
-    .update({ agreement_pdf_url: pdfUrl, signed_at: new Date().toISOString() })
+    .update({ agreement_pdf_url: upload.path, signed_at: new Date().toISOString() })
     .eq('id', contractId)
 
   // แจ้ง owner และผู้เช่าทาง LINE
@@ -388,9 +407,10 @@ export async function uploadOwnerSignature(
 
   if (error || !upload) return { success: false, message: `อัพโหลดไม่สำเร็จ: ${error?.message ?? 'unknown'}` }
 
-  const url = supabase.storage.from('tenant-documents').getPublicUrl(upload.path).data.publicUrl
+  const url = await createSignedStorageUrl(supabase, 'tenant-documents', upload.path, 3600)
+  if (!url) return { success: false, message: 'ไม่สามารถสร้างลิงก์ลายเซ็นได้' }
 
-  await supabase.from('settings').update({ owner_signature_url: url }).eq('id', 1)
+  await supabase.from('settings').update({ owner_signature_url: upload.path }).eq('id', 1)
 
   logAudit({
     action: 'settings_update',

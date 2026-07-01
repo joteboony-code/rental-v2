@@ -161,7 +161,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: false, error: lockError.message }, { status: 500 })
   }
 
-  const today = new Date().toISOString().split('T')[0]
+  const today = bangkokDateKey()
   const todayThai = thaiDate(today)
   const bankText = settings.bank_accounts_text ?? ''
 

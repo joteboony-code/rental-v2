@@ -4,6 +4,7 @@ import { useTransition, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Check, X, ChevronRight, ArrowLeft } from 'lucide-react'
 import { clearRoomReservation, convertReservationToTenant } from '@/app/actions/rooms'
+import { bangkokDateKey } from '@/lib/date-utils'
 
 type Props = {
   roomId: string
@@ -15,7 +16,7 @@ export function ReservationActions({ roomId, fullDeposit, reservedDeposit }: Pro
   const [pending, startTransition] = useTransition()
   const router = useRouter()
   const [confirming, setConfirming] = useState(false)
-  const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10))
+  const [startDate, setStartDate] = useState(bangkokDateKey())
   // ยอดมัดจำที่รับแล้วรวม — default = fullDeposit ถ้าตั้งไว้ มิฉะนั้นใช้ยอดจอง
   const [totalDepositPaid, setTotalDepositPaid] = useState(
     String(fullDeposit > 0 ? fullDeposit : reservedDeposit)
