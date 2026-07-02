@@ -67,7 +67,7 @@ export default async function BackupSettingsPage() {
               <h2 className="text-sm font-semibold text-slate-800">Cloudflare R2</h2>
             </div>
             <p className="mt-1 text-xs text-slate-400">
-              สำรองอัตโนมัติทุกวัน เก็บในพื้นที่ Private และเข้ารหัส AES-256-GCM
+              สำรองอัตโนมัติหนึ่งครั้งเมื่อบิลรอบปัจจุบันชำระครบทุกห้อง เก็บในพื้นที่ Private และเข้ารหัส AES-256-GCM
             </p>
           </div>
           <BackupNowButton disabled={!configured || latest?.status === 'running'} />
