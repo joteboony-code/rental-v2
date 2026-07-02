@@ -16,6 +16,7 @@ const worker = {
       '/api/cron/reminders',
       '/api/cron/contracts',
       '/api/cron/daily-summary',
+      '/api/cron/backup',
     ]
 
     ctx.waitUntil(Promise.allSettled(

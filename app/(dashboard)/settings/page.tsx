@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Settings, MessageSquareText, ChevronRight, Zap, QrCode, MessageCircle, ShieldCheck } from 'lucide-react'
+import { Settings, MessageSquareText, ChevronRight, Zap, QrCode, MessageCircle, ShieldCheck, DatabaseBackup } from 'lucide-react'
 
 export default function SettingsPage() {
   const items = [
@@ -37,6 +37,13 @@ export default function SettingsPage() {
       bg: 'bg-indigo-100',
       title: 'ความปลอดภัย',
       desc: '2FA, เปลี่ยนรหัสผ่าน, ออกจากระบบทุกเครื่อง',
+    },
+    {
+      href: '/settings/backup',
+      icon: <DatabaseBackup className="size-5 text-sky-700" />,
+      bg: 'bg-sky-100',
+      title: 'สำรองข้อมูล',
+      desc: 'Backup อัตโนมัติ, สถานะล่าสุด และประวัติย้อนหลัง',
     },
   ] as const
 

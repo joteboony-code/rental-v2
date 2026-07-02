@@ -11,6 +11,10 @@ binding = "ASSETS"
 binding = "WORKER_SELF_REFERENCE"
 service = "rental-v2"
 
+[[r2_buckets]]
+binding = "BACKUP_BUCKET"
+bucket_name = "pananth-rental-backup"
+
 [triggers]
 # 02:00 UTC = 09:00 Thai time (UTC+7)
 crons = ["0 2 * * *"]

@@ -5,9 +5,9 @@ const originalSecret = process.env.PORTAL_SESSION_SECRET
 const originalEncryptionKey = process.env.ENCRYPTION_KEY
 
 afterEach(() => {
-  if (originalSecret === undefined) delete process.env.PORTAL_SESSION_SECRET
+  if (originalSecret === undefined) Reflect.deleteProperty(process.env, 'PORTAL_SESSION_SECRET')
   else process.env.PORTAL_SESSION_SECRET = originalSecret
-  if (originalEncryptionKey === undefined) delete process.env.ENCRYPTION_KEY
+  if (originalEncryptionKey === undefined) Reflect.deleteProperty(process.env, 'ENCRYPTION_KEY')
   else process.env.ENCRYPTION_KEY = originalEncryptionKey
 })
 
@@ -21,8 +21,8 @@ describe('portal session tokens', () => {
   })
 
   it('fails closed when no signing secret exists', () => {
-    delete process.env.PORTAL_SESSION_SECRET
-    delete process.env.ENCRYPTION_KEY
+    Reflect.deleteProperty(process.env, 'PORTAL_SESSION_SECRET')
+    Reflect.deleteProperty(process.env, 'ENCRYPTION_KEY')
     expect(verifyPortalToken('invalid')).toBeNull()
   })
 })
