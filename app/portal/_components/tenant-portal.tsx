@@ -59,13 +59,13 @@ export function TenantPortal({ liffId }: TenantPortalProps) {
     })
   }, [portalToken])
 
-  const loadRepairs = useCallback(async (token = portalToken) => {
+  const loadRepairs = useCallback(async (token = portalToken, roomId = selectedRoomId) => {
     if (!token) return
     setRepairsLoading(true)
-    const result = await getPortalRepairs(token)
+    const result = await getPortalRepairs(token, roomId)
     setRepairsLoading(false)
     if (result.success) setRepairs(result.repairs ?? [])
-  }, [portalToken])
+  }, [portalToken, selectedRoomId])
 
   useEffect(() => {
     if (!liffId || !scriptReady) return
@@ -105,10 +105,10 @@ export function TenantPortal({ liffId }: TenantPortalProps) {
   useEffect(() => {
     if (tab === 'repairs' && repairs === null && portalToken) {
       setTimeout(() => {
-        void loadRepairs(portalToken)
+        void loadRepairs(portalToken, selectedRoomId)
       }, 0)
     }
-  }, [tab, repairs, portalToken, loadRepairs])
+  }, [tab, repairs, portalToken, selectedRoomId, loadRepairs])
 
   const currentBill    = data?.bills[0] ?? null
   const monthlyRent    = data?.contract?.monthly_rent ?? 0
@@ -238,7 +238,7 @@ export function TenantPortal({ liffId }: TenantPortalProps) {
                     <Wrench className="size-4 text-slate-400" />
                     <h2 className="text-sm font-semibold text-slate-800">แจ้งซ่อม / แจ้งปัญหา</h2>
                   </div>
-                  <RepairSubmit portalToken={portalToken} roomId={selectedRoomId} onSuccess={() => loadRepairs(portalToken)} />
+                  <RepairSubmit portalToken={portalToken} roomId={selectedRoomId} onSuccess={() => loadRepairs(portalToken, selectedRoomId)} />
                 </section>
 
                 <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">

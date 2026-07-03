@@ -5,6 +5,7 @@ import { createServiceClient } from '@/lib/supabase/service'
 import { getLineMessagingConfig } from '@/lib/line-integration'
 import { logAudit } from './audit'
 import { getAuthedUser } from '@/lib/require-admin'
+import { revalidatePath } from 'next/cache'
 
 export async function unlinkTenantLine(tenantId: string): Promise<{ success: boolean; message?: string }> {
   if (!(await getAuthedUser())) return { success: false, message: 'ไม่มีสิทธิ์ใช้งาน' }
@@ -18,6 +19,40 @@ export async function unlinkTenantLine(tenantId: string): Promise<{ success: boo
 
   logAudit({ action: 'line_unpair', entityType: 'tenant', entityId: tenantId, tenantId, description: `ยกเลิกจับคู่ LINE` }).catch(() => {})
 
+  return { success: true }
+}
+
+export async function unlinkContractLineRecipient(
+  contractId: string,
+  tenantId: string
+): Promise<{ success: boolean; message?: string }> {
+  if (!(await getAuthedUser())) return { success: false, message: 'ไม่มีสิทธิ์ใช้งาน' }
+  const supabase = createServiceClient()
+  const { data: contract, error } = await supabase
+    .from('contracts')
+    .update({
+      line_recipient_user_id: null,
+      line_recipient_display_name: null,
+      line_recipient_picture_url: null,
+    })
+    .eq('id', contractId)
+    .eq('tenant_id', tenantId)
+    .select('room_id')
+    .maybeSingle()
+
+  if (error) return { success: false, message: error.message }
+  if (!contract) return { success: false, message: 'ไม่พบสัญญา' }
+
+  await logAudit({
+    action: 'line_unpair',
+    entityType: 'contract',
+    entityId: contractId,
+    tenantId,
+    roomId: contract.room_id,
+    description: 'ยกเลิก LINE ผู้รับบิลแยกของสัญญา',
+  })
+  revalidatePath(`/tenants/${tenantId}`)
+  revalidatePath(`/rooms/${contract.room_id}`)
   return { success: true }
 }
 

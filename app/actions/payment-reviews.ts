@@ -8,6 +8,49 @@ import { getAuthedUser } from '@/lib/require-admin'
 
 const VALID_PAYMENT_METHODS = ['cash', 'transfer', 'promptpay'] as const
 type PaymentMethod = typeof VALID_PAYMENT_METHODS[number]
+type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>
+
+async function getAuthorizedContractIds(
+  supabase: SupabaseServerClient,
+  lineUserId: string | null,
+  fallbackTenantId?: string | null
+): Promise<string[]> {
+  const ids = new Set<string>()
+
+  if (lineUserId) {
+    const [{ data: dedicated }, { data: linkedTenants }] = await Promise.all([
+      supabase
+        .from('contracts')
+        .select('id')
+        .eq('status', 'active')
+        .eq('line_recipient_user_id', lineUserId),
+      supabase.from('tenants').select('id').eq('line_user_id', lineUserId),
+    ])
+    for (const contract of dedicated ?? []) ids.add(contract.id)
+
+    const tenantIds = (linkedTenants ?? []).map((tenant) => tenant.id)
+    if (tenantIds.length > 0) {
+      const { data: fallback } = await supabase
+        .from('contracts')
+        .select('id')
+        .in('tenant_id', tenantIds)
+        .eq('status', 'active')
+        .is('line_recipient_user_id', null)
+      for (const contract of fallback ?? []) ids.add(contract.id)
+    }
+  }
+
+  if (ids.size === 0 && fallbackTenantId) {
+    const { data: fallback } = await supabase
+      .from('contracts')
+      .select('id')
+      .eq('tenant_id', fallbackTenantId)
+      .eq('status', 'active')
+    for (const contract of fallback ?? []) ids.add(contract.id)
+  }
+
+  return [...ids]
+}
 function sanitizePaymentMethod(raw: string): PaymentMethod {
   return (VALID_PAYMENT_METHODS as readonly string[]).includes(raw) ? (raw as PaymentMethod) : 'transfer'
 }
@@ -69,18 +112,13 @@ export async function getPendingSlip(id: string): Promise<PendingSlip | null> {
 export async function getTenantOutstandingBills(lineUserId: string | null, fallbackTenantId?: string | null): Promise<OutstandingBill[]> {
   const supabase = await createClient()
 
-  let tenantIds: string[] = []
-  if (lineUserId) {
-    const { data: linked } = await supabase.from('tenants').select('id').eq('line_user_id', lineUserId)
-    tenantIds = (linked ?? []).map((t) => t.id)
-  }
-  if (tenantIds.length === 0 && fallbackTenantId) tenantIds = [fallbackTenantId]
-  if (tenantIds.length === 0) return []
+  const contractIds = await getAuthorizedContractIds(supabase, lineUserId, fallbackTenantId)
+  if (contractIds.length === 0) return []
 
   const { data } = await supabase
     .from('bills')
     .select('id, billing_month, due_date, total_amount, status, rooms(room_number), payments(amount)')
-    .in('tenant_id', tenantIds)
+    .in('contract_id', contractIds)
     .in('status', ['pending', 'overdue'])
     .order('due_date', { ascending: true })
     .order('billing_month', { ascending: true })
@@ -270,17 +308,18 @@ export async function approveSlipOldestFirst(
     }
   }
 
-  // Collect all tenant_ids sharing the same LINE user
-  let tenantIds: string[] = [tenantId]
-  if (lineUserId) {
-    const { data: linked } = await supabase.from('tenants').select('id').eq('line_user_id', lineUserId)
-    if (linked && linked.length > 0) tenantIds = linked.map((t) => t.id)
+  const contractIds = await getAuthorizedContractIds(supabase, lineUserId ?? null, tenantId ?? null)
+  if (contractIds.length === 0) {
+    await supabase.from('pending_slips')
+      .update({ status: 'pending', reviewed_at: null, reviewed_by: null })
+      .eq('id', slipId)
+    return { success: false, message: 'ไม่พบสัญญาที่ LINE นี้มีสิทธิ์ชำระ' }
   }
 
   const { data: bills } = await supabase
     .from('bills')
     .select('id, tenant_id, room_id, total_amount, billing_month, due_date, status, payments(amount)')
-    .in('tenant_id', tenantIds)
+    .in('contract_id', contractIds)
     .in('status', ['pending', 'overdue'])
     .order('due_date', { ascending: true })
     .order('billing_month', { ascending: true })

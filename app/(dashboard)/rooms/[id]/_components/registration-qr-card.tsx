@@ -95,7 +95,7 @@ export function RegistrationQrCard({
               : 'bg-slate-50 text-slate-500 hover:bg-slate-100'
           }`}
         >
-          จับคู่ LINE เดิม
+          LINE ผู้รับบิล
         </button>
       </div>
 
@@ -107,7 +107,7 @@ export function RegistrationQrCard({
               <p className="text-xs text-slate-500">
                 {tab === 'register'
                   ? `ลิงก์ลงทะเบียน ห้อง ${roomNumber}`
-                  : `ลิงก์จับคู่ LINE ห้อง ${roomNumber}`}
+                  : `ลิงก์ตั้งค่า LINE ผู้รับบิล ห้อง ${roomNumber}`}
               </p>
               <p className="text-xs font-mono text-slate-600 break-all bg-slate-50 rounded-lg p-2 leading-relaxed">
                 {activeUrl}
@@ -124,7 +124,7 @@ export function RegistrationQrCard({
           <p className="text-xs text-slate-400">
             {tab === 'register'
               ? 'ให้ผู้เช่าสแกน QR นี้ผ่าน LINE เพื่อกรอกข้อมูลและลงทะเบียนเข้าห้องพัก'
-              : 'สำหรับผู้เช่าปัจจุบันที่มีสัญญาแล้ว สแกนเพื่อผูก LINE กับห้องโดยไม่ต้องรอ approve'}
+              : 'ให้ผู้รับบิลของห้องนี้สแกน ระบบจะแยกเฉพาะ LINE โดยไม่เปลี่ยนผู้เช่า สัญญา มิเตอร์ หรือประวัติการเงิน'}
           </p>
         </>
       ) : (

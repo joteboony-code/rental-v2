@@ -13,6 +13,7 @@ import { EditBillForm } from './_components/edit-bill-form'
 import { DeleteBillButton } from './_components/delete-bill-button'
 import { PromiseButton } from './_components/promise-button'
 import { getActivePromiseForBill } from '@/app/actions/promises'
+import { getEffectiveLineUserId } from '@/lib/line-recipient'
 
 export default async function BillDetailPage({
   params,
@@ -29,6 +30,7 @@ export default async function BillDetailPage({
         *,
         rooms ( room_number, floor ),
         tenants ( full_name, phone, line_user_id ),
+        contracts ( line_recipient_user_id ),
         meter_readings ( water_prev, water_curr, water_units, electricity_prev, electricity_curr, electricity_units, water_image_url, electricity_image_url )
       `)
       .eq('id', id)
@@ -47,10 +49,13 @@ export default async function BillDetailPage({
 
   type RoomJoin   = { room_number: string; floor: number | null }
   type TenantJoin = { full_name: string; phone: string | null; line_user_id: string | null }
+  type ContractJoin = { line_recipient_user_id: string | null }
   type MeterJoin  = { water_prev: number; water_curr: number; water_units: number; electricity_prev: number; electricity_curr: number; electricity_units: number; water_image_url: string | null; electricity_image_url: string | null }
 
   const room   = bill.rooms          as unknown as RoomJoin   | null
   const tenant = bill.tenants        as unknown as TenantJoin | null
+  const contract = bill.contracts    as unknown as ContractJoin | null
+  const lineUserId = getEffectiveLineUserId(contract, tenant)
   const meter  = bill.meter_readings as unknown as MeterJoin  | null
 
   const totalPaid = (payments ?? []).reduce((s, p) => s + Number(p.amount), 0)
@@ -305,11 +310,11 @@ export default async function BillDetailPage({
               <p className="text-xs text-emerald-600 mt-1 font-semibold">
                 ฿{Number(bill.total_amount).toLocaleString('th-TH', { minimumFractionDigits: 2 })}
               </p>
-              {tenant?.line_user_id && (
+              {lineUserId && (
                 <div className="mt-4 flex justify-center">
                   <SendPaymentConfirmedButton
                     billId={id}
-                    hasLineUserId={!!tenant.line_user_id}
+                    hasLineUserId
                   />
                 </div>
               )}
@@ -323,7 +328,7 @@ export default async function BillDetailPage({
             </p>
             <LineNotifyButton
               billId={id}
-              hasLineUserId={!!tenant?.line_user_id}
+              hasLineUserId={!!lineUserId}
               billingMonth={bill.billing_month}
               currentBillingMonth={currentBillingMonth}
               remaining={remaining}

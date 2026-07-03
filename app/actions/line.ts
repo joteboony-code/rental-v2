@@ -9,6 +9,7 @@ import { buildBillPortalUrl, buildTenantPortalUrl } from '@/lib/portal-url'
 import { getAuthedUser } from '@/lib/require-admin'
 import { logAudit } from './audit'
 import { bangkokDateKey } from '@/lib/date-utils'
+import { getEffectiveLineUserId } from '@/lib/line-recipient'
 
 // ── helpers ──────────────────────────────────────────────────────────
 function thaiMonth(dateStr: string) {
@@ -197,6 +198,7 @@ type StatementBill = {
   rooms: { room_number: string; floor: number | null } | null
   meter_readings: { reading_date: string | null; created_at: string } | null
   payments: { amount: number }[] | null
+  contracts?: { line_recipient_user_id: string | null } | null
 }
 
 function buildRoomStatements(allBills: StatementBill[]): {
@@ -275,6 +277,7 @@ async function fetchRoomStatements(supabase: any, tenantId: string): Promise<{
       rent_amount, water_amount, electricity_amount, wifi_amount, trash_amount, other_amount, other_note,
       total_amount,
       rooms ( room_number, floor ),
+      contracts ( line_recipient_user_id ),
       meter_readings ( reading_date, created_at ),
       payments ( amount )
     `)
@@ -282,7 +285,9 @@ async function fetchRoomStatements(supabase: any, tenantId: string): Promise<{
     .in('status', ['pending', 'overdue'])
     .order('billing_month', { ascending: false })
 
-  return buildRoomStatements((rawBills ?? []) as unknown as StatementBill[])
+  const fallbackRecipientBills = ((rawBills ?? []) as unknown as StatementBill[])
+    .filter((bill) => !bill.contracts?.line_recipient_user_id)
+  return buildRoomStatements(fallbackRecipientBills)
 }
 
 function buildCombinedFlexBubble(data: {
@@ -451,6 +456,7 @@ export async function sendLineBillNotification(
       *,
       rooms   ( room_number, floor ),
       tenants ( full_name, line_user_id ),
+      contracts ( line_recipient_user_id ),
       meter_readings ( reading_date, created_at ),
       payments ( amount )
     `)
@@ -461,10 +467,13 @@ export async function sendLineBillNotification(
 
   type RoomJoin   = { room_number: string; floor: number | null }
   type TenantJoin = { full_name: string; line_user_id: string | null }
+  type ContractJoin = { line_recipient_user_id: string | null }
   type MeterJoin  = { reading_date: string | null; created_at: string } | null
 
   const room   = bill.rooms   as unknown as RoomJoin   | null
   const tenant = bill.tenants as unknown as TenantJoin | null
+  const contract = bill.contracts as unknown as ContractJoin | null
+  const lineUserId = getEffectiveLineUserId(contract, tenant)
   const meter  = bill.meter_readings as unknown as MeterJoin
   const remaining = billRemaining(bill.total_amount, bill.payments as { amount: unknown }[] | null)
 
@@ -472,7 +481,7 @@ export async function sendLineBillNotification(
     return { success: false, message: PAID_BILL_NOTIFY_BLOCK_MESSAGE }
   }
 
-  if (!tenant?.line_user_id) {
+  if (!tenant || !lineUserId) {
     return { success: false, message: 'ผู้เช่าไม่มี LINE User ID — กรุณาเพิ่มในข้อมูลผู้เช่า' }
   }
 
@@ -504,16 +513,18 @@ export async function sendLineBillNotification(
   }
 
   const { rooms: allRooms, grandTotal: allTotal, earliestDueDate } =
-    await fetchRoomStatements(supabase, bill.tenant_id as string)
-  if (allRooms.length >= 2) {
+    contract?.line_recipient_user_id
+      ? { rooms: [], grandTotal: 0, earliestDueDate: bangkokDateKey() }
+      : await fetchRoomStatements(supabase, bill.tenant_id as string)
+  if (!contract?.line_recipient_user_id && allRooms.length >= 2) {
     const combinedUrl = buildTenantPortalUrl(lineConfig.liffId, lineConfig.appUrl)
     try {
       if (mode === 'flex') {
-        await pushMessage(tenant.line_user_id, lineConfig.channelAccessToken, [
+        await pushMessage(lineUserId, lineConfig.channelAccessToken, [
           buildCombinedFlexBubble({ tenantName: tenant.full_name, rooms: allRooms, grandTotal: allTotal, earliestDueDate, portalUrl: combinedUrl }),
         ])
       } else {
-        await pushMessage(tenant.line_user_id, lineConfig.channelAccessToken, [{
+        await pushMessage(lineUserId, lineConfig.channelAccessToken, [{
           type: 'text',
           text: buildCombinedTextMessage({
             tenantName: tenant.full_name,
@@ -554,7 +565,7 @@ export async function sendLineBillNotification(
       )
       lines.push(``, `🔗 ดูบิล: ${portalUrl}`)
 
-      await pushMessage(tenant.line_user_id, lineConfig.channelAccessToken, [
+      await pushMessage(lineUserId, lineConfig.channelAccessToken, [
         { type: 'text', text: lines.join('\n') },
       ])
     } else {
@@ -573,7 +584,7 @@ export async function sendLineBillNotification(
         portalUrl,
         meterRecordedAt: meter?.reading_date ?? meter?.created_at ?? null,
       })
-      await pushMessage(tenant.line_user_id, lineConfig.channelAccessToken, [flexMsg])
+      await pushMessage(lineUserId, lineConfig.channelAccessToken, [flexMsg])
     }
 
     await auditLineBillSent()
@@ -593,7 +604,7 @@ export async function sendPaymentConfirmedNotification(
 
   const { data: bill } = await supabase
     .from('bills')
-    .select(`*, rooms ( room_number, floor ), tenants ( full_name, line_user_id )`)
+    .select(`*, rooms ( room_number, floor ), tenants ( full_name, line_user_id ), contracts ( line_recipient_user_id )`)
     .eq('id', billId)
     .single()
 
@@ -601,10 +612,13 @@ export async function sendPaymentConfirmedNotification(
 
   type RoomJoin   = { room_number: string; floor: number | null }
   type TenantJoin = { full_name: string; line_user_id: string | null }
+  type ContractJoin = { line_recipient_user_id: string | null }
   const room   = bill.rooms   as unknown as RoomJoin   | null
   const tenant = bill.tenants as unknown as TenantJoin | null
+  const contract = bill.contracts as unknown as ContractJoin | null
+  const lineUserId = getEffectiveLineUserId(contract, tenant)
 
-  if (!tenant?.line_user_id) return { success: false, message: 'ผู้เช่าไม่มี LINE User ID' }
+  if (!tenant || !lineUserId) return { success: false, message: 'ห้องนี้ไม่มี LINE ผู้รับบิล' }
 
   const lineConfig = await getLineMessagingConfig()
   if (!lineConfig) return { success: false, message: 'ยังไม่ได้ตั้งค่า LINE Channel Access Token' }
@@ -676,7 +690,7 @@ export async function sendPaymentConfirmedNotification(
   }
 
   try {
-    await pushMessage(tenant.line_user_id, lineConfig.channelAccessToken, [flexMsg])
+    await pushMessage(lineUserId, lineConfig.channelAccessToken, [flexMsg])
     return { success: true, message: 'ส่ง LINE ยืนยันชำระแล้วสำเร็จ' }
   } catch (err) {
     return { success: false, message: String(err) }
@@ -825,7 +839,7 @@ export async function sendBroadcast(
   // Build recipient query
   let contractQuery = supabase
     .from('contracts')
-    .select('tenant_id, tenants ( full_name, line_user_id ), rooms ( room_number )')
+    .select('tenant_id, line_recipient_user_id, tenants ( full_name, line_user_id ), rooms ( room_number )')
     .eq('status', 'active')
 
   if (roomIds.length > 0) {
@@ -844,7 +858,7 @@ export async function sendBroadcast(
   for (const c of contracts) {
     type TJ = { full_name: string; line_user_id: string | null }
     const tenant = c.tenants as unknown as TJ | null
-    const lineUserId = tenant?.line_user_id
+    const lineUserId = getEffectiveLineUserId(c, tenant)
     if (!lineUserId) { failed++; continue }
     if (sentTo.has(lineUserId)) continue   // ส่งไปแล้ว (ห้องอื่นของผู้เช่าคนเดียวกัน)
 
@@ -952,6 +966,7 @@ export async function sendBulkLineBillNotification(
       total_amount, due_date, billing_month,
       rooms   ( room_number, floor ),
       tenants ( full_name, line_user_id ),
+      contracts ( line_recipient_user_id ),
       meter_readings ( reading_date, created_at ),
       payments ( amount )
     `)
@@ -983,13 +998,13 @@ export async function sendBulkLineBillNotification(
   const activeLineConfig = lineConfig
 
   type TenantJ = { full_name: string; line_user_id: string | null }
+  type ContractJ = { line_recipient_user_id: string | null }
   type RoomJ   = { room_number: string; floor: number | null }
   type MeterJ  = { reading_date: string | null; created_at: string } | null
   type CurrentBill = (typeof payableBills)[number]
   type LineGroup = {
     lineUserId: string | null
     tenantName: string
-    tenantIds: Set<string>
     bills: CurrentBill[]
   }
 
@@ -998,15 +1013,15 @@ export async function sendBulkLineBillNotification(
 
   for (const bill of payableBills) {
     const tenant     = bill.tenants as unknown as TenantJ | null
-    const lineUserId = tenant?.line_user_id ?? null
+    const contract   = bill.contracts as unknown as ContractJ | null
+    const lineUserId = getEffectiveLineUserId(contract, tenant)
     const tid        = bill.tenant_id as string
     const groupKey   = lineUserId ?? tid
 
     if (!byLineUser.has(groupKey)) {
-      byLineUser.set(groupKey, { lineUserId, tenantName: tenant?.full_name ?? '—', tenantIds: new Set(), bills: [] })
+      byLineUser.set(groupKey, { lineUserId, tenantName: tenant?.full_name ?? '—', bills: [] })
     }
     const grp = byLineUser.get(groupKey)!
-    grp.tenantIds.add(tid)
     grp.bills.push(bill)
     if (tenant?.full_name) grp.tenantName = tenant.full_name
   }
@@ -1020,6 +1035,8 @@ export async function sendBulkLineBillNotification(
       rent_amount, water_amount, electricity_amount, wifi_amount, trash_amount, other_amount, other_note,
       total_amount,
       rooms ( room_number, floor ),
+      tenants ( line_user_id ),
+      contracts ( line_recipient_user_id ),
       meter_readings ( reading_date, created_at ),
       payments ( amount )
     `)
@@ -1029,11 +1046,15 @@ export async function sendBulkLineBillNotification(
 
   if (statementError) return emptyResult(`โหลดรายละเอียดบิลไม่สำเร็จ: ${statementError.message}`)
 
-  const statementsByTenant = new Map<string, StatementBill[]>()
-  for (const row of (statementRows ?? []) as unknown as StatementBill[]) {
-    if (!row.tenant_id) continue
-    if (!statementsByTenant.has(row.tenant_id)) statementsByTenant.set(row.tenant_id, [])
-    statementsByTenant.get(row.tenant_id)!.push(row)
+  type StatementWithRecipient = StatementBill & {
+    tenants?: { line_user_id: string | null } | null
+  }
+  const statementsByRecipient = new Map<string, StatementBill[]>()
+  for (const row of (statementRows ?? []) as unknown as StatementWithRecipient[]) {
+    const recipient = getEffectiveLineUserId(row.contracts, row.tenants)
+    if (!recipient) continue
+    if (!statementsByRecipient.has(recipient)) statementsByRecipient.set(recipient, [])
+    statementsByRecipient.get(recipient)!.push(row)
   }
 
   const failures: BulkLineFailure[] = []
@@ -1056,10 +1077,7 @@ export async function sendBulkLineBillNotification(
       return
     }
 
-    const allStmtRooms: RoomStatement[] = []
-    for (const tenantId of group.tenantIds) {
-      allStmtRooms.push(...buildRoomStatements(statementsByTenant.get(tenantId) ?? []).rooms)
-    }
+    const allStmtRooms = buildRoomStatements(statementsByRecipient.get(group.lineUserId) ?? []).rooms
     allStmtRooms.sort((a, b) => {
       const na = parseInt(a.roomNumber) || 0
       const nb = parseInt(b.roomNumber) || 0

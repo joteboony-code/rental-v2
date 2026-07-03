@@ -7,20 +7,12 @@ async function getAlreadyLinked(roomNumber: string): Promise<boolean> {
   const supabase = createServiceClient()
   const { data: contract } = await supabase
     .from('contracts')
-    .select('tenant_id, rooms!inner(room_number)')
+    .select('line_recipient_user_id, rooms!inner(room_number)')
     .eq('status', 'active')
     .eq('rooms.room_number', roomNumber)
     .maybeSingle()
 
-  if (!contract?.tenant_id) return false
-
-  const { data: tenant } = await supabase
-    .from('tenants')
-    .select('line_user_id')
-    .eq('id', contract.tenant_id)
-    .maybeSingle()
-
-  return !!tenant?.line_user_id
+  return !!contract?.line_recipient_user_id
 }
 
 function parseLiffState(liffState?: string | string[]): URLSearchParams {

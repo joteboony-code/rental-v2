@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { Megaphone, Clock, Image as ImageIcon, Check, X } from 'lucide-react'
 import { BroadcastForm } from './_components/broadcast-form'
 import { EmptyState } from '@/components/ui/empty-state'
+import { getEffectiveLineUserId } from '@/lib/line-recipient'
 
 type BroadcastHistoryRow = {
   id: string
@@ -28,7 +29,7 @@ export default async function BroadcastPage() {
     supabase
       .from('contracts')
       .select(`
-        id, room_id,
+        id, room_id, line_recipient_user_id,
         rooms   ( id, room_number ),
         tenants ( full_name, line_user_id )
       `)
@@ -49,7 +50,7 @@ export default async function BroadcastPage() {
       room_id:    c.room_id as string,
       room_number: (c.rooms as unknown as RJ | null)?.room_number ?? '—',
       tenant_name: (c.tenants as unknown as TJ | null)?.full_name ?? '—',
-      has_line:    !!((c.tenants as unknown as TJ | null)?.line_user_id),
+      has_line:    !!getEffectiveLineUserId(c, c.tenants as unknown as TJ | null),
     }))
     .sort((a, b) => (parseInt(a.room_number) || 0) - (parseInt(b.room_number) || 0))
 

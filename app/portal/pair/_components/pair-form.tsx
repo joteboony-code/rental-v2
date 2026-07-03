@@ -255,7 +255,7 @@ export function PairForm({
             className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#1a3a6b] text-sm font-bold text-white shadow-sm disabled:opacity-50 active:opacity-90"
           >
             {pending ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
-            ยืนยันจับคู่ LINE กับห้องนี้
+            ยืนยันเป็นผู้รับบิลของห้องนี้
           </button>
         </form>
       )}

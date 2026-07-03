@@ -9,6 +9,7 @@ import { buildBillPortalUrl } from '@/lib/portal-url'
 import { getAuthedUser } from '@/lib/require-admin'
 import { bangkokDateKey } from '@/lib/date-utils'
 import { notifyOwner } from '@/lib/notify-owner'
+import { getEffectiveLineUserId } from '@/lib/line-recipient'
 
 function fmt(n: number) {
   return n.toLocaleString('th-TH', { maximumFractionDigits: 0 })
@@ -68,6 +69,7 @@ type BillRow = {
   tenant_id: string
   rooms:         { room_number: string } | null
   tenants:       { full_name: string; line_user_id: string | null } | null
+  contracts:     { line_recipient_user_id: string | null } | null
   meter_readings:{ water_units: number | null; electricity_units: number | null } | null
   payments:      { amount: number }[] | null
 }
@@ -247,6 +249,7 @@ export async function sendOverdueReminders(
       snooze_until,
       rooms          ( room_number ),
       tenants        ( full_name, line_user_id ),
+      contracts      ( line_recipient_user_id ),
       meter_readings ( water_units, electricity_units ),
       payments       ( amount )
     `)
@@ -278,11 +281,13 @@ export async function sendOverdueReminders(
   const elecRate  = Number(settings?.electricity_unit_price ?? 8)
   const waterRate = Number(settings?.water_unit_price ?? 18)
 
-  // Group by tenant
+  // Group by effective LINE recipient so dedicated room recipients stay isolated.
   const byTenant = new Map<string, BillRow[]>()
   for (const bill of bills) {
-    if (!byTenant.has(bill.tenant_id)) byTenant.set(bill.tenant_id, [])
-    byTenant.get(bill.tenant_id)!.push(bill)
+    const recipient = getEffectiveLineUserId(bill.contracts, bill.tenants)
+    const key = recipient ?? `tenant:${bill.tenant_id}`
+    if (!byTenant.has(key)) byTenant.set(key, [])
+    byTenant.get(key)!.push(bill)
   }
 
   let sent = 0, snoozed = 0, noLine = 0, failed = 0
@@ -291,7 +296,7 @@ export async function sendOverdueReminders(
   for (const [, tenantBills] of byTenant) {
     const firstBill = tenantBills[0]
     const tenant    = firstBill.tenants
-    const lineUserId = tenant?.line_user_id
+    const lineUserId = getEffectiveLineUserId(firstBill.contracts, tenant)
 
     if (!lineUserId) { noLine++; continue }
 

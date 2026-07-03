@@ -13,6 +13,7 @@ import { SendAgreementButton } from './_components/send-agreement-button'
 import { createContract } from '@/app/actions/tenants'
 import { getTenantDocuments } from '@/app/actions/tenant-documents'
 import { createSignedStorageUrl } from '@/lib/storage-urls'
+import { ContractLineRecipient } from './_components/contract-line-recipient'
 
 export default async function TenantDetailPage({
   params,
@@ -195,6 +196,15 @@ export default async function TenantDetailPage({
                 )}
               </div>
               <div className="mt-5 pt-4 border-t border-slate-100 space-y-3">
+                <ContractLineRecipient
+                  contractId={c.id}
+                  tenantId={id}
+                  roomId={c.room_id}
+                  roomNumber={c.rooms?.room_number ?? '—'}
+                  lineUserId={c.line_recipient_user_id}
+                  displayName={c.line_recipient_display_name}
+                  pictureUrl={c.line_recipient_picture_url}
+                />
                 <SendAgreementButton
                   tenantId={id}
                   contractId={c.id}

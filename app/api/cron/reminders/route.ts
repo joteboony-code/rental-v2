@@ -4,6 +4,7 @@ import { getLineMessagingConfig } from '@/lib/line-integration'
 import { buildBillPortalUrl } from '@/lib/portal-url'
 import { parseReminderDays } from '@/lib/reminder-utils'
 import { notifyOwner } from '@/lib/notify-owner'
+import { getEffectiveLineUserId } from '@/lib/line-recipient'
 
 function isAuthorized(req: NextRequest) {
   const secret = process.env.CRON_SECRET
@@ -174,6 +175,7 @@ export async function GET(req: NextRequest) {
       snooze_until, tenant_id, status,
       rooms   ( room_number ),
       tenants ( full_name, line_user_id ),
+      contracts ( line_recipient_user_id ),
       meter_readings ( water_units, electricity_units ),
       payments ( amount )
     `)
@@ -203,15 +205,18 @@ export async function GET(req: NextRequest) {
 
   // Group bills by tenant
   type TJ = { full_name: string; line_user_id: string | null }
+  type CJ = { line_recipient_user_id: string | null }
   type RJ = { room_number: string }
   type MJ = { water_units: number | null; electricity_units: number | null }
   type PJ = { amount: number }
 
   const byTenant = new Map<string, typeof bills>()
   for (const bill of remindableBills) {
-    const tid = bill.tenant_id as string
-    if (!byTenant.has(tid)) byTenant.set(tid, [])
-    byTenant.get(tid)!.push(bill)
+    const tenant = bill.tenants as unknown as TJ | null
+    const contract = bill.contracts as unknown as CJ | null
+    const key = getEffectiveLineUserId(contract, tenant) ?? `tenant:${bill.tenant_id as string}`
+    if (!byTenant.has(key)) byTenant.set(key, [])
+    byTenant.get(key)!.push(bill)
   }
 
   let sent = 0, failed = 0, snoozed = 0, noLine = 0, totalReminded = 0
@@ -220,7 +225,8 @@ export async function GET(req: NextRequest) {
   for (const [, tenantBills] of byTenant) {
     const firstBill = tenantBills[0]
     const tenant = firstBill.tenants as unknown as TJ | null
-    const lineUserId = tenant?.line_user_id
+    const contract = firstBill.contracts as unknown as CJ | null
+    const lineUserId = getEffectiveLineUserId(contract, tenant)
 
     if (!lineUserId) { noLine++; continue }
 

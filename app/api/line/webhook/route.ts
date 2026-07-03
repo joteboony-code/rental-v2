@@ -370,16 +370,34 @@ async function handleSlipImage(
 ) {
   const token = cfg.channelAccessToken
 
-  // Fetch ALL tenants linked to this line_user_id (multi-room support) + settings in parallel
-  const [{ data: tenantsData }, { data: settings }] = await Promise.all([
+  // Resolve contracts this LINE identity may access. A dedicated contract
+  // recipient takes precedence; the tenant LINE only sees contracts without
+  // a dedicated recipient.
+  const [{ data: tenantsData }, { data: dedicatedContracts }, { data: settings }] = await Promise.all([
     supabase.from('tenants').select('id, full_name').eq('line_user_id', lineUserId),
+    supabase
+      .from('contracts')
+      .select('id, tenant_id, rooms(room_number), tenants(id, full_name)')
+      .eq('status', 'active')
+      .eq('line_recipient_user_id', lineUserId),
     supabase.from('settings').select('slipok_api_key, slipok_branch_id').eq('id', 1).maybeSingle(),
   ])
 
   const allTenantIds = (tenantsData ?? []).map((t) => t.id as string)
-  const tenant = tenantsData?.[0] ?? null
+  const { data: fallbackContracts } = allTenantIds.length > 0
+    ? await supabase
+        .from('contracts')
+        .select('id, tenant_id, rooms(room_number), tenants(id, full_name)')
+        .in('tenant_id', allTenantIds)
+        .eq('status', 'active')
+        .is('line_recipient_user_id', null)
+    : { data: [] }
+  const activeContracts = [...(dedicatedContracts ?? []), ...(fallbackContracts ?? [])]
+  const authorizedContractIds = activeContracts.map((contract) => contract.id as string)
+  type TenantJoin = { id: string; full_name: string }
+  const tenant = (activeContracts[0]?.tenants as unknown as TenantJoin | null) ?? tenantsData?.[0] ?? null
 
-  if (!tenant) {
+  if (!tenant || authorizedContractIds.length === 0) {
     await reply(replyToken, token, [{
       type: 'text',
       text: [
@@ -392,15 +410,8 @@ async function handleSlipImage(
     return
   }
 
-  // ดึงทุกห้องที่ผู้เช่ากำลังเช่าอยู่ (รองรับผู้เช่าหลายห้องหลาย tenant_id)
-  const { data: activeContracts } = await supabase
-    .from('contracts')
-    .select('rooms(room_number)')
-    .in('tenant_id', allTenantIds)
-    .eq('status', 'active')
-
   type RJ = { room_number: string }
-  const activeRooms = (activeContracts ?? [])
+  const activeRooms = activeContracts
     .map((c) => (c.rooms as unknown as RJ | null)?.room_number)
     .filter((n): n is string => Boolean(n))
   const roomNumber = activeRooms.length > 0 ? activeRooms.join(', ') : '—'
@@ -558,11 +569,11 @@ async function handleSlipImage(
   const thDate = paidDate ? thaiDate(paidDate) : transDate
   const paidAt = paidDate?.toISOString() ?? new Date().toISOString()
 
-  // Fetch outstanding bills across ALL tenant_ids linked to this line_user_id, oldest first
+  // Fetch outstanding bills only from contracts authorized for this LINE identity.
   const { data: rawBills } = await supabase
     .from('bills')
     .select('id, tenant_id, room_id, total_amount, billing_month, due_date, status, rooms(room_number), payments(amount)')
-    .in('tenant_id', allTenantIds)
+    .in('contract_id', authorizedContractIds)
     .in('status', ['pending', 'overdue'])
     .order('due_date', { ascending: true })
     .order('billing_month', { ascending: true })

@@ -5,6 +5,7 @@
 import { createServiceClient } from '@/lib/supabase/service'
 import { getLineMessagingConfig } from '@/lib/line-integration'
 import { buildBillPortalUrl } from '@/lib/portal-url'
+import { getEffectiveLineUserId } from '@/lib/line-recipient'
 
 function thaiMonth(dateStr: string) {
   return new Date(dateStr).toLocaleDateString('th-TH', { year: 'numeric', month: 'long' })
@@ -36,7 +37,7 @@ export async function sendPaymentReceiptNotification(
 
   const { data: bill } = await supabase
     .from('bills')
-    .select('billing_month, rooms(room_number), tenants(full_name, line_user_id)')
+    .select('billing_month, rooms(room_number), tenants(full_name, line_user_id), contracts(line_recipient_user_id)')
     .eq('id', billId)
     .single()
 
@@ -44,10 +45,13 @@ export async function sendPaymentReceiptNotification(
 
   type RoomJoin   = { room_number: string }
   type TenantJoin = { full_name: string; line_user_id: string | null }
+  type ContractJoin = { line_recipient_user_id: string | null }
   const room   = bill.rooms   as unknown as RoomJoin   | null
   const tenant = bill.tenants as unknown as TenantJoin | null
+  const contract = bill.contracts as unknown as ContractJoin | null
+  const lineUserId = getEffectiveLineUserId(contract, tenant)
 
-  if (!tenant?.line_user_id) return { success: false, message: 'ผู้เช่าไม่มี LINE User ID' }
+  if (!tenant || !lineUserId) return { success: false, message: 'ห้องนี้ไม่มี LINE ผู้รับบิล' }
 
   const { data: lastPayment } = await supabase
     .from('payments')
@@ -124,7 +128,7 @@ export async function sendPaymentReceiptNotification(
   }
 
   try {
-    await pushMessage(tenant.line_user_id, lineConfig.channelAccessToken, [flexMsg])
+    await pushMessage(lineUserId, lineConfig.channelAccessToken, [flexMsg])
     return { success: true, message: 'ส่ง LINE สำเร็จ' }
   } catch (err) {
     return { success: false, message: String(err) }

@@ -78,6 +78,36 @@ export type PortalRoom = {
   monthly_rent: number
 }
 
+async function getAuthorizedPortalContract(lineUserId: string, roomId?: string) {
+  const supabase = createServiceClient()
+
+  let dedicatedQuery = supabase
+    .from('contracts')
+    .select('id, tenant_id, room_id, tenants(id, full_name, phone)')
+    .eq('status', 'active')
+    .eq('line_recipient_user_id', lineUserId)
+  if (roomId) dedicatedQuery = dedicatedQuery.eq('room_id', roomId)
+  const { data: dedicated } = await dedicatedQuery.order('start_date', { ascending: false }).limit(1).maybeSingle()
+  if (dedicated) return dedicated
+
+  const { data: tenant } = await supabase
+    .from('tenants')
+    .select('id, full_name, phone')
+    .eq('line_user_id', lineUserId)
+    .maybeSingle()
+  if (!tenant) return null
+
+  let fallbackQuery = supabase
+    .from('contracts')
+    .select('id, tenant_id, room_id, tenants(id, full_name, phone)')
+    .eq('tenant_id', tenant.id)
+    .eq('status', 'active')
+    .is('line_recipient_user_id', null)
+  if (roomId) fallbackQuery = fallbackQuery.eq('room_id', roomId)
+  const { data: fallback } = await fallbackQuery.order('start_date', { ascending: false }).limit(1).maybeSingle()
+  return fallback
+}
+
 export async function verifyAndGetPortalToken(
   idToken: string
 ): Promise<{ success: true; token: string } | { success: false; message: string }> {
@@ -102,21 +132,34 @@ export async function getPortalRooms(portalToken: string): Promise<{ rooms: Port
   const lineUserId = verifyPortalToken(portalToken)
   if (!lineUserId) return { rooms: [] }
   const supabase = createServiceClient()
-  const { data: tenant } = await supabase
-    .from('tenants').select('id').eq('line_user_id', lineUserId).maybeSingle()
-  if (!tenant) return { rooms: [] }
 
-  const { data } = await supabase
+  const { data: dedicated } = await supabase
     .from('contracts')
     .select('room_id, monthly_rent, rooms(room_number, floor)')
-    .eq('tenant_id', tenant.id)
     .eq('status', 'active')
+    .eq('line_recipient_user_id', lineUserId)
     .order('start_date', { ascending: true })
 
+  const { data: tenant } = await supabase
+    .from('tenants').select('id').eq('line_user_id', lineUserId).maybeSingle()
+  const { data: fallback } = tenant
+    ? await supabase
+        .from('contracts')
+        .select('room_id, monthly_rent, rooms(room_number, floor)')
+        .eq('tenant_id', tenant.id)
+        .eq('status', 'active')
+        .is('line_recipient_user_id', null)
+        .order('start_date', { ascending: true })
+    : { data: [] }
+
   type Row = { room_id: string; monthly_rent: number; rooms: unknown }
+  const uniqueRows = new Map<string, Row>()
+  for (const item of [...(dedicated ?? []), ...(fallback ?? [])]) {
+    const row = item as Row
+    uniqueRows.set(row.room_id, row)
+  }
   return {
-    rooms: (data ?? []).map((r) => {
-      const row = r as Row
+    rooms: [...uniqueRows.values()].map((row) => {
       const room = row.rooms as { room_number: string; floor: number | null } | null
       return {
         room_id: row.room_id,
@@ -196,20 +239,21 @@ export type PortalRepairItem = {
 }
 
 export async function getPortalRepairs(
-  portalToken: string
+  portalToken: string,
+  roomId?: string
 ): Promise<{ success: boolean; repairs?: PortalRepairItem[]; message?: string }> {
   const lineUserId = verifyPortalToken(portalToken)
   if (!lineUserId) return { success: false, message: 'Session หมดอายุ กรุณาเปิดใหม่อีกครั้ง' }
   const supabase = createServiceClient()
 
-  const { data: tenant } = await supabase
-    .from('tenants').select('id, full_name, phone').eq('line_user_id', lineUserId).maybeSingle()
-  if (!tenant) return { success: false, message: 'ไม่พบข้อมูลผู้เช่า' }
+  const contract = await getAuthorizedPortalContract(lineUserId, roomId)
+  if (!contract) return { success: false, message: 'ไม่พบข้อมูลห้องที่ได้รับอนุญาต' }
 
   const { data, error } = await supabase
     .from('repair_requests')
     .select('id, title, description, photo_url, status, priority, admin_note, created_at')
-    .eq('tenant_id', tenant.id)
+    .eq('tenant_id', contract.tenant_id)
+    .eq('room_id', contract.room_id)
     .order('created_at', { ascending: false })
     .limit(20)
 
@@ -229,16 +273,10 @@ export async function submitPortalRepair(
   }
   const supabase = createServiceClient()
 
-  const { data: tenant } = await supabase
-    .from('tenants').select('id, full_name, phone').eq('line_user_id', lineUserId).maybeSingle()
-  if (!tenant) return { success: false, message: 'ไม่พบข้อมูลผู้เช่า' }
-
-  let contractQuery = supabase
-    .from('contracts').select('room_id')
-    .eq('tenant_id', tenant.id).eq('status', 'active')
-  if (roomId) contractQuery = contractQuery.eq('room_id', roomId)
-  const { data: contract } = await contractQuery.maybeSingle()
+  const contract = await getAuthorizedPortalContract(lineUserId, roomId)
   if (!contract) return { success: false, message: 'ไม่พบสัญญาเช่าที่ใช้งานอยู่' }
+  const tenant = contract.tenants as unknown as { id: string; full_name: string; phone: string | null } | null
+  if (!tenant) return { success: false, message: 'ไม่พบข้อมูลผู้เช่า' }
 
   const title = String(formData.get('title') ?? '').trim()
   const description = String(formData.get('description') ?? '').trim() || null
