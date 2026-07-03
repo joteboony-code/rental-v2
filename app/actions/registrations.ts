@@ -360,34 +360,79 @@ export async function approveRegistration(
     .maybeSingle()
   if (!room) return { success: false, message: 'ไม่พบห้อง' }
 
-  // ถ้าห้องมี active contract อยู่ = ผู้เช่าเดิมสแกน QR เพื่อเพิ่ม LINE/เบอร์
-  // → อัปเดต tenant เดิมของ contract นั้น ไม่สร้าง contract ใหม่ (ไม่ block)
+  // ห้องที่มีสัญญาอยู่แล้วต้องไม่แก้ข้อมูลผู้เช่าหลัก เพราะ tenant หนึ่งคน
+  // อาจถือหลายสัญญา ให้ LINE ที่ลงทะเบียนเป็นผู้รับบิลเฉพาะสัญญานี้แทน
   const { data: activeContract } = await serviceSupabase
     .from('contracts')
-    .select('id, tenant_id')
+    .select('id, tenant_id, line_recipient_user_id, line_recipient_display_name, line_recipient_picture_url')
     .eq('room_id', req.room_id)
     .eq('status', 'active')
     .maybeSingle()
 
-  let skipContract = false
-  let matchedTenantId: string | null = req.matched_tenant_id
-  if (activeContract) {
-    skipContract = true
-    matchedTenantId = activeContract.tenant_id
-  }
+  let tenantId: string | null
+  let err: string | null = null
 
-  const { tenantId, error: err } = await doApprove({
-    requestId: req.id, roomId: req.room_id,
-    fullName: req.full_name, phone: req.phone,
-    idCard: req.id_card, moveInDate: req.move_in_date,
-    lineUserId: req.line_user_id, lineDisplayName: req.line_display_name, linePictureUrl: req.line_picture_url,
-    matchedTenantId,
-    skipContract,
-    monthlyRent: Number(room.monthly_rent),
-    depositPaid: Number(req.deposit_paid ?? 0),
-    approvalType: 'approved',
-    reviewedBy: user?.id ?? null,
-  })
+  if (activeContract) {
+    tenantId = activeContract.tenant_id
+    if (!req.line_user_id) {
+      return { success: false, message: 'คำขอนี้ไม่มีข้อมูล LINE กรุณาให้ผู้รับบิลสแกน QR ใหม่ผ่านแอป LINE' }
+    }
+    if (
+      activeContract.line_recipient_user_id &&
+      activeContract.line_recipient_user_id !== req.line_user_id
+    ) {
+      return { success: false, message: 'ห้องนี้มี LINE ผู้รับบิลแยกอยู่แล้ว กรุณายกเลิกการจับคู่เดิมก่อน' }
+    }
+
+    const { error: recipientError } = await serviceSupabase
+      .from('contracts')
+      .update({
+        line_recipient_user_id: req.line_user_id,
+        line_recipient_display_name: req.line_display_name,
+        line_recipient_picture_url: req.line_picture_url,
+      })
+      .eq('id', activeContract.id)
+
+    if (recipientError) {
+      err = recipientError.message
+    } else {
+      const { error: requestError } = await serviceSupabase
+        .from('tenant_registration_requests')
+        .update({
+          status: 'approved',
+          matched_tenant_id: tenantId,
+          reviewed_at: new Date().toISOString(),
+          reviewed_by: user.id,
+        })
+        .eq('id', req.id)
+      if (requestError) {
+        await serviceSupabase
+          .from('contracts')
+          .update({
+            line_recipient_user_id: activeContract.line_recipient_user_id,
+            line_recipient_display_name: activeContract.line_recipient_display_name,
+            line_recipient_picture_url: activeContract.line_recipient_picture_url,
+          })
+          .eq('id', activeContract.id)
+        err = requestError.message
+      }
+    }
+  } else {
+    const approved = await doApprove({
+      requestId: req.id, roomId: req.room_id,
+      fullName: req.full_name, phone: req.phone,
+      idCard: req.id_card, moveInDate: req.move_in_date,
+      lineUserId: req.line_user_id, lineDisplayName: req.line_display_name, linePictureUrl: req.line_picture_url,
+      matchedTenantId: req.matched_tenant_id,
+      skipContract: false,
+      monthlyRent: Number(room.monthly_rent),
+      depositPaid: Number(req.deposit_paid ?? 0),
+      approvalType: 'approved',
+      reviewedBy: user.id,
+    })
+    tenantId = approved.tenantId
+    err = approved.error
+  }
   if (err) return { success: false, message: err }
 
   if (adminNote) {

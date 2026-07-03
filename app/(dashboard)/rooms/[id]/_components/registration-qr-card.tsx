@@ -12,15 +12,17 @@ export function RegistrationQrCard({
   registrationToken,
   appUrl,
   liffId,
+  hasActiveContract,
 }: {
   roomId: string
   roomNumber: string
   registrationToken: string | null
   appUrl: string | null
   liffId: string | null
+  hasActiveContract: boolean
 }) {
   const [token, setToken] = useState(registrationToken)
-  const [tab, setTab] = useState<'register' | 'pair'>('register')
+  const [tab, setTab] = useState<'register' | 'pair'>(hasActiveContract ? 'pair' : 'register')
   const [copied, setCopied] = useState(false)
   const [isPending, startTransition] = useTransition()
 
@@ -58,7 +60,7 @@ export function RegistrationQrCard({
     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-4">
       <div className="flex items-center justify-between">
         <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest flex items-center gap-2">
-          <QrCode className="size-3.5" /> QR ลงทะเบียน / จับคู่
+          <QrCode className="size-3.5" /> {hasActiveContract ? 'QR ผู้รับบิล LINE' : 'QR ลงทะเบียน / จับคู่'}
         </p>
         {tab === 'register' && (
           <button
@@ -75,17 +77,19 @@ export function RegistrationQrCard({
 
       {/* Tabs */}
       <div className="flex rounded-xl overflow-hidden border border-slate-100 text-xs font-semibold">
-        <button
-          type="button"
-          onClick={() => { setTab('register'); setCopied(false) }}
-          className={`flex-1 py-2 transition-colors ${
-            tab === 'register'
-              ? 'bg-violet-600 text-white'
-              : 'bg-slate-50 text-slate-500 hover:bg-slate-100'
-          }`}
-        >
-          ลงทะเบียนใหม่
-        </button>
+        {!hasActiveContract && (
+          <button
+            type="button"
+            onClick={() => { setTab('register'); setCopied(false) }}
+            className={`flex-1 py-2 transition-colors ${
+              tab === 'register'
+                ? 'bg-violet-600 text-white'
+                : 'bg-slate-50 text-slate-500 hover:bg-slate-100'
+            }`}
+          >
+            ลงทะเบียนใหม่
+          </button>
+        )}
         <button
           type="button"
           onClick={() => { setTab('pair'); setCopied(false) }}
