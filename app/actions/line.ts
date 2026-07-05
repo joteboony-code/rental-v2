@@ -10,6 +10,7 @@ import { getAuthedUser } from '@/lib/require-admin'
 import { logAudit } from './audit'
 import { bangkokDateKey } from '@/lib/date-utils'
 import { getEffectiveLineUserId } from '@/lib/line-recipient'
+import { formatMeterReadingLines, type MeterReadingDetails } from '@/lib/meter-message'
 
 // ── helpers ──────────────────────────────────────────────────────────
 function thaiMonth(dateStr: string) {
@@ -178,6 +179,7 @@ type RoomStatement = {
   otherNote: string | null
   currentTotal: number
   meterRecordedAt: string | null
+  meterReading: MeterReadingDetails | null
   overdueBills: { billId: string; billingMonth: string; remaining: number }[]
   overdueTotal: number
 }
@@ -196,7 +198,7 @@ type StatementBill = {
   other_note: string | null
   total_amount: number
   rooms: { room_number: string; floor: number | null } | null
-  meter_readings: { reading_date: string | null; created_at: string } | null
+  meter_readings: (MeterReadingDetails & { reading_date: string | null; created_at: string }) | null
   payments: { amount: number }[] | null
   contracts?: { line_recipient_user_id: string | null } | null
 }
@@ -245,6 +247,7 @@ function buildRoomStatements(allBills: StatementBill[]): {
       otherNote: main.other_note,
       currentTotal: Number(main.total_amount),
       meterRecordedAt: main.meter_readings?.reading_date ?? main.meter_readings?.created_at ?? null,
+      meterReading: main.meter_readings,
       overdueBills,
       overdueTotal: overdueBills.reduce((sum, bill) => sum + bill.remaining, 0),
     })
@@ -278,7 +281,11 @@ async function fetchRoomStatements(supabase: any, tenantId: string): Promise<{
       total_amount,
       rooms ( room_number, floor ),
       contracts ( line_recipient_user_id ),
-      meter_readings ( reading_date, created_at ),
+      meter_readings (
+        reading_date, created_at,
+        water_prev, water_curr, water_units,
+        electricity_prev, electricity_curr, electricity_units
+      ),
       payments ( amount )
     `)
     .eq('tenant_id', tenantId)
@@ -429,6 +436,11 @@ function buildCombinedTextMessage(data: {
     if (room.wifiAmt > 0) lines.push(`   WiFi ฿${fmt(room.wifiAmt)}`)
     lines.push(`   ขยะ ฿${fmt(room.trashAmt)}`)
     if (room.otherAmt > 0) lines.push(`   ${room.otherNote || 'ค่าอื่น ๆ'} ฿${fmt(room.otherAmt)}`)
+    const meterLines = formatMeterReadingLines(room.meterReading)
+    if (meterLines.length > 0) {
+      lines.push('   📟 รายละเอียดมิเตอร์')
+      lines.push(...meterLines.map((line) => `   ${line}`))
+    }
     lines.push(`   รวม ฿${fmt(room.currentTotal)}`)
     for (const overdue of room.overdueBills) {
       lines.push(`   ⚠️ ค้าง ${thaiMonth(overdue.billingMonth)} ฿${fmt(overdue.remaining)}`)
@@ -457,7 +469,11 @@ export async function sendLineBillNotification(
       rooms   ( room_number, floor ),
       tenants ( full_name, line_user_id ),
       contracts ( line_recipient_user_id ),
-      meter_readings ( reading_date, created_at ),
+      meter_readings (
+        reading_date, created_at,
+        water_prev, water_curr, water_units,
+        electricity_prev, electricity_curr, electricity_units
+      ),
       payments ( amount )
     `)
     .eq('id', billId)
@@ -468,7 +484,7 @@ export async function sendLineBillNotification(
   type RoomJoin   = { room_number: string; floor: number | null }
   type TenantJoin = { full_name: string; line_user_id: string | null }
   type ContractJoin = { line_recipient_user_id: string | null }
-  type MeterJoin  = { reading_date: string | null; created_at: string } | null
+  type MeterJoin  = (MeterReadingDetails & { reading_date: string | null; created_at: string }) | null
 
   const room   = bill.rooms   as unknown as RoomJoin   | null
   const tenant = bill.tenants as unknown as TenantJoin | null
@@ -557,6 +573,8 @@ export async function sendLineBillNotification(
       ]
       lines.push(`ค่าน้ำ:   ฿${fmt(Number(bill.water_amount))}`)
       lines.push(`ค่าไฟ:   ฿${fmt(Number(bill.electricity_amount))}`)
+      const meterLines = formatMeterReadingLines(meter)
+      if (meterLines.length > 0) lines.push(``, `📟 รายละเอียดมิเตอร์`, ...meterLines)
       if (Number(bill.wifi_amount) > 0) lines.push(`ค่า WiFi: ฿${fmt(Number(bill.wifi_amount))}`)
       lines.push(`ค่าขยะ:  ฿${fmt(Number(bill.trash_amount))}`)
       lines.push(``, `รวม: ฿${fmt(Number(bill.total_amount))}`)
@@ -967,7 +985,11 @@ export async function sendBulkLineBillNotification(
       rooms   ( room_number, floor ),
       tenants ( full_name, line_user_id ),
       contracts ( line_recipient_user_id ),
-      meter_readings ( reading_date, created_at ),
+      meter_readings (
+        reading_date, created_at,
+        water_prev, water_curr, water_units,
+        electricity_prev, electricity_curr, electricity_units
+      ),
       payments ( amount )
     `)
     .eq('billing_month', billingMonth)
@@ -1000,7 +1022,7 @@ export async function sendBulkLineBillNotification(
   type TenantJ = { full_name: string; line_user_id: string | null }
   type ContractJ = { line_recipient_user_id: string | null }
   type RoomJ   = { room_number: string; floor: number | null }
-  type MeterJ  = { reading_date: string | null; created_at: string } | null
+  type MeterJ  = (MeterReadingDetails & { reading_date: string | null; created_at: string }) | null
   type CurrentBill = (typeof payableBills)[number]
   type LineGroup = {
     lineUserId: string | null
@@ -1037,7 +1059,11 @@ export async function sendBulkLineBillNotification(
       rooms ( room_number, floor ),
       tenants ( line_user_id ),
       contracts ( line_recipient_user_id ),
-      meter_readings ( reading_date, created_at ),
+      meter_readings (
+        reading_date, created_at,
+        water_prev, water_curr, water_units,
+        electricity_prev, electricity_curr, electricity_units
+      ),
       payments ( amount )
     `)
     .in('tenant_id', tenantIds)
@@ -1131,6 +1157,8 @@ export async function sendBulkLineBillNotification(
           ]
           lines.push(`ค่าน้ำ:   ฿${fmt(Number(bill.water_amount))}`)
           lines.push(`ค่าไฟ:   ฿${fmt(Number(bill.electricity_amount))}`)
+          const meterLines = formatMeterReadingLines(meter)
+          if (meterLines.length > 0) lines.push(``, `📟 รายละเอียดมิเตอร์`, ...meterLines)
           if (Number(bill.wifi_amount)  > 0) lines.push(`ค่า WiFi: ฿${fmt(Number(bill.wifi_amount))}`)
           lines.push(`ค่าขยะ:  ฿${fmt(Number(bill.trash_amount))}`)
           if (Number(bill.other_amount) > 0) lines.push(`อื่นๆ:   ฿${fmt(Number(bill.other_amount))}`)
