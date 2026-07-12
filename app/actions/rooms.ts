@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { RoomSchema, RoomFormState } from '@/lib/definitions'
 import { getAuthedUser } from '@/lib/require-admin'
+import { createServiceClient } from '@/lib/supabase/service'
 import { bangkokDateKey } from '@/lib/date-utils'
 import { logAudit } from './audit'
 
@@ -159,57 +160,13 @@ export async function convertReservationToTenant(
   if (!room) return { success: false, message: 'ไม่พบห้อง' }
   if (room.status !== 'reserved') return { success: false, message: 'ห้องนี้ไม่ได้อยู่ในสถานะจอง' }
 
-  let tenantId: string
-
-  if (room.reserved_tenant_id) {
-    // ผู้เช่าที่มีในระบบแล้ว — ใช้ ID เดิม
-    tenantId = room.reserved_tenant_id
-  } else {
-    // ผู้จองใหม่ — สร้าง tenant ใหม่จากชื่อ/โทร
-    const reservedName = String(room.reserved_name ?? '').trim()
-    if (!reservedName) return { success: false, message: 'กรุณากรอกชื่อผู้จองก่อนแปลงเป็นผู้เช่า' }
-
-    const { data: newTenant, error: tenantError } = await supabase
-      .from('tenants')
-      .insert({
-        full_name: reservedName,
-        phone: room.reserved_phone ?? null,
-        note: room.reservation_note
-          ? `มาจากการจองห้อง ${room.room_number}: ${room.reservation_note}`
-          : `มาจากการจองห้อง ${room.room_number}`,
-      })
-      .select('id')
-      .single()
-    if (tenantError || !newTenant) return { success: false, message: tenantError?.message ?? 'สร้างผู้เช่าไม่สำเร็จ' }
-    tenantId = newTenant.id
-  }
-
   const today = bangkokDateKey()
-  const depositPaid = Number(room.reserved_deposit ?? 0) + (additionalDeposit ?? 0)
-  const { error: contractError } = await supabase.from('contracts').insert({
-    room_id: roomId,
-    tenant_id: tenantId,
-    start_date: startDate || today,
-    monthly_rent: Number(room.monthly_rent),
-    deposit_paid: depositPaid,
-    status: 'active',
-    note: 'สร้างจากการแปลงการจองเป็นสัญญาเช่า',
+  const { data: tenantId, error } = await createServiceClient().rpc('admin_convert_reservation', {
+    p_room_id: roomId,
+    p_start_date: startDate || today,
+    p_additional_deposit: additionalDeposit ?? 0,
   })
-  if (contractError) return { success: false, message: contractError.message }
-
-  const { error: roomError } = await supabase
-    .from('rooms')
-    .update({
-      status: 'occupied',
-      reserved_tenant_id: null,
-      reserved_name: null,
-      reserved_phone: null,
-      reserved_deposit: null,
-      reservation_expires: null,
-      reservation_note: null,
-    })
-    .eq('id', roomId)
-  if (roomError) return { success: false, message: roomError.message }
+  if (error || !tenantId) return { success: false, message: error?.message ?? 'แปลงการจองไม่สำเร็จ' }
 
   logAudit({ action: 'reservation_convert', entityType: 'room', entityId: roomId, roomId, tenantId, description: `แปลงการจองห้อง ${room.room_number} เป็นสัญญาเช่า` }).catch(() => {})
 

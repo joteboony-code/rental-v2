@@ -6,7 +6,7 @@ import { sendPaymentReceiptNotification } from '@/lib/line-notify'
 import { logAudit } from './audit'
 import { getAuthedUser } from '@/lib/require-admin'
 
-const MAX_SLIP_SIZE = 10 * 1024 * 1024
+const MAX_SLIP_SIZE = 5 * 1024 * 1024
 const ALLOWED_SLIP_TYPES: Record<string, string> = {
   'image/jpeg': 'jpg',
   'image/png': 'png',
@@ -65,7 +65,7 @@ export async function recordPayment(
 
   if (slipFile && slipFile.size > 0) {
     if (slipFile.size > MAX_SLIP_SIZE) {
-      return { success: false, message: 'ไฟล์สลิปต้องไม่เกิน 10 MB' }
+      return { success: false, message: 'ไฟล์สลิปต้องไม่เกิน 5 MB' }
     }
     const ext = ALLOWED_SLIP_TYPES[slipFile.type]
     if (!ext) {

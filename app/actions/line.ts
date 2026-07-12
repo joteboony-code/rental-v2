@@ -457,9 +457,9 @@ export async function sendLineBillNotification(
   billId: string,
   mode: 'text' | 'flex'
 ): Promise<{ success: boolean; message: string }> {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getAuthedUser()
   if (!user) return { success: false, message: 'ไม่มีสิทธิ์ใช้งาน' }
+  const supabase = await createClient()
 
   // Re-fetch the latest bill state before every send; stale bill pages can stay open for days.
   const { data: bill } = await supabase
@@ -964,9 +964,9 @@ export async function sendBulkLineBillNotification(
     failures: [],
   })
 
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getAuthedUser()
   if (!user) return emptyResult('ไม่มีสิทธิ์ใช้งาน')
+  const supabase = await createClient()
 
   const retryRoomIds = [...new Set(
     targetRoomIds.filter((id) => /^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(id))

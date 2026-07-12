@@ -6,6 +6,10 @@ const migration = readFileSync(
   resolve(process.cwd(), 'supabase/security_hardening_20260701.sql'),
   'utf8'
 ).toLowerCase()
+const orderedMigration = readFileSync(
+  resolve(process.cwd(), 'supabase/migrations/202607120001_atomic_security_hardening.sql'),
+  'utf8'
+).toLowerCase()
 
 describe('security hardening migration', () => {
   it('restricts privileged RPCs to service_role', () => {
@@ -26,5 +30,13 @@ describe('security hardening migration', () => {
       /update storage\.buckets[\s\S]*?set public = false[\s\S]*?tenant-documents/
     )
     expect(migration.match(/if not public\.is_admin\(\) then/g)?.length).toBeGreaterThanOrEqual(3)
+  })
+
+  it('keeps identity RPCs private and makes critical workflows atomic', () => {
+    expect(orderedMigration).toMatch(/pair_tenant_line[\s\S]*?from public, anon, authenticated/)
+    expect(orderedMigration).toMatch(/get_tenant_portal_by_line_user[\s\S]*?from public, anon, authenticated/)
+    expect(orderedMigration).toContain('create or replace function public.admin_approve_pending_slip')
+    expect(orderedMigration).toContain('create or replace function public.admin_convert_reservation')
+    expect(orderedMigration.match(/to service_role/g)?.length).toBeGreaterThanOrEqual(4)
   })
 })

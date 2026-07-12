@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
 import { Prompt } from "next/font/google"
 import { Toaster } from "sonner"
+import { headers } from "next/headers"
 import "./globals.css"
 
 const prompt = Prompt({
@@ -15,14 +16,16 @@ export const metadata: Metadata = {
   description: "ระบบจัดการห้องพัก ผู้เช่า และการชำระเงิน",
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  const nonce = (await headers()).get('x-nonce') ?? undefined
   return (
     <html lang="th" className={`${prompt.variable} h-full antialiased`} suppressHydrationWarning>
       <body className="min-h-full flex flex-col">
         {/* Blocking script — runs before paint to prevent dark-mode flash */}
         <script
+          nonce={nonce}
           dangerouslySetInnerHTML={{
             __html: `(function(){try{var s=localStorage.getItem('theme');var d=window.matchMedia('(prefers-color-scheme: dark)').matches;if(s==='dark'||(s===null&&d)){document.documentElement.classList.add('dark');}else{document.documentElement.classList.remove('dark');}}catch(e){}})();`,
           }}

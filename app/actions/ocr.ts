@@ -120,9 +120,9 @@ export async function readMeterOCR(formData: FormData): Promise<MeterOcrResult> 
     return { value: null, rawText: '', error: 'รองรับเฉพาะ JPEG, PNG, WebP เท่านั้น' }
   }
 
-  const MAX_OCR_SIZE = 10 * 1024 * 1024
+  const MAX_OCR_SIZE = 5 * 1024 * 1024
   if (file.size > MAX_OCR_SIZE) {
-    return { value: null, rawText: '', error: 'ไฟล์ใหญ่เกิน 10 MB' }
+    return { value: null, rawText: '', error: 'ไฟล์ใหญ่เกิน 5 MB' }
   }
 
   try {

@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/server'
 import { RepairSchema, type RepairFormState, type RepairStatus } from '@/lib/definitions'
 import { getAuthedUser } from '@/lib/require-admin'
 
-const MAX_PHOTO_SIZE = 10 * 1024 * 1024
+const MAX_PHOTO_SIZE = 5 * 1024 * 1024
 const ALLOWED_PHOTO_TYPES: Record<string, string> = {
   'image/jpeg': 'jpg',
   'image/png': 'png',
@@ -39,7 +39,7 @@ export async function createRepair(
   const photoFile = formData.get('photo') as File | null
   if (photoFile && photoFile.size > 0) {
     if (photoFile.size > MAX_PHOTO_SIZE) {
-      return { message: 'ไฟล์รูปภาพต้องไม่เกิน 10 MB' }
+      return { message: 'ไฟล์รูปภาพต้องไม่เกิน 5 MB' }
     }
     const ext = ALLOWED_PHOTO_TYPES[photoFile.type]
     if (!ext) {

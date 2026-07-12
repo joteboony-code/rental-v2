@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache'
 import { sendPaymentReceiptNotification } from '@/lib/line-notify'
 import { logAudit } from './audit'
 import { getAuthedUser } from '@/lib/require-admin'
+import { createServiceClient } from '@/lib/supabase/service'
 
 const VALID_PAYMENT_METHODS = ['cash', 'transfer', 'promptpay'] as const
 type PaymentMethod = typeof VALID_PAYMENT_METHODS[number]
@@ -90,6 +91,7 @@ export type OutstandingBill = {
 }
 
 export async function getPendingSlips(): Promise<PendingSlip[]> {
+  if (!(await getAuthedUser())) return []
   const supabase = await createClient()
   const { data } = await supabase
     .from('pending_slips')
@@ -100,6 +102,7 @@ export async function getPendingSlips(): Promise<PendingSlip[]> {
 }
 
 export async function getPendingSlip(id: string): Promise<PendingSlip | null> {
+  if (!(await getAuthedUser())) return null
   const supabase = await createClient()
   const { data } = await supabase
     .from('pending_slips')
@@ -110,6 +113,7 @@ export async function getPendingSlip(id: string): Promise<PendingSlip | null> {
 }
 
 export async function getTenantOutstandingBills(lineUserId: string | null, fallbackTenantId?: string | null): Promise<OutstandingBill[]> {
+  if (!(await getAuthedUser())) return []
   const supabase = await createClient()
 
   const contractIds = await getAuthorizedContractIds(supabase, lineUserId, fallbackTenantId)
@@ -167,73 +171,20 @@ export async function approveSlip(
   if (!billId) return { success: false, message: 'กรุณาเลือกบิล' }
   if (!amount || amount <= 0) return { success: false, message: 'กรุณาระบุจำนวนเงิน' }
 
-  // H1: Atomically claim slip — only succeeds if still pending (race guard)
-  const { data: slip } = await supabase
-    .from('pending_slips')
-    .update({
-      status: 'approved',
-      reviewed_at: new Date().toISOString(),
-      reviewed_by: user?.id ?? null,
-      admin_note: note,
-    })
-    .eq('id', slipId)
-    .eq('status', 'pending')
-    .select('slip_url, slip_ref')
-    .single()
-  if (!slip) return { success: false, message: 'ไม่พบสลิปนี้หรือถูกดำเนินการไปแล้ว' }
-
-  const { data: billMeta } = await supabase
-    .from('bills')
-    .select('tenant_id, room_id, total_amount, payments(amount)')
-    .eq('id', billId)
-    .single()
-
-  if (!billMeta) {
-    await supabase.from('pending_slips')
-      .update({ status: 'pending', reviewed_at: null, reviewed_by: null, admin_note: null })
-      .eq('id', slipId)
-    return { success: false, message: 'ไม่พบบิลที่เลือก' }
+  const { data, error } = await createServiceClient().rpc('admin_approve_pending_slip', {
+    p_slip_id: slipId,
+    p_bill_id: billId,
+    p_amount: amount,
+    p_payment_method: paymentMethod,
+    p_paid_at: paidAt,
+    p_note: note,
+    p_reviewed_by: user.id,
+  })
+  if (error || !data) {
+    const detail = error?.message ?? 'ไม่สามารถอนุมัติสลิปได้'
+    return { success: false, message: detail.includes('exceeds') ? 'ยอดเงินเกินยอดค้างชำระ' : detail }
   }
-
-  type BillMetaRow = { tenant_id: string; room_id: string | null; total_amount: number; payments: { amount: number }[] | null }
-  const meta = billMeta as unknown as BillMetaRow
-  const alreadyPaid = (meta.payments ?? []).reduce((s, p) => s + Number(p.amount), 0)
-  const remaining = Math.max(0, Number(meta.total_amount) - alreadyPaid)
-
-  if (amount > remaining + 0.01) {
-    await supabase.from('pending_slips')
-      .update({ status: 'pending', reviewed_at: null, reviewed_by: null, admin_note: null })
-      .eq('id', slipId)
-    return {
-      success: false,
-      message: `ยอดเงิน ฿${amount.toLocaleString('th-TH')} เกินยอดค้างชำระ ฿${remaining.toLocaleString('th-TH')} — ใช้ "ตัดหนี้เก่าสุด" หรือบันทึกเป็นเงินล่วงหน้าแทน`,
-    }
-  }
-
-  const paymentPayload = {
-    bill_id: billId,
-    amount,
-    payment_method: paymentMethod,
-    slip_url: slip.slip_url,
-    slip_ref: slip.slip_ref,
-    note,
-    paid_at: paidAt,
-    recorded_by: user?.id ?? null,
-  }
-
-  const { data: payment, error: payErr } = await supabase
-    .from('payments')
-    .insert(paymentPayload)
-    .select('id')
-    .single()
-  if (payErr) {
-    // Revert slip on payment failure
-    await supabase.from('pending_slips')
-      .update({ status: 'pending', reviewed_at: null, reviewed_by: null, admin_note: null })
-      .eq('id', slipId)
-    return { success: false, message: `บันทึกไม่สำเร็จ: ${payErr.message}` }
-  }
-
+  const meta = data as { payment_id: string; tenant_id: string; room_id: string | null; slip_ref: string | null }
   await updateBillStatusAndNotify(supabase, billId)
 
   logAudit({
@@ -243,12 +194,12 @@ export async function approveSlip(
     tenantId: meta?.tenant_id ?? null,
     roomId: meta?.room_id ?? null,
     newValue: {
-      payment_id: payment?.id ?? null,
+      payment_id: meta.payment_id,
       amount,
       bill_id: billId,
       tenant_id: meta?.tenant_id ?? null,
       room_id: meta?.room_id ?? null,
-      slip_ref: slip?.slip_ref ?? null,
+      slip_ref: meta.slip_ref,
     },
     description: `อนุมัติสลิป ฿${amount.toLocaleString('th-TH')} → บิล ${billId}`,
   }).catch(() => {})
@@ -486,6 +437,7 @@ export async function reassignSlipTenant(
   tenantId: string,
   roomId: string | null
 ): Promise<{ success: boolean; message: string }> {
+  if (!(await getAuthedUser())) return { success: false, message: 'ไม่มีสิทธิ์ใช้งาน' }
   const supabase = await createClient()
   const { data: oldSlip } = await supabase
     .from('pending_slips')
@@ -529,6 +481,7 @@ export async function reassignSlipTenant(
 
 // รายชื่อผู้เช่าทั้งหมด สำหรับ dropdown เปลี่ยนผู้เช่า
 export async function getAllTenantsForSelect(): Promise<{ id: string; full_name: string; room_id: string | null; room_number: string | null }[]> {
+  if (!(await getAuthedUser())) return []
   const supabase = await createClient()
   const { data } = await supabase
     .from('contracts')
@@ -580,6 +533,7 @@ export async function rejectSlip(
 }
 
 export async function getPendingSlipCount(): Promise<number> {
+  if (!(await getAuthedUser())) return 0
   const supabase = await createClient()
   const { count } = await supabase
     .from('pending_slips')

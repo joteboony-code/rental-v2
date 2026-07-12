@@ -156,7 +156,7 @@ export async function uploadContractImages(
   if (!(await getAuthedUser())) return { success: false, message: 'กรุณายืนยันตัวตน 2 ชั้นก่อนทำรายการ' }
   const supabase = await createClient()
 
-  const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10 MB
+  const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5 MB
   const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf']
 
   const files = formData.getAll('contract_images') as File[]
@@ -167,7 +167,7 @@ export async function uploadContractImages(
 
   for (const file of validFiles) {
     if (file.size > MAX_FILE_SIZE) {
-      return { success: false, message: `ไฟล์ "${file.name}" ขนาดเกิน 10 MB` }
+      return { success: false, message: `ไฟล์ "${file.name}" ขนาดเกิน 5 MB` }
     }
     if (!ALLOWED_TYPES.includes(file.type)) {
       return { success: false, message: `ไฟล์ "${file.name}" ไม่รองรับ (รองรับ JPG, PNG, WebP, PDF เท่านั้น)` }

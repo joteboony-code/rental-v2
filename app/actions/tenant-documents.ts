@@ -5,7 +5,7 @@ import { type DocumentType, type TenantDocument } from '@/lib/tenant-documents'
 import { getAuthedUser } from '@/lib/require-admin'
 import { createSignedStorageUrl, storageObjectPath } from '@/lib/storage-urls'
 
-const MAX_DOC_SIZE = 10 * 1024 * 1024
+const MAX_DOC_SIZE = 5 * 1024 * 1024
 const ALLOWED_DOC_TYPES: Record<string, string> = {
   'image/jpeg': 'jpg',
   'image/png': 'png',
@@ -51,7 +51,7 @@ export async function uploadTenantDocument(
     return { success: false, message: 'ไม่พบไฟล์ที่อัพโหลด' }
   }
   if (file.size > MAX_DOC_SIZE) {
-    return { success: false, message: 'ไฟล์ต้องไม่เกิน 10 MB' }
+    return { success: false, message: 'ไฟล์ต้องไม่เกิน 5 MB' }
   }
   const ext = ALLOWED_DOC_TYPES[file.type]
   if (!ext) {

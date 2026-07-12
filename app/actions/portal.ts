@@ -3,7 +3,7 @@
 import { createServiceClient } from '@/lib/supabase/service'
 import { revalidatePath } from 'next/cache'
 
-const MAX_REPAIR_PHOTO_SIZE = 10 * 1024 * 1024
+const MAX_REPAIR_PHOTO_SIZE = 5 * 1024 * 1024
 const ALLOWED_REPAIR_PHOTO_TYPES: Record<string, string> = {
   'image/jpeg': 'jpg',
   'image/png': 'png',
@@ -289,7 +289,7 @@ export async function submitPortalRepair(
   const photoFile = formData.get('photo') as File | null
   if (photoFile && photoFile.size > 0) {
     if (photoFile.size > MAX_REPAIR_PHOTO_SIZE) {
-      return { success: false, message: 'ไฟล์รูปภาพต้องไม่เกิน 10 MB' }
+      return { success: false, message: 'ไฟล์รูปภาพต้องไม่เกิน 5 MB' }
     }
     const ext = ALLOWED_REPAIR_PHOTO_TYPES[photoFile.type]
     if (!ext) {
