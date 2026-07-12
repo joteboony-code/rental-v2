@@ -8,7 +8,33 @@ import { verifyAndGetPortalToken } from '@/app/actions/portal'
 import { AgreementTemplate } from './agreement-template'
 import type { LiffClient } from '@/lib/liff-types'
 
-declare global { interface Window { liff?: LiffClient } }
+type Html2Canvas = (
+  element: HTMLElement,
+  options: {
+    scale: number
+    useCORS: boolean
+    backgroundColor: string
+    logging: boolean
+    onclone: (document: Document) => void
+  }
+) => Promise<HTMLCanvasElement>
+
+interface PdfDocument {
+  internal: { pageSize: { getWidth: () => number; getHeight: () => number } }
+  addImage: (data: string, format: string, x: number, y: number, width: number, height: number) => void
+  addPage: () => void
+  output: (type: 'blob') => Blob
+}
+
+type JsPdf = new (options: { orientation: string; unit: string; format: string }) => PdfDocument
+
+declare global {
+  interface Window {
+    liff?: LiffClient
+    html2canvas?: Html2Canvas
+    jspdf?: { jsPDF: JsPdf }
+  }
+}
 
 interface Props {
   contractId: string
@@ -134,10 +160,9 @@ export function SignAgreementClient({ contractId, liffId }: Props) {
     if (!data || !sigDataUrl || !portalToken) return
     setStatus('submitting')
     try {
-      const [{ default: jsPDF }, { default: html2canvas }] = await Promise.all([
-        import('jspdf'),
-        import('html2canvas'),
-      ])
+      const jsPDF = window.jspdf?.jsPDF
+      const html2canvas = window.html2canvas
+      if (!jsPDF || !html2canvas) throw new Error('PDF tools are still loading')
       const el = document.getElementById('agreement-template')
       if (!el) throw new Error('template element not found')
 
@@ -195,6 +220,8 @@ export function SignAgreementClient({ contractId, liffId }: Props) {
           onReady={() => setScriptReady(true)}
         />
       )}
+      <Script src="/vendor/html2canvas.min.js" strategy="afterInteractive" />
+      <Script src="/vendor/jspdf.umd.min.js" strategy="afterInteractive" />
 
       {/* Loading */}
       {status === 'loading' && (
