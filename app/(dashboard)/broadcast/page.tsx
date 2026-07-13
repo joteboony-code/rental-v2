@@ -30,7 +30,7 @@ export default async function BroadcastPage() {
       .from('contracts')
       .select(`
         id, room_id, line_recipient_user_id,
-        rooms   ( id, room_number ),
+        rooms   ( id, room_number, floor, wifi_fee ),
         tenants ( full_name, line_user_id )
       `)
       .eq('status', 'active')
@@ -42,7 +42,7 @@ export default async function BroadcastPage() {
       .limit(20),
   ])
 
-  type RJ = { id: string; room_number: string }
+  type RJ = { id: string; room_number: string; floor: number | null; wifi_fee: number | null }
   type TJ = { full_name: string; line_user_id: string | null }
 
   const rooms = (contracts ?? [])
@@ -51,6 +51,8 @@ export default async function BroadcastPage() {
       room_number: (c.rooms as unknown as RJ | null)?.room_number ?? '—',
       tenant_name: (c.tenants as unknown as TJ | null)?.full_name ?? '—',
       has_line:    !!getEffectiveLineUserId(c, c.tenants as unknown as TJ | null),
+      row:         (c.rooms as unknown as RJ | null)?.floor ?? null,
+      uses_wifi:   Number((c.rooms as unknown as RJ | null)?.wifi_fee ?? 0) > 0,
     }))
     .sort((a, b) => (parseInt(a.room_number) || 0) - (parseInt(b.room_number) || 0))
 

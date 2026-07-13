@@ -3,7 +3,7 @@
 import { useState, useTransition, useRef } from 'react'
 import { sendBroadcast } from '@/app/actions/line'
 import { uploadBroadcastImage } from '@/app/actions/upload'
-import { Megaphone, Loader2, Check, AlertCircle, Users, ImagePlus, X } from 'lucide-react'
+import { Megaphone, Loader2, Check, AlertCircle, Users, Wifi, Rows3, ListChecks, ImagePlus, X } from 'lucide-react'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 
@@ -12,11 +12,17 @@ interface RoomInfo {
   room_number: string
   tenant_name: string
   has_line:    boolean
+  row:         number | null
+  uses_wifi:   boolean
 }
 
 interface Props {
   rooms: RoomInfo[]
 }
+
+type TargetMode = 'all' | 'wifi' | 'rows' | 'rooms'
+
+const ROOM_ROWS = [1, 2, 3] as const
 
 export function BroadcastForm({ rooms }: Props) {
   const [pending, start]        = useTransition()
@@ -25,7 +31,8 @@ export function BroadcastForm({ rooms }: Props) {
   const [imageUrl, setImageUrl] = useState('')
   const [imagePreview, setImagePreview] = useState('')
   const [uploadError, setUploadError]   = useState('')
-  const [allRooms, setAllRooms] = useState(true)
+  const [targetMode, setTargetMode] = useState<TargetMode>('all')
+  const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set())
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [result,  setResult]   = useState<{ success: boolean; sent: number; failed: number; message: string } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -57,9 +64,29 @@ export function BroadcastForm({ rooms }: Props) {
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
-  const lineRooms     = rooms.filter((r) => r.has_line)
-  const targetRooms   = allRooms ? lineRooms : lineRooms.filter((r) => selected.has(r.room_id))
+  const lineRooms = rooms.filter((r) => r.has_line)
+  const wifiRooms = lineRooms.filter((r) => r.uses_wifi)
+  const targetRooms = lineRooms.filter((r) => {
+    if (targetMode === 'all') return true
+    if (targetMode === 'wifi') return r.uses_wifi
+    if (targetMode === 'rows') return r.row !== null && selectedRows.has(r.row)
+    return selected.has(r.room_id)
+  })
   const recipientCount = targetRooms.length
+
+  function selectTargetMode(mode: TargetMode) {
+    setTargetMode(mode)
+    setSelectedRows(new Set())
+    setSelected(new Set())
+  }
+
+  function toggleRow(row: number) {
+    setSelectedRows((prev) => {
+      const next = new Set(prev)
+      if (next.has(row)) next.delete(row); else next.add(row)
+      return next
+    })
+  }
 
   function toggleRoom(id: string) {
     setSelected((prev) => {
@@ -71,7 +98,7 @@ export function BroadcastForm({ rooms }: Props) {
 
   function send() {
     if (!message.trim()) return
-    const roomIds = allRooms ? [] : Array.from(selected)
+    const roomIds = targetMode === 'all' ? [] : targetRooms.map((room) => room.room_id)
     start(async () => {
       const res = await sendBroadcast(roomIds, message.trim(), imageUrl.trim() || null)
       setResult(res)
@@ -89,22 +116,66 @@ export function BroadcastForm({ rooms }: Props) {
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-4">
         <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest">เลือกผู้รับ</p>
 
-        {/* All rooms toggle */}
-        <label className="flex items-center gap-3 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={allRooms}
-            onChange={(e) => { setAllRooms(e.target.checked); setSelected(new Set()) }}
-            className="size-4 accent-violet-600 rounded"
-          />
-          <span className="flex items-center gap-2 text-sm font-medium text-slate-700">
-            <Users className="size-4 text-violet-500" />
-            ส่งทุกห้อง ({lineRooms.length} ห้องที่มี LINE)
-          </span>
-        </label>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {([
+            { mode: 'all', label: 'ส่งทุกห้อง', detail: `${lineRooms.length} ห้องที่มี LINE`, icon: Users },
+            { mode: 'wifi', label: 'เฉพาะห้องที่ใช้ WiFi', detail: `${wifiRooms.length} ห้องที่มี LINE`, icon: Wifi },
+            { mode: 'rows', label: 'เลือกตามแถว', detail: 'แถว 1, 2 หรือ 3', icon: Rows3 },
+            { mode: 'rooms', label: 'เลือกห้องเอง', detail: 'เลือกได้หลายห้อง', icon: ListChecks },
+          ] as const).map(({ mode, label, detail, icon: Icon }) => (
+            <label
+              key={mode}
+              className={`flex cursor-pointer items-center gap-3 rounded-xl border px-3 py-3 transition-colors ${
+                targetMode === mode
+                  ? 'border-violet-300 bg-violet-50 text-violet-700'
+                  : 'border-slate-200 text-slate-600 hover:border-violet-200'
+              }`}
+            >
+              <input
+                type="radio"
+                name="broadcast_target"
+                value={mode}
+                checked={targetMode === mode}
+                onChange={() => selectTargetMode(mode)}
+                className="size-4 accent-violet-600"
+              />
+              <Icon className="size-4 shrink-0 text-violet-500" />
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold">{label}</span>
+                <span className="block text-xs opacity-70">{detail}</span>
+              </span>
+            </label>
+          ))}
+        </div>
+
+        {targetMode === 'rows' && (
+          <div className="grid grid-cols-3 gap-2 pt-1">
+            {ROOM_ROWS.map((row) => {
+              const count = lineRooms.filter((room) => room.row === row).length
+              return (
+                <label
+                  key={row}
+                  className={`flex cursor-pointer items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-sm transition-colors ${
+                    selectedRows.has(row)
+                      ? 'border-violet-300 bg-violet-50 font-semibold text-violet-700'
+                      : 'border-slate-200 text-slate-600 hover:border-violet-200'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedRows.has(row)}
+                    onChange={() => toggleRow(row)}
+                    className="size-3.5 accent-violet-600"
+                  />
+                  แถว {row} ({count})
+                </label>
+              )
+            })}
+          </div>
+        )}
 
         {/* Per-room selection */}
-        {!allRooms && (
+        {targetMode === 'rooms' && (
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-2">
             {rooms.map((r) => (
               <label
