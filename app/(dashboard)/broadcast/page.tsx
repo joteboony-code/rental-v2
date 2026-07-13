@@ -3,6 +3,7 @@ import { Megaphone, Clock, Image as ImageIcon, Check, X } from 'lucide-react'
 import { BroadcastForm } from './_components/broadcast-form'
 import { EmptyState } from '@/components/ui/empty-state'
 import { getEffectiveLineUserId } from '@/lib/line-recipient'
+import { roomRow } from '@/lib/room-utils'
 
 type BroadcastHistoryRow = {
   id: string
@@ -30,7 +31,7 @@ export default async function BroadcastPage() {
       .from('contracts')
       .select(`
         id, room_id, line_recipient_user_id,
-        rooms   ( id, room_number, floor, wifi_fee ),
+        rooms   ( id, room_number, wifi_fee ),
         tenants ( full_name, line_user_id )
       `)
       .eq('status', 'active')
@@ -42,18 +43,23 @@ export default async function BroadcastPage() {
       .limit(20),
   ])
 
-  type RJ = { id: string; room_number: string; floor: number | null; wifi_fee: number | null }
+  type RJ = { id: string; room_number: string; wifi_fee: number | null }
   type TJ = { full_name: string; line_user_id: string | null }
 
   const rooms = (contracts ?? [])
-    .map((c) => ({
-      room_id:    c.room_id as string,
-      room_number: (c.rooms as unknown as RJ | null)?.room_number ?? '—',
-      tenant_name: (c.tenants as unknown as TJ | null)?.full_name ?? '—',
-      has_line:    !!getEffectiveLineUserId(c, c.tenants as unknown as TJ | null),
-      row:         (c.rooms as unknown as RJ | null)?.floor ?? null,
-      uses_wifi:   Number((c.rooms as unknown as RJ | null)?.wifi_fee ?? 0) > 0,
-    }))
+    .map((c) => {
+      const room = c.rooms as unknown as RJ | null
+      const tenant = c.tenants as unknown as TJ | null
+
+      return {
+        room_id:    c.room_id as string,
+        room_number: room?.room_number ?? '—',
+        tenant_name: tenant?.full_name ?? '—',
+        has_line:    !!getEffectiveLineUserId(c, tenant),
+        row:         room ? roomRow(room.room_number) : null,
+        uses_wifi:   Number(room?.wifi_fee ?? 0) > 0,
+      }
+    })
     .sort((a, b) => (parseInt(a.room_number) || 0) - (parseInt(b.room_number) || 0))
 
   const lineCount = rooms.filter((r) => r.has_line).length
