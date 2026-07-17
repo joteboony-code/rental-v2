@@ -5,8 +5,8 @@ describe('payment thank-you sticker', () => {
   it('uses the approved LINE Messaging API sticker', () => {
     expect(PAYMENT_THANK_YOU_STICKER).toEqual({
       type: 'sticker',
-      packageId: '8515',
-      stickerId: '16581243',
+      packageId: '8522',
+      stickerId: '16581267',
     })
   })
 
