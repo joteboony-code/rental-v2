@@ -5,6 +5,7 @@ import { decryptSecret, maybeDecryptSecret } from '@/lib/crypto-secrets'
 import { DEFAULT_DORM_ID } from '@/lib/line-integration'
 import { buildBillPortalUrl } from '@/lib/portal-url'
 import { notifyOwner as notifyOwnerChannel } from '@/lib/notify-owner'
+import { withPaymentThankYou } from '@/lib/line-sticker'
 
 type SupabaseClient = ReturnType<typeof createServiceClient>
 
@@ -712,7 +713,8 @@ async function handleSlipImage(
       await supabase.from('bills').update({ status: nextStatus }).eq('id', bill.id).eq('status', bill.status)
     }
     const portalUrl = buildBillPortalUrl(bill.id, cfg.liffId, cfg.appUrl)
-    await reply(replyToken, token, [buildPaymentFlex({ fullyPaid, roomNumber: billRoom, billingMonth: bill.billing_month, paidAmount: totalPaid, remaining, ref: slipRef, portalUrl })])
+    const confirmation = buildPaymentFlex({ fullyPaid, roomNumber: billRoom, billingMonth: bill.billing_month, paidAmount: totalPaid, remaining, ref: slipRef, portalUrl })
+    await reply(replyToken, token, fullyPaid ? withPaymentThankYou(confirmation) : [confirmation])
     await logAutoPayment('unique_single_bill', [{ roomNumber: billRoom, billingMonth: bill.billing_month, amount }])
     if (fullyPaid) {
       await notifyOwner(cfg, `✅ ชำระครบ! ห้อง ${billRoom} — ${tenant.full_name}\n💰 ${fmt(amount)} บาท\n🔢 Ref: ${slipRef ?? '-'}\n📅 ${thDate} ${transTime}`)
@@ -747,11 +749,11 @@ async function handleSlipImage(
         await supabase.from('bills').update({ status: 'paid' }).eq('id', bill.id)
         await recordCredit(creditAmt, bill.tenant_id, bill.room_id)
         const portalUrl = buildBillPortalUrl(bill.id, cfg.liffId, cfg.appUrl)
-        await reply(replyToken, token, [buildPaymentFlex({
+        await reply(replyToken, token, withPaymentThankYou(buildPaymentFlex({
           fullyPaid: true, roomNumber: billRoom, billingMonth: bill.billing_month,
           paidAmount: bill.remainingAmount, remaining: 0, ref: slipRef, portalUrl,
           creditAmount: creditAmt, transferAmount: amount,
-        })])
+        })))
         await logAutoPayment('unique_single_overpay', [{ roomNumber: billRoom, billingMonth: bill.billing_month, amount: bill.remainingAmount }], creditAmt)
         await notifyOwner(cfg, `✅ ชำระครบ+เครดิต! ห้อง ${billRoom} — ${tenant.full_name}\n💰 ตัดบิล ฿${fmt(bill.remainingAmount)} เครดิต ฿${fmt(creditAmt)}\n🔢 Ref: ${slipRef ?? '-'}\n📅 ${thDate} ${transTime}`)
         return
@@ -764,7 +766,7 @@ async function handleSlipImage(
     const { ok, paidBills } = await payBills(outstandingBills, ' (รวมยอดทุกห้อง)')
     if (ok) {
       const portalUrl = buildBillPortalUrl(outstandingBills[0].id, cfg.liffId, cfg.appUrl)
-      await reply(replyToken, token, [buildMultiBillPaymentFlex({ tenantName: tenant.full_name, paidBills, totalPaid: amount, ref: slipRef, portalUrl })])
+      await reply(replyToken, token, withPaymentThankYou(buildMultiBillPaymentFlex({ tenantName: tenant.full_name, paidBills, totalPaid: amount, ref: slipRef, portalUrl })))
       await logAutoPayment('total_all_outstanding', paidBills)
       const roomList = paidBills.map((b) => `ห้อง ${b.roomNumber}`).join(', ')
       await notifyOwner(cfg, `✅ ชำระรวมทุกห้อง! ${tenant.full_name}\n${roomList}\n💰 ${fmt(amount)} บาท\n🔢 Ref: ${slipRef ?? '-'}\n📅 ${thDate} ${transTime}`)
@@ -780,7 +782,7 @@ async function handleSlipImage(
       const roomId1 = outstandingBills.length === 1 ? outstandingBills[0].room_id : null
       await recordCredit(overAll, tenant.id, roomId1)
       const portalUrl = buildBillPortalUrl(outstandingBills[0].id, cfg.liffId, cfg.appUrl)
-      await reply(replyToken, token, [buildMultiBillPaymentFlex({ tenantName: tenant.full_name, paidBills, totalPaid: totalOutstanding, transferAmount: amount, creditAmount: overAll, ref: slipRef, portalUrl })])
+      await reply(replyToken, token, withPaymentThankYou(buildMultiBillPaymentFlex({ tenantName: tenant.full_name, paidBills, totalPaid: totalOutstanding, transferAmount: amount, creditAmount: overAll, ref: slipRef, portalUrl })))
       await logAutoPayment('total_all_overpay', paidBills, overAll)
       const roomList = paidBills.map((b) => `ห้อง ${b.roomNumber}`).join(', ')
       await notifyOwner(cfg, `✅ ชำระรวม+เครดิต! ${tenant.full_name}\n${roomList}\n💰 โอน ฿${fmt(amount)} ตัดบิล ฿${fmt(totalOutstanding)} เครดิต ฿${fmt(overAll)}\n🔢 Ref: ${slipRef ?? '-'}\n📅 ${thDate} ${transTime}`)
@@ -809,7 +811,7 @@ async function handleSlipImage(
     const { ok, paidBills } = await payBills(roomBills, ` (รวมยอดห้อง ${rn})`)
     if (ok) {
       const portalUrl = buildBillPortalUrl(roomBills[0].id, cfg.liffId, cfg.appUrl)
-      await reply(replyToken, token, [buildMultiBillPaymentFlex({ tenantName: tenant.full_name, paidBills, totalPaid: amount, ref: slipRef, portalUrl })])
+      await reply(replyToken, token, withPaymentThankYou(buildMultiBillPaymentFlex({ tenantName: tenant.full_name, paidBills, totalPaid: amount, ref: slipRef, portalUrl })))
       await logAutoPayment('single_room_total', paidBills)
       await notifyOwner(cfg, `✅ ชำระรวมห้อง ${rn}! ${tenant.full_name}\n💰 ${fmt(amount)} บาท\n🔢 Ref: ${slipRef ?? '-'}\n📅 ${thDate} ${transTime}`)
       return
@@ -825,7 +827,7 @@ async function handleSlipImage(
     if (ok) {
       await recordCredit(over, tenant.id, roomId1)
       const portalUrl = buildBillPortalUrl(roomBills[0].id, cfg.liffId, cfg.appUrl)
-      await reply(replyToken, token, [buildMultiBillPaymentFlex({ tenantName: tenant.full_name, paidBills, totalPaid: roomOutstanding, transferAmount: amount, creditAmount: over, ref: slipRef, portalUrl })])
+      await reply(replyToken, token, withPaymentThankYou(buildMultiBillPaymentFlex({ tenantName: tenant.full_name, paidBills, totalPaid: roomOutstanding, transferAmount: amount, creditAmount: over, ref: slipRef, portalUrl })))
       await logAutoPayment('single_room_overpay', paidBills, over)
       await notifyOwner(cfg, `✅ ชำระห้อง ${rn}+เครดิต! ${tenant.full_name}\n💰 โอน ฿${fmt(amount)} ตัดบิล ฿${fmt(roomOutstanding)} เครดิต ฿${fmt(over)}\n🔢 Ref: ${slipRef ?? '-'}\n📅 ${thDate} ${transTime}`)
       return
