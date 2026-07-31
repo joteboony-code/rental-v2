@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Pencil, BarChart2, Building2, Wifi } from 'lucide-react'
+import { Pencil, BarChart2, Building2, Eye, Wifi } from 'lucide-react'
 import { roomRow } from '@/lib/room-utils'
 import { SearchInput } from '@/components/ui/search-input'
 import { EmptyState } from '@/components/ui/empty-state'
@@ -182,6 +182,16 @@ export function RoomsBrowser({ rooms }: { rooms: RoomRow[] }) {
                 {/* Actions */}
                 <div className="flex items-center justify-end gap-1 border-t border-slate-100 pt-2">
                   <RoomPairQrButton roomNumber={room.room_number} registrationUrl={room.registrationUrl} pairUrl={room.pairUrl} />
+                  {room.tenantId && (
+                    <Link
+                      href={`/rooms/${room.id}/portal-preview`}
+                      className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-violet-50 hover:text-violet-600"
+                      title="ดู Portal ในฐานะผู้ดูแล"
+                      aria-label={`ดู Portal ห้อง ${room.room_number}`}
+                    >
+                      <Eye className="size-4" />
+                    </Link>
+                  )}
                   <Link href={`/rooms/${room.id}/usage`} className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-teal-50 hover:text-teal-600" title="กราฟการใช้น้ำ-ไฟ">
                     <BarChart2 className="size-4" />
                   </Link>

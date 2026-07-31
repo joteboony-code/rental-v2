@@ -15,6 +15,7 @@ const PromptPayQR = dynamic(
   { ssr: false }
 )
 import { getTenantPortalDashboard, getPortalRepairs, getPortalRooms, verifyAndGetPortalToken, type TenantPortalData, type PortalRepairItem, type PortalRoom } from '@/app/actions/portal'
+import { getAdminPortalRepairs, getAdminPortalRooms, getAdminTenantPortalDashboard } from '@/app/actions/portal-admin'
 import { roomRow } from '@/lib/room-utils'
 import { Badge } from '@/components/ui/badge'
 import { RepairSubmit } from './repair-submit'
@@ -23,7 +24,11 @@ import type { LiffClient } from '@/lib/liff-types'
 
 declare global { interface Window { liff?: LiffClient } }
 
-type TenantPortalProps = { liffId?: string | null }
+type TenantPortalProps = {
+  liffId?: string | null
+  adminPreview?: boolean
+  initialRoomId?: string
+}
 type Tab = 'bills' | 'repairs'
 
 const money = new Intl.NumberFormat('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -34,12 +39,12 @@ const statusLabel: Record<string, string> = {
   paid: 'ชำระแล้ว', pending: 'รอชำระ', overdue: 'เกินกำหนด', cancelled: 'ยกเลิก',
 }
 
-export function TenantPortal({ liffId }: TenantPortalProps) {
+export function TenantPortal({ liffId, adminPreview = false, initialRoomId }: TenantPortalProps) {
   const [scriptReady, setScriptReady]       = useState(false)
   const [linePictureUrl, setLinePictureUrl] = useState('')
   const [lineDisplayName, setLineDisplayName] = useState('')
   const [portalToken, setPortalToken]       = useState('')
-  const [status, setStatus]                 = useState(liffId ? 'กำลังเชื่อมต่อ LINE' : 'กำลังเตรียมข้อมูลห้อง')
+  const [status, setStatus]                 = useState(adminPreview ? 'กำลังโหลดข้อมูล Portal' : liffId ? 'กำลังเชื่อมต่อ LINE' : 'กำลังเตรียมข้อมูลห้อง')
   const [data, setData]                     = useState<TenantPortalData | null>(null)
   const [error, setError]                   = useState('')
   const [tab, setTab]                       = useState<Tab>('bills')
@@ -50,25 +55,53 @@ export function TenantPortal({ liffId }: TenantPortalProps) {
   const [, startTransition]                 = useTransition()
 
   const loadDashboard = useCallback((token = portalToken, roomId?: string) => {
-    if (!token) return
+    if (!adminPreview && !token) return
+    if (adminPreview && !roomId) return
     setError('')
     startTransition(async () => {
-      const result = await getTenantPortalDashboard(token, roomId)
+      const result = adminPreview
+        ? await getAdminTenantPortalDashboard(roomId!)
+        : await getTenantPortalDashboard(token, roomId)
       if (!result.success) { setData(null); setError(result.message); return }
       setData(result.data)
     })
-  }, [portalToken])
+  }, [adminPreview, portalToken])
 
   const loadRepairs = useCallback(async (token = portalToken, roomId = selectedRoomId) => {
-    if (!token) return
+    if (!adminPreview && !token) return
+    if (adminPreview && !roomId) return
     setRepairsLoading(true)
-    const result = await getPortalRepairs(token, roomId)
+    const result = adminPreview
+      ? await getAdminPortalRepairs(roomId!)
+      : await getPortalRepairs(token, roomId)
     setRepairsLoading(false)
     if (result.success) setRepairs(result.repairs ?? [])
-  }, [portalToken, selectedRoomId])
+  }, [adminPreview, portalToken, selectedRoomId])
 
   useEffect(() => {
-    if (!liffId || !scriptReady) return
+    if (!adminPreview) return
+    let cancelled = false
+    async function loadAdminPreview() {
+      const result = await getAdminPortalRooms()
+      if (cancelled) return
+      if (!result.success) {
+        setError(result.message ?? 'โหลดรายการห้องไม่สำเร็จ')
+        return
+      }
+      setRooms(result.rooms)
+      const selected = result.rooms.some((room) => room.room_id === initialRoomId)
+        ? initialRoomId
+        : result.rooms[0]?.room_id
+      setSelectedRoomId(selected)
+      if (selected) loadDashboard('', selected)
+      else setError('ยังไม่มีห้องที่มีสัญญาเช่าใช้งานอยู่')
+    }
+    void loadAdminPreview()
+    return () => { cancelled = true }
+  }, [adminPreview, initialRoomId, loadDashboard])
+
+  useEffect(() => {
+    if (adminPreview || !liffId || !scriptReady) return
     let cancelled = false
     async function loadLineProfile() {
       try {
@@ -99,16 +132,16 @@ export function TenantPortal({ liffId }: TenantPortalProps) {
     }
     loadLineProfile()
     return () => { cancelled = true }
-  }, [liffId, loadDashboard, scriptReady])
+  }, [adminPreview, liffId, loadDashboard, scriptReady])
 
   // Load repairs when switching to repair tab
   useEffect(() => {
-    if (tab === 'repairs' && repairs === null && portalToken) {
+    if (tab === 'repairs' && repairs === null && (adminPreview || portalToken)) {
       setTimeout(() => {
         void loadRepairs(portalToken, selectedRoomId)
       }, 0)
     }
-  }, [tab, repairs, portalToken, selectedRoomId, loadRepairs])
+  }, [adminPreview, tab, repairs, portalToken, selectedRoomId, loadRepairs])
 
   const currentBill    = data?.bills[0] ?? null
   const monthlyRent    = data?.contract?.monthly_rent ?? 0
@@ -117,7 +150,7 @@ export function TenantPortal({ liffId }: TenantPortalProps) {
 
   return (
     <>
-      {liffId && (
+      {!adminPreview && liffId && (
         <Script
           src="https://static.line-scdn.net/liff/edge/2/sdk.js"
           strategy="afterInteractive"
@@ -148,7 +181,11 @@ export function TenantPortal({ liffId }: TenantPortalProps) {
                     {data.tenant.full_name}{data.room?.room_number ? ` · แถวที่ ${roomRow(data.room.room_number)}` : ''}
                   </p>
                 </div>
-                {linePictureUrl ? (
+                {adminPreview ? (
+                  <div className="rounded-full bg-violet-500/20 px-3 py-1 text-xs font-semibold text-violet-200">
+                    ดูโดยผู้ดูแล
+                  </div>
+                ) : linePictureUrl ? (
                   <div className="relative shrink-0">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
@@ -222,7 +259,7 @@ export function TenantPortal({ liffId }: TenantPortalProps) {
                   </div>
                   <div className="space-y-3">
                     {data.bills.length > 0
-                      ? data.bills.map((bill) => <BillHistoryItem key={bill.id} bill={bill} />)
+                      ? data.bills.map((bill) => <BillHistoryItem key={bill.id} bill={bill} adminPreview={adminPreview} />)
                       : <p className="rounded-xl bg-slate-50 p-4 text-center text-sm text-slate-400">ยังไม่มีประวัติบิล</p>
                     }
                   </div>
@@ -233,13 +270,15 @@ export function TenantPortal({ liffId }: TenantPortalProps) {
             {/* Repairs tab */}
             {tab === 'repairs' && (
               <>
-                <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
-                  <div className="mb-4 flex items-center gap-2">
-                    <Wrench className="size-4 text-slate-400" />
-                    <h2 className="text-sm font-semibold text-slate-800">แจ้งซ่อม / แจ้งปัญหา</h2>
-                  </div>
-                  <RepairSubmit portalToken={portalToken} roomId={selectedRoomId} onSuccess={() => loadRepairs(portalToken, selectedRoomId)} />
-                </section>
+                {!adminPreview && (
+                  <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+                    <div className="mb-4 flex items-center gap-2">
+                      <Wrench className="size-4 text-slate-400" />
+                      <h2 className="text-sm font-semibold text-slate-800">แจ้งซ่อม / แจ้งปัญหา</h2>
+                    </div>
+                    <RepairSubmit portalToken={portalToken} roomId={selectedRoomId} onSuccess={() => loadRepairs(portalToken, selectedRoomId)} />
+                  </section>
+                )}
 
                 <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
                   <div className="mb-3 flex items-center gap-2">
@@ -420,7 +459,7 @@ function MeterImage({ label, src }: { label: string; src: string }) {
   )
 }
 
-function BillHistoryItem({ bill }: { bill: TenantPortalData['bills'][number] }) {
+function BillHistoryItem({ bill, adminPreview = false }: { bill: TenantPortalData['bills'][number]; adminPreview?: boolean }) {
   return (
     <div className="rounded-xl border border-slate-100 p-3">
       <div className="flex items-start justify-between gap-2">
@@ -435,7 +474,7 @@ function BillHistoryItem({ bill }: { bill: TenantPortalData['bills'][number] }) 
 
       <div className="mt-3 flex items-center justify-between gap-2">
         <p className="text-xs text-slate-500">คงเหลือ ฿{money.format(bill.remaining_amount)}</p>
-        <Link href={`/portal/${bill.id}`} className="inline-flex items-center gap-1 text-xs font-semibold text-slate-700">
+        <Link href={adminPreview ? `/bills/${bill.id}` : `/portal/${bill.id}`} className="inline-flex items-center gap-1 text-xs font-semibold text-slate-700">
           ดูบิล <ExternalLink className="size-3" />
         </Link>
       </div>
