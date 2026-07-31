@@ -700,17 +700,18 @@ function PhotoPicker({
         <button
           type="button"
           onClick={() => localRef.current?.click()}
+          aria-label="เพิ่มรูปมิเตอร์"
+          title="เพิ่มรูปมิเตอร์"
           className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[10px] font-medium transition-colors ${accentClass}`}
         >
           <Camera className="size-3" />
-          {!compact && 'ถ่ายรูปมิเตอร์'}
+          {!compact && 'เพิ่มรูปมิเตอร์'}
         </button>
       )}
       <input
         ref={combinedRef}
         type="file"
         accept="image/*"
-        capture="environment"
         className="hidden"
         onChange={(e) => { const f = e.target.files?.[0]; if (f) onChange(f) }}
       />
