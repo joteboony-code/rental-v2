@@ -1,4 +1,4 @@
-import { createHmac } from 'crypto'
+import { createHmac, timingSafeEqual } from 'crypto'
 import { normalizeOrigin } from '@/lib/pair-url'
 
 const DEFAULT_APP_ORIGIN = 'https://rental-v2.joteboony.workers.dev'
@@ -9,6 +9,36 @@ export function createBillToken(billId: string): string {
   const payload = `${billId}|${exp}`
   const mac = createHmac('sha256', secret).update(payload).digest('hex')
   return Buffer.from(`${payload}|${mac}`).toString('base64url')
+}
+
+export function verifyBillToken(billId: string, token: string): boolean {
+  try {
+    const secret = process.env.PORTAL_SESSION_SECRET ?? process.env.ENCRYPTION_KEY ?? ''
+    if (!secret) return false
+    const decoded = Buffer.from(token, 'base64url').toString('utf8')
+    const lastPipe = decoded.lastIndexOf('|')
+    if (lastPipe < 0) return false
+    const mac = decoded.slice(lastPipe + 1)
+    const rest = decoded.slice(0, lastPipe)
+    const pipeParts = rest.split('|')
+    if (pipeParts.length < 2) return false
+    const expStr = pipeParts[pipeParts.length - 1]
+    const tokenBillId = pipeParts.slice(0, -1).join('|')
+    if (tokenBillId !== billId) return false
+    const exp = Number(expStr)
+    if (isNaN(exp) || exp < Math.floor(Date.now() / 1000)) return false
+    const expected = createHmac('sha256', secret).update(rest).digest('hex')
+    const macBuf = Buffer.from(mac, 'hex')
+    const expectedBuf = Buffer.from(expected, 'hex')
+    return macBuf.length === expectedBuf.length && timingSafeEqual(macBuf, expectedBuf)
+  } catch {
+    return false
+  }
+}
+
+export function buildBillDetailPath(billId: string) {
+  const token = createBillToken(billId)
+  return `/portal/${encodeURIComponent(billId)}?t=${encodeURIComponent(token)}`
 }
 
 function getAppOrigin(appUrl: string | null) {

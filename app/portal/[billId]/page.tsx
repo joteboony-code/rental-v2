@@ -1,37 +1,11 @@
 export const dynamic = 'force-dynamic'
 
 import { notFound } from 'next/navigation'
-import { createHmac, timingSafeEqual } from 'crypto'
 import { createServiceClient } from '@/lib/supabase/service'
 import { Droplets, Zap, Wifi, Trash2, User, Phone, CheckCircle, Clock, AlertTriangle } from 'lucide-react'
 import { roomRow } from '@/lib/room-utils'
+import { verifyBillToken } from '@/lib/portal-url'
 import { QRWrapper } from './_components/qr-wrapper'
-
-export function verifyBillToken(billId: string, token: string): boolean {
-  try {
-    const secret = process.env.PORTAL_SESSION_SECRET ?? process.env.ENCRYPTION_KEY ?? ''
-    if (!secret) return false
-    const decoded = Buffer.from(token, 'base64url').toString('utf8')
-    const lastPipe = decoded.lastIndexOf('|')
-    if (lastPipe < 0) return false
-    const mac = decoded.slice(lastPipe + 1)
-    const rest = decoded.slice(0, lastPipe)
-    const pipeParts = rest.split('|')
-    if (pipeParts.length < 2) return false
-    const expStr = pipeParts[pipeParts.length - 1]
-    const tokenBillId = pipeParts.slice(0, -1).join('|')
-    if (tokenBillId !== billId) return false
-    const exp = Number(expStr)
-    if (isNaN(exp) || exp < Math.floor(Date.now() / 1000)) return false
-    const expected = createHmac('sha256', secret).update(rest).digest('hex')
-    const macBuf = Buffer.from(mac, 'hex')
-    const expectedBuf = Buffer.from(expected, 'hex')
-    if (macBuf.length !== expectedBuf.length || !timingSafeEqual(macBuf, expectedBuf)) return false
-    return true
-  } catch {
-    return false
-  }
-}
 
 export default async function PortalPage({
   params,

@@ -3,7 +3,7 @@
 import Script from 'next/script'
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
-import { useCallback, useEffect, useMemo, useState, useTransition } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import {
   AlertCircle, CalendarDays, CheckCircle2, Clock,
   Droplets, ExternalLink, Home, Loader2, Receipt,
@@ -53,29 +53,45 @@ export function TenantPortal({ liffId, adminPreview = false, initialRoomId }: Te
   const [rooms, setRooms]                   = useState<PortalRoom[]>([])
   const [selectedRoomId, setSelectedRoomId] = useState<string | undefined>(undefined)
   const [, startTransition]                 = useTransition()
+  const dashboardRequestId                  = useRef(0)
+  const repairsRequestId                    = useRef(0)
 
   const loadDashboard = useCallback((token = portalToken, roomId?: string) => {
     if (!adminPreview && !token) return
     if (adminPreview && !roomId) return
+    const requestId = ++dashboardRequestId.current
     setError('')
+    setData(null)
     startTransition(async () => {
-      const result = adminPreview
-        ? await getAdminTenantPortalDashboard(roomId!)
-        : await getTenantPortalDashboard(token, roomId)
-      if (!result.success) { setData(null); setError(result.message); return }
-      setData(result.data)
+      try {
+        const result = adminPreview
+          ? await getAdminTenantPortalDashboard(roomId!)
+          : await getTenantPortalDashboard(token, roomId)
+        if (requestId !== dashboardRequestId.current) return
+        if (!result.success) { setError(result.message); return }
+        setData(result.data)
+      } catch {
+        if (requestId === dashboardRequestId.current) {
+          setError('โหลดข้อมูล Portal ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง')
+        }
+      }
     })
   }, [adminPreview, portalToken])
 
   const loadRepairs = useCallback(async (token = portalToken, roomId = selectedRoomId) => {
     if (!adminPreview && !token) return
     if (adminPreview && !roomId) return
+    const requestId = ++repairsRequestId.current
     setRepairsLoading(true)
-    const result = adminPreview
-      ? await getAdminPortalRepairs(roomId!)
-      : await getPortalRepairs(token, roomId)
-    setRepairsLoading(false)
-    if (result.success) setRepairs(result.repairs ?? [])
+    try {
+      const result = adminPreview
+        ? await getAdminPortalRepairs(roomId!)
+        : await getPortalRepairs(token, roomId)
+      if (requestId !== repairsRequestId.current) return
+      if (result.success) setRepairs(result.repairs ?? [])
+    } finally {
+      if (requestId === repairsRequestId.current) setRepairsLoading(false)
+    }
   }, [adminPreview, portalToken, selectedRoomId])
 
   useEffect(() => {
@@ -217,7 +233,9 @@ export function TenantPortal({ liffId, adminPreview = false, initialRoomId }: Te
                     type="button"
                     onClick={() => {
                       setSelectedRoomId(r.room_id)
+                      repairsRequestId.current += 1
                       setRepairs(null)
+                      setRepairsLoading(false)
                       loadDashboard(portalToken, r.room_id)
                     }}
                     className={`shrink-0 rounded-xl border px-4 py-2 text-sm font-semibold transition-colors ${
@@ -474,7 +492,7 @@ function BillHistoryItem({ bill, adminPreview = false }: { bill: TenantPortalDat
 
       <div className="mt-3 flex items-center justify-between gap-2">
         <p className="text-xs text-slate-500">คงเหลือ ฿{money.format(bill.remaining_amount)}</p>
-        <Link href={adminPreview ? `/bills/${bill.id}` : `/portal/${bill.id}`} className="inline-flex items-center gap-1 text-xs font-semibold text-slate-700">
+        <Link href={adminPreview ? `/bills/${bill.id}` : bill.detail_url ?? '/portal'} className="inline-flex items-center gap-1 text-xs font-semibold text-slate-700">
           ดูบิล <ExternalLink className="size-3" />
         </Link>
       </div>

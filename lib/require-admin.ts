@@ -19,5 +19,13 @@ export async function getAuthedUser() {
   if (!user) return null
   if (error || !assurance) return null   // fail closed: cannot confirm AAL → deny
   if (assurance.nextLevel === 'aal2' && assurance.currentLevel !== 'aal2') return null
+
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .maybeSingle()
+  if (profileError || profile?.role !== 'admin') return null
+
   return user
 }

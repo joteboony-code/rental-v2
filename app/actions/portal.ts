@@ -10,6 +10,7 @@ const ALLOWED_REPAIR_PHOTO_TYPES: Record<string, string> = {
   'image/webp': 'webp',
 }
 import { signPortalToken, verifyPortalToken } from '@/lib/portal-session'
+import { buildBillDetailPath } from '@/lib/portal-url'
 import { isRateLimited } from '@/lib/rate-limit'
 import { notifyOwner } from '@/lib/notify-owner'
 
@@ -46,6 +47,7 @@ export type TenantPortalData = {
     total_amount: number
     paid_amount: number
     remaining_amount: number
+    detail_url?: string
     meter: {
       water_prev: number
       water_curr: number
@@ -202,6 +204,7 @@ export async function getTenantPortalDashboard(portalToken: string, roomId?: str
   const portalData = data as TenantPortalData
   const svc3 = createServiceClient()
   for (const bill of portalData.bills ?? []) {
+    bill.detail_url = buildBillDetailPath(bill.id)
     for (const payment of bill.payments ?? []) {
       if (payment.slip_url) {
         const path = payment.slip_url.split('/payment-slips/')[1]
