@@ -1,4 +1,5 @@
-import { Gauge, Info } from 'lucide-react'
+import Link from 'next/link'
+import { ChevronLeft, Gauge, Info } from 'lucide-react'
 import { redirect } from 'next/navigation'
 import { BaselineManager, type BaselineHistoryItem, type BaselineRoom } from './_components/baseline-manager'
 import { normalizeBillingMonth, type MeterBaselineReason } from '@/lib/meter-baseline'
@@ -181,6 +182,9 @@ export default async function MeterBaselinesPage({
             <Gauge className="size-5" />
           </div>
           <div>
+            <Link href={`/bills/meter?month=${selectedMonth}`} className="mb-1 inline-flex items-center gap-1 text-xs font-medium text-slate-400 transition-colors hover:text-slate-700">
+              <ChevronLeft className="size-3.5" /> กลับไปหน้าจดมิเตอร์
+            </Link>
             <h1 className="text-2xl font-bold tracking-tight text-slate-950 md:text-3xl">ปรับฐานมิเตอร์</h1>
             <p className="text-sm text-slate-400">ใช้เมื่อซ่อมห้อง เปลี่ยนมิเตอร์ หรือมีหน่วยที่เจ้าของรับผิดชอบ</p>
           </div>

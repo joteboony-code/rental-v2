@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { ChevronLeft, Droplets, Zap } from 'lucide-react'
+import { ChevronLeft, Droplets, Gauge, Zap } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { MeterForm, type RoomRow } from './_components/meter-form'
 import { resolveMeterBaseline, type ActiveMeterBaseline } from '@/lib/meter-baseline'
@@ -157,21 +157,29 @@ export default async function MeterReadingPage({ searchParams }: Props) {
           <h1 className="text-2xl md:text-3xl font-bold text-slate-950 tracking-tight">บันทึกมิเตอร์ + ออกบิล</h1>
         </div>
 
-        {/* Month switcher */}
-        <form method="get" className="flex w-full items-center gap-2 sm:w-auto">
-          <input
-            type="month"
-            name="month"
-            defaultValue={currentMonth}
-            className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-slate-900 shadow-sm sm:flex-none"
-          />
-          <button
-            type="submit"
-            className="shrink-0 px-4 py-2 text-sm font-medium bg-white border border-slate-200 hover:bg-slate-50 rounded-xl shadow-sm transition-colors text-slate-600"
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+          <Link
+            href={`/meter-baselines?month=${currentMonth}`}
+            className="inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-xl border border-cyan-200 bg-cyan-50 px-4 text-sm font-semibold text-cyan-700 shadow-sm transition-colors hover:bg-cyan-100 sm:flex-none"
           >
-            ดู
-          </button>
-        </form>
+            <Gauge className="size-4" /> ปรับฐานมิเตอร์
+          </Link>
+          {/* Month switcher */}
+          <form method="get" className="flex min-w-0 flex-1 items-center gap-2 sm:flex-none">
+            <input
+              type="month"
+              name="month"
+              defaultValue={currentMonth}
+              className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-slate-900 shadow-sm sm:flex-none"
+            />
+            <button
+              type="submit"
+              className="shrink-0 px-4 py-2 text-sm font-medium bg-white border border-slate-200 hover:bg-slate-50 rounded-xl shadow-sm transition-colors text-slate-600"
+            >
+              ดู
+            </button>
+          </form>
+        </div>
       </div>
 
       {/* Rate info */}

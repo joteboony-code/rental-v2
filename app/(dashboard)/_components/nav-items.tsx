@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, Users, FileText, ClipboardList, Wrench, Settings, History, Megaphone, LayoutDashboard, Inbox, BarChart2, Wallet, Gauge } from 'lucide-react'
+import { Home, Users, FileText, ClipboardList, Wrench, Settings, History, Megaphone, LayoutDashboard, Inbox, BarChart2, Wallet } from 'lucide-react'
 
 const navItems = [
   {
@@ -38,14 +38,7 @@ const navItems = [
     label:  'จดมิเตอร์',
     icon:   ClipboardList,
     dot:    'bg-teal-400',
-    match:  (p: string) => p.startsWith('/bills/meter'),
-  },
-  {
-    href:   '/meter-baselines',
-    label:  'ปรับฐานมิเตอร์',
-    icon:   Gauge,
-    dot:    'bg-cyan-400',
-    match:  (p: string) => p.startsWith('/meter-baselines'),
+    match:  (p: string) => p.startsWith('/bills/meter') || p.startsWith('/meter-baselines'),
   },
   {
     href:   '/repairs',
