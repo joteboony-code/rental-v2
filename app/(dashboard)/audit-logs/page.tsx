@@ -41,6 +41,8 @@ export const ACTION_LABELS: Record<string, { label: string; color: string }> = {
   registration_rejected:      { label: 'ปฏิเสธลงทะเบียน',  color: 'bg-rose-50 text-rose-700 ring-rose-200' },
   room_pairing_token_regenerated: { label: 'สร้าง QR ใหม่', color: 'bg-slate-100 text-slate-600 ring-slate-200' },
   settings_update:     { label: 'เปลี่ยนบัญชี/PromptPay', color: 'bg-amber-50 text-amber-700 ring-amber-200' },
+  meter_baseline_adjustment: { label: 'ปรับฐานมิเตอร์', color: 'bg-cyan-50 text-cyan-700 ring-cyan-200' },
+  meter_baseline_adjustment_cancelled: { label: 'ยกเลิกปรับฐานมิเตอร์', color: 'bg-rose-50 text-rose-700 ring-rose-200' },
 }
 
 const dateTimeFmt = (s: string) =>

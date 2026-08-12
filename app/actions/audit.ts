@@ -41,6 +41,8 @@ export type AuditAction =
   | 'cron_daily_summary_sent'
   | 'bills_mark_overdue'
   | 'settings_update'
+  | 'meter_baseline_adjustment'
+  | 'meter_baseline_adjustment_cancelled'
 
 export type AuditLog = {
   id: string

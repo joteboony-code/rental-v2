@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { ChevronLeft, Droplets, Zap } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { MeterForm, type RoomRow } from './_components/meter-form'
+import { resolveMeterBaseline, type ActiveMeterBaseline } from '@/lib/meter-baseline'
 
 interface Props {
   searchParams: Promise<{ month?: string }>
@@ -76,8 +77,16 @@ export default async function MeterReadingPage({ searchParams }: Props) {
     .in('room_id', roomIds)
     .eq('billing_month', billingMonth)
 
+  const { data: baselineAdjustments } = await supabase
+    .from('meter_baseline_adjustments')
+    .select('id, room_id, water_baseline, electricity_baseline, reason_code, reason_note')
+    .in('room_id', roomIds)
+    .eq('effective_billing_month', billingMonth)
+    .is('cancelled_at', null)
+
   const prevMap = Object.fromEntries((prevReadings    ?? []).map((r) => [r.room_id, r]))
   const thisMap = Object.fromEntries((thisMonthReadings ?? []).map((r) => [r.room_id, r]))
+  const adjustmentMap = Object.fromEntries((baselineAdjustments ?? []).map((r) => [r.room_id, r]))
 
   type RoomJoin   = { room_number: string; floor: number | null }
   type TenantJoin = { full_name: string }
@@ -87,6 +96,12 @@ export default async function MeterReadingPage({ searchParams }: Props) {
     const curr   = thisMap[c.room_id]
     const room   = (c.rooms   as unknown as RoomJoin   | null)
     const tenant = (c.tenants as unknown as TenantJoin | null)
+    const adjustment = (adjustmentMap[c.room_id] ?? null) as ActiveMeterBaseline
+    const baseline = resolveMeterBaseline(
+      Number(curr?.water_prev ?? prev?.water_curr ?? 0),
+      Number(curr?.electricity_prev ?? prev?.electricity_curr ?? 0),
+      adjustment
+    )
 
     // Previous month units (for anomaly detection)
     const prevWaterUnits = prev ? Number(prev.water_curr)       - Number(prev.water_prev)       : null
@@ -104,8 +119,8 @@ export default async function MeterReadingPage({ searchParams }: Props) {
       contract_id:       c.id,
       tenant_id:         c.tenant_id,
       rent:              Number(c.monthly_rent),
-      water_prev:            Number(curr?.water_prev ?? prev?.water_curr ?? 0),
-      electricity_prev:      Number(curr?.electricity_prev ?? prev?.electricity_curr ?? 0),
+      water_prev:            baseline.water,
+      electricity_prev:      baseline.electricity,
       water_curr:            Number(curr?.water_curr ?? 0),
       electricity_curr:      Number(curr?.electricity_curr ?? 0),
       water_image_url:       (curr as { water_image_url?: string | null } | undefined)?.water_image_url ?? null,
@@ -116,6 +131,8 @@ export default async function MeterReadingPage({ searchParams }: Props) {
       // Pro-rated
       start_date:        startDate ?? '',
       is_first_month:    isFirstMonth,
+      baseline_adjusted: baseline.adjusted,
+      baseline_reason:   baseline.reason,
     }
   })
   // numeric sort (room_number stored as text → "10" < "2" alphabetically)

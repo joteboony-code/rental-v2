@@ -27,6 +27,8 @@ export interface RoomRow {
   // Pro-rated rent
   start_date:        string
   is_first_month:    boolean
+  baseline_adjusted: boolean
+  baseline_reason:   string | null
 }
 
 interface Props {
@@ -340,7 +342,7 @@ export function MeterForm({ rooms, billingMonth, waterRate, electricityRate, ano
                   <div className="flex items-center gap-1 text-xs font-semibold text-blue-500">
                     <Droplets className="size-3.5" /> น้ำ
                   </div>
-                  <p className="text-xs text-slate-400">ก่อนหน้า: <strong className="text-slate-600">{room.water_prev.toLocaleString()}</strong></p>
+                  <p className="text-xs text-slate-400">ก่อนหน้า: <strong className="text-slate-600">{room.water_prev.toLocaleString()}</strong>{room.baseline_adjusted && <span className="ml-1 text-cyan-600">(ปรับฐาน)</span>}</p>
                   <Input
                     type="number"
                     value={curr[room.room_id]?.water ?? ''}
@@ -383,7 +385,7 @@ export function MeterForm({ rooms, billingMonth, waterRate, electricityRate, ano
                   <div className="flex items-center gap-1 text-xs font-semibold text-amber-500">
                     <Zap className="size-3.5" /> ไฟ
                   </div>
-                  <p className="text-xs text-slate-400">ก่อนหน้า: <strong className="text-slate-600">{room.electricity_prev.toLocaleString()}</strong></p>
+                  <p className="text-xs text-slate-400">ก่อนหน้า: <strong className="text-slate-600">{room.electricity_prev.toLocaleString()}</strong>{room.baseline_adjusted && <span className="ml-1 text-cyan-600">(ปรับฐาน)</span>}</p>
                   <Input
                     type="number"
                     value={curr[room.room_id]?.elec ?? ''}
@@ -502,7 +504,8 @@ export function MeterForm({ rooms, billingMonth, waterRate, electricityRate, ano
 
                   {/* Water prev */}
                   <td className="px-3 py-3 text-center text-slate-500 border-l border-slate-100">
-                    {room.water_prev.toLocaleString()}
+                    <span title={room.baseline_reason ?? undefined}>{room.water_prev.toLocaleString()}</span>
+                    {room.baseline_adjusted && <span className="ml-1 text-[10px] font-semibold text-cyan-600">ปรับฐาน</span>}
                   </td>
                   {/* Water curr input */}
                   <td className="px-2 py-2">
@@ -549,7 +552,8 @@ export function MeterForm({ rooms, billingMonth, waterRate, electricityRate, ano
 
                   {/* Electricity prev */}
                   <td className="px-3 py-3 text-center text-slate-500 border-l border-slate-100">
-                    {room.electricity_prev.toLocaleString()}
+                    <span title={room.baseline_reason ?? undefined}>{room.electricity_prev.toLocaleString()}</span>
+                    {room.baseline_adjusted && <span className="ml-1 text-[10px] font-semibold text-cyan-600">ปรับฐาน</span>}
                   </td>
                   {/* Electricity curr input */}
                   <td className="px-2 py-2">
