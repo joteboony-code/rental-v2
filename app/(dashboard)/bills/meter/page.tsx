@@ -160,7 +160,7 @@ export default async function MeterReadingPage({ searchParams }: Props) {
         <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
           <Link
             href={`/meter-baselines?month=${currentMonth}`}
-            className="inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-xl border border-cyan-200 bg-cyan-50 px-4 text-sm font-semibold text-cyan-700 shadow-sm transition-colors hover:bg-cyan-100 sm:flex-none"
+            className="inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-600 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-800 sm:flex-none"
           >
             <Gauge className="size-4" /> ปรับฐานมิเตอร์
           </Link>
