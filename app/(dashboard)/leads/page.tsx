@@ -5,6 +5,7 @@ import { LeadActions } from './_components/lead-actions'
 import { Users, Eye } from 'lucide-react'
 import { CopyLinkButton } from './_components/copy-link-button'
 import { AnnouncementEditor } from './_components/announcement-editor'
+import { InterestGalleryManager } from './_components/interest-gallery-manager'
 import { EmptyState } from '@/components/ui/empty-state'
 
 type Lead = {
@@ -36,8 +37,14 @@ export default async function LeadsPage({ searchParams }: Props) {
   const [{ data: leads }, { data: allLeads }, { data: settings }] = await Promise.all([
     query,
     supabase.from('leads').select('status'),
-    supabase.from('settings').select('lead_announcement, interest_view_count').eq('id', 1).single(),
+    supabase.from('settings').select('lead_announcement, interest_view_count, interest_gallery_paths').eq('id', 1).single(),
   ])
+
+  const galleryPaths = (settings as { interest_gallery_paths?: string[] | null } | null)?.interest_gallery_paths ?? []
+  const galleryImages = galleryPaths.map((path) => ({
+    path,
+    url: supabase.storage.from('interest-room-photos').getPublicUrl(path).data.publicUrl,
+  }))
 
   const counts = {
     all:       allLeads?.length ?? 0,
@@ -79,6 +86,9 @@ export default async function LeadsPage({ searchParams }: Props) {
 
       {/* Announcement editor */}
       <AnnouncementEditor initial={(settings as { lead_announcement?: string | null } | null)?.lead_announcement ?? null} />
+
+      {/* Photos shown on the public interest form */}
+      <InterestGalleryManager initial={galleryImages} />
 
       {/* Filter tabs */}
       <div className="flex gap-2 flex-wrap">

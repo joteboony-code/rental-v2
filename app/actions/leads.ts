@@ -72,6 +72,74 @@ export async function updateLeadAnnouncement(text: string): Promise<{ error?: st
   return {}
 }
 
+const INTEREST_GALLERY_BUCKET = 'interest-room-photos'
+const MAX_INTEREST_GALLERY_PHOTOS = 10
+
+function isValidInterestGalleryPath(path: string, userId: string) {
+  return path.startsWith(`${userId}/`) && /^[0-9a-f-]+\.jpg$/i.test(path.slice(userId.length + 1))
+}
+
+export async function addInterestGalleryPhotos(paths: string[]): Promise<{ error?: string }> {
+  const user = await getAuthedUser()
+  if (!user) return { error: 'ไม่มีสิทธิ์ใช้งาน' }
+
+  const uniquePaths = [...new Set(paths)]
+  if (uniquePaths.length === 0 || uniquePaths.some((path) => !isValidInterestGalleryPath(path, user.id))) {
+    return { error: 'ตำแหน่งรูปไม่ถูกต้อง' }
+  }
+
+  const supabase = await createClient()
+  const { data: settings, error: readError } = await supabase
+    .from('settings')
+    .select('interest_gallery_paths')
+    .eq('id', 1)
+    .single()
+  if (readError) return { error: readError.message }
+
+  const current = (settings as { interest_gallery_paths?: string[] | null } | null)?.interest_gallery_paths ?? []
+  const next = [...new Set([...current, ...uniquePaths])]
+  if (next.length > MAX_INTEREST_GALLERY_PHOTOS) {
+    return { error: `เพิ่มรูปได้สูงสุด ${MAX_INTEREST_GALLERY_PHOTOS} รูป` }
+  }
+
+  const { error } = await supabase
+    .from('settings')
+    .update({ interest_gallery_paths: next })
+    .eq('id', 1)
+  if (error) return { error: error.message }
+
+  revalidatePath('/leads')
+  revalidatePath('/portal/interest')
+  return {}
+}
+
+export async function deleteInterestGalleryPhoto(path: string): Promise<{ error?: string }> {
+  const user = await getAuthedUser()
+  if (!user) return { error: 'ไม่มีสิทธิ์ใช้งาน' }
+
+  const supabase = await createClient()
+  const { data: settings, error: readError } = await supabase
+    .from('settings')
+    .select('interest_gallery_paths')
+    .eq('id', 1)
+    .single()
+  if (readError) return { error: readError.message }
+
+  const current = (settings as { interest_gallery_paths?: string[] | null } | null)?.interest_gallery_paths ?? []
+  if (!current.includes(path)) return { error: 'ไม่พบรูปนี้ในแกลเลอรี' }
+
+  const { error: updateError } = await supabase
+    .from('settings')
+    .update({ interest_gallery_paths: current.filter((item) => item !== path) })
+    .eq('id', 1)
+  if (updateError) return { error: updateError.message }
+
+  await supabase.storage.from(INTEREST_GALLERY_BUCKET).remove([path])
+  revalidatePath('/leads')
+  revalidatePath('/portal/interest')
+  return {}
+}
+
 export async function updateLeadStatus(
   id: string,
   status: 'new' | 'contacted' | 'converted' | 'dismissed'
