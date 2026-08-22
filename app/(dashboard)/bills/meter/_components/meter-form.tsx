@@ -2,10 +2,10 @@
 
 import { useRef, useState, useTransition } from 'react'
 import { saveMeterAndGenerateBills } from '@/app/actions/bills'
-import { readMeterOCR } from '@/app/actions/ocr'
 import { Input } from '@/components/ui/input'
-import { Loader2, Zap, Droplets, Check, AlertCircle, AlertTriangle, CalendarDays, Camera, X, ListChecks, ScanLine } from 'lucide-react'
+import { Loader2, Zap, Droplets, Check, AlertCircle, AlertTriangle, CalendarDays, Camera, X, ListChecks, ScanLine, RefreshCw } from 'lucide-react'
 import { roomRow } from '@/lib/room-utils'
+import { createClient as createBrowserClient } from '@/lib/supabase/client'
 
 export interface RoomRow {
   room_id:             string
@@ -75,10 +75,21 @@ async function compressImage(file: File, maxPx = 1200, quality = 0.82): Promise<
 }
 
 type SaveStatus = 'idle' | 'loading' | 'saved' | 'error'
-type PhotoSlot = { file: File | null; preview: string | null; existing: string | null }
+type PhotoUploadState = 'idle' | 'uploading' | 'uploaded' | 'error'
+type PhotoSlot = {
+  file: File | null
+  preview: string | null
+  existing: string | null
+  path: string | null
+  uploadState: PhotoUploadState
+  error: string | null
+}
 type RoomPhotos = { water: PhotoSlot; elec: PhotoSlot }
 type OcrSlotState = 'idle' | 'reading' | 'done' | 'failed'
-type RoomOcrState = { water: OcrSlotState; elec: OcrSlotState }
+type OcrSlot = { state: OcrSlotState; candidates: number[]; error: string | null }
+type RoomOcrState = { water: OcrSlot; elec: OcrSlot }
+
+const emptyOcrSlot = (): OcrSlot => ({ state: 'idle', candidates: [], error: null })
 
 export function MeterForm({ rooms, billingMonth, waterRate, electricityRate, anomalyThreshold, ocrEnabled }: Props) {
   const [, startTransition] = useTransition()
@@ -101,8 +112,8 @@ export function MeterForm({ rooms, billingMonth, waterRate, electricityRate, ano
     const init: Record<string, RoomPhotos> = {}
     rooms.forEach((r) => {
       init[r.room_id] = {
-        water: { file: null, preview: null, existing: r.water_image_url ?? null },
-        elec:  { file: null, preview: null, existing: r.electricity_image_url ?? null },
+        water: { file: null, preview: null, existing: r.water_image_url ?? null, path: null, uploadState: r.water_image_url ? 'uploaded' : 'idle', error: null },
+        elec:  { file: null, preview: null, existing: r.electricity_image_url ?? null, path: null, uploadState: r.electricity_image_url ? 'uploaded' : 'idle', error: null },
       }
     })
     return init
@@ -112,49 +123,143 @@ export function MeterForm({ rooms, billingMonth, waterRate, electricityRate, ano
     if (!file) return
     const compressed = await compressImage(file, 1200, 0.82)
     const preview = URL.createObjectURL(compressed)
+    const previousSlot = photos[roomId]?.[slot]
+    if (previousSlot?.preview?.startsWith('blob:')) URL.revokeObjectURL(previousSlot.preview)
     setPhotos(prev => ({
       ...prev,
-      [roomId]: { ...prev[roomId], [slot]: { file: compressed, preview, existing: prev[roomId]?.[slot]?.existing ?? null } },
+      [roomId]: {
+        ...prev[roomId],
+        [slot]: { file: compressed, preview, existing: null, path: null, uploadState: 'uploading', error: null },
+      },
     }))
-
-    // เก็บรูปหลักฐานได้เสมอ แต่เรียก OCR เฉพาะเมื่อเปิดใช้งาน
-    if (!ocrEnabled) return
-
     setOcrState(prev => ({
       ...prev,
-      [roomId]: { ...(prev[roomId] ?? { water: 'idle', elec: 'idle' }), [slot]: 'reading' },
+      [roomId]: {
+        ...(prev[roomId] ?? { water: emptyOcrSlot(), elec: emptyOcrSlot() }),
+        [slot]: emptyOcrSlot(),
+      },
     }))
-    const fd = new FormData()
-    fd.append('image', compressed)
-    const result = await readMeterOCR(fd)
 
-    if (result.value !== null) {
-      const currKey = slot === 'water' ? 'water' : 'elec'
-      setCurr(prev => ({ ...prev, [roomId]: { ...prev[roomId], [currKey]: String(result.value) } }))
-      if (saveStatus[roomId] === 'saved') setSaveStatus(prev => ({ ...prev, [roomId]: 'idle' }))
-      setOcrState(prev => ({
+    let uploadedPath: string | null = null
+    try {
+      const supabase = createBrowserClient()
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      if (userError || !user) throw new Error('กรุณาเข้าสู่ระบบใหม่')
+      const type = slot === 'water' ? 'water' : 'electricity'
+      const path = `drafts/${user.id}/${roomId}/${billingMonth}/${type}-${crypto.randomUUID()}.jpg`
+      const { error: uploadError } = await supabase.storage
+        .from('meter-photos')
+        .upload(path, compressed, { contentType: 'image/jpeg', upsert: false })
+      if (uploadError) throw uploadError
+      const publicUrl = supabase.storage.from('meter-photos').getPublicUrl(path).data.publicUrl
+      uploadedPath = path
+
+      setPhotos(prev => ({
         ...prev,
-        [roomId]: { ...(prev[roomId] ?? { water: 'idle', elec: 'idle' }), [slot]: 'done' },
+        [roomId]: {
+          ...prev[roomId],
+          [slot]: { file: null, preview: publicUrl, existing: null, path, uploadState: 'uploaded', error: null },
+        },
       }))
-    } else {
+      URL.revokeObjectURL(preview)
+      if (previousSlot?.path) void supabase.storage.from('meter-photos').remove([previousSlot.path])
+
+      if (!ocrEnabled) return
       setOcrState(prev => ({
         ...prev,
-        [roomId]: { ...(prev[roomId] ?? { water: 'idle', elec: 'idle' }), [slot]: 'failed' },
+        [roomId]: {
+          ...(prev[roomId] ?? { water: emptyOcrSlot(), elec: emptyOcrSlot() }),
+          [slot]: { state: 'reading', candidates: [], error: null },
+        },
+      }))
+      const room = rooms.find((item) => item.room_id === roomId)
+      const previousValue = slot === 'water' ? room?.water_prev ?? 0 : room?.electricity_prev ?? 0
+      const { data, error } = await supabase.functions.invoke<{
+        candidates?: number[]
+        error?: string
+      }>('meter-ocr', { body: { path, previousValue } })
+      if (error || data?.error) throw new Error(data?.error ?? error?.message ?? 'OCR ไม่สำเร็จ')
+      const candidates = Array.isArray(data?.candidates) ? data.candidates.slice(0, 3) : []
+      setOcrState(prev => ({
+        ...prev,
+        [roomId]: {
+          ...(prev[roomId] ?? { water: emptyOcrSlot(), elec: emptyOcrSlot() }),
+          [slot]: {
+            state: candidates.length > 0 ? 'done' : 'failed',
+            candidates,
+            error: candidates.length > 0 ? null : 'ไม่พบเลขที่เหมาะสม กรุณากรอกเอง',
+          },
+        },
+      }))
+    } catch (error) {
+      if (!uploadedPath) {
+        setPhotos(prev => ({
+          ...prev,
+          [roomId]: {
+            ...prev[roomId],
+            [slot]: {
+              ...prev[roomId][slot],
+              file: compressed,
+              preview,
+              path: null,
+              uploadState: 'error',
+              error: error instanceof Error ? error.message : 'อัปโหลดรูปไม่สำเร็จ',
+            },
+          },
+        }))
+      }
+      setOcrState(prev => ({
+        ...prev,
+        [roomId]: {
+          ...(prev[roomId] ?? { water: emptyOcrSlot(), elec: emptyOcrSlot() }),
+          [slot]: {
+            state: 'failed',
+            candidates: [],
+            error: uploadedPath
+              ? (error instanceof Error ? error.message : 'OCR ไม่สำเร็จ กรุณากรอกเอง')
+              : 'ยังไม่ได้ตรวจเลข เพราะอัปโหลดรูปไม่สำเร็จ',
+          },
+        },
       }))
     }
   }
 
   function clearPhoto(roomId: string, slot: 'water' | 'elec') {
+    const current = photos[roomId]?.[slot]
+    if (current?.preview?.startsWith('blob:')) URL.revokeObjectURL(current.preview)
+    if (current?.path) {
+      const supabase = createBrowserClient()
+      void supabase.storage.from('meter-photos').remove([current.path])
+    }
     setPhotos(prev => ({
       ...prev,
-      [roomId]: { ...prev[roomId], [slot]: { file: null, preview: null, existing: null } },
+      [roomId]: {
+        ...prev[roomId],
+        [slot]: { file: null, preview: null, existing: null, path: null, uploadState: 'idle', error: null },
+      },
     }))
     setOcrState(prev => ({
       ...prev,
-      [roomId]: { ...(prev[roomId] ?? { water: 'idle', elec: 'idle' }), [slot]: 'idle' },
+      [roomId]: {
+        ...(prev[roomId] ?? { water: emptyOcrSlot(), elec: emptyOcrSlot() }),
+        [slot]: emptyOcrSlot(),
+      },
     }))
     const ref = fileRefs.current[roomId]?.[slot]
     if (ref) ref.value = ''
+  }
+
+  function retryPhoto(roomId: string, slot: 'water' | 'elec') {
+    const file = photos[roomId]?.[slot]?.file
+    if (file) void handlePhoto(roomId, slot, file)
+  }
+
+  function chooseOcrCandidate(roomId: string, slot: 'water' | 'elec', value: number) {
+    const key = slot === 'water' ? 'water' : 'elec'
+    setCurr(prev => ({ ...prev, [roomId]: { ...prev[roomId], [key]: String(value) } }))
+    if (saveStatus[roomId] === 'saved') {
+      setSaveStatus(prev => ({ ...prev, [roomId]: 'idle' }))
+    }
   }
 
   // Per-room save status — pre-mark rooms that already have this month's reading
@@ -217,13 +322,35 @@ export function MeterForm({ rooms, billingMonth, waterRate, electricityRate, ano
     fd.append(`room_${room.room_id}_start_date`,          room.start_date)
 
     const roomPhotos = photos[room.room_id]
-    if (roomPhotos?.water.file)  fd.append(`room_${room.room_id}_water_image`, roomPhotos.water.file)
-    if (roomPhotos?.elec.file)   fd.append(`room_${room.room_id}_elec_image`,  roomPhotos.elec.file)
+    const waitingPhoto = [roomPhotos?.water, roomPhotos?.elec].find(
+      (photo) => photo?.file && photo.uploadState !== 'uploaded'
+    )
+    if (waitingPhoto) {
+      const message = waitingPhoto.uploadState === 'uploading'
+        ? 'กรุณารอให้อัปโหลดรูปเสร็จก่อน'
+        : 'รูปยังอัปโหลดไม่สำเร็จ กรุณากดลองใหม่ที่รูป'
+      setSaveStatus(prev => ({ ...prev, [room.room_id]: 'error' }))
+      setSaveError(prev => ({ ...prev, [room.room_id]: message }))
+      return false
+    }
+    if (roomPhotos?.water.path) fd.append(`room_${room.room_id}_water_image_path`, roomPhotos.water.path)
+    else if (roomPhotos?.water.existing) fd.append(`room_${room.room_id}_water_existing_url`, roomPhotos.water.existing)
+    if (roomPhotos?.elec.path) fd.append(`room_${room.room_id}_elec_image_path`, roomPhotos.elec.path)
+    else if (roomPhotos?.elec.existing) fd.append(`room_${room.room_id}_elec_existing_url`, roomPhotos.elec.existing)
 
-    const res = await saveMeterAndGenerateBills(fd)
-    setSaveStatus(prev => ({ ...prev, [room.room_id]: res.success ? 'saved' : 'error' }))
-    if (!res.success) setSaveError(prev => ({ ...prev, [room.room_id]: res.message }))
-    return res.success
+    try {
+      const res = await saveMeterAndGenerateBills(fd)
+      setSaveStatus(prev => ({ ...prev, [room.room_id]: res.success ? 'saved' : 'error' }))
+      if (!res.success) setSaveError(prev => ({ ...prev, [room.room_id]: res.message }))
+      return res.success
+    } catch {
+      setSaveStatus(prev => ({ ...prev, [room.room_id]: 'error' }))
+      setSaveError(prev => ({
+        ...prev,
+        [room.room_id]: 'เชื่อมต่อระบบไม่สำเร็จ กรุณากดบันทึกอีกครั้ง รูปที่อัปโหลดไว้ยังอยู่',
+      }))
+      return false
+    }
   }
 
   function saveRoom(room: RoomRow) {
@@ -376,8 +503,12 @@ export function MeterForm({ rooms, billingMonth, waterRate, electricityRate, ano
                     }}
                     onChange={(f) => handlePhoto(room.room_id, 'water', f)}
                     onClear={() => clearPhoto(room.room_id, 'water')}
+                    onRetry={() => retryPhoto(room.room_id, 'water')}
                   />
-                  <OcrBadge state={ocrState[room.room_id]?.water} />
+                  <OcrChoices
+                    slot={ocrState[room.room_id]?.water}
+                    onSelect={(value) => chooseOcrCandidate(room.room_id, 'water', value)}
+                  />
                 </div>
 
                 {/* Electricity */}
@@ -419,8 +550,12 @@ export function MeterForm({ rooms, billingMonth, waterRate, electricityRate, ano
                     }}
                     onChange={(f) => handlePhoto(room.room_id, 'elec', f)}
                     onClear={() => clearPhoto(room.room_id, 'elec')}
+                    onRetry={() => retryPhoto(room.room_id, 'elec')}
                   />
-                  <OcrBadge state={ocrState[room.room_id]?.elec} />
+                  <OcrChoices
+                    slot={ocrState[room.room_id]?.elec}
+                    onSelect={(value) => chooseOcrCandidate(room.room_id, 'elec', value)}
+                  />
                 </div>
               </div>
 
@@ -531,8 +666,13 @@ export function MeterForm({ rooms, billingMonth, waterRate, electricityRate, ano
                       }}
                       onChange={(f) => handlePhoto(room.room_id, 'water', f)}
                       onClear={() => clearPhoto(room.room_id, 'water')}
+                      onRetry={() => retryPhoto(room.room_id, 'water')}
                     />
-                    <OcrBadge state={ocrState[room.room_id]?.water} compact />
+                    <OcrChoices
+                      slot={ocrState[room.room_id]?.water}
+                      onSelect={(value) => chooseOcrCandidate(room.room_id, 'water', value)}
+                      compact
+                    />
                   </td>
                   {/* Water calc + anomaly */}
                   <td className="px-3 py-3 text-center">
@@ -579,8 +719,13 @@ export function MeterForm({ rooms, billingMonth, waterRate, electricityRate, ano
                       }}
                       onChange={(f) => handlePhoto(room.room_id, 'elec', f)}
                       onClear={() => clearPhoto(room.room_id, 'elec')}
+                      onRetry={() => retryPhoto(room.room_id, 'elec')}
                     />
-                    <OcrBadge state={ocrState[room.room_id]?.elec} compact />
+                    <OcrChoices
+                      slot={ocrState[room.room_id]?.elec}
+                      onSelect={(value) => chooseOcrCandidate(room.room_id, 'elec', value)}
+                      compact
+                    />
                   </td>
                   {/* Electricity calc + anomaly */}
                   <td className="px-3 py-3 text-center">
@@ -638,32 +783,54 @@ export function MeterForm({ rooms, billingMonth, waterRate, electricityRate, ano
   )
 }
 
-// ── OcrBadge component ───────────────────────────────────────
-function OcrBadge({ state, compact = false }: { state: OcrSlotState | undefined; compact?: boolean }) {
-  if (!state || state === 'idle') return null
-  if (state === 'reading') return (
+// ── OCR suggestions — never writes into the meter input until the user chooses ──
+function OcrChoices({
+  slot,
+  onSelect,
+  compact = false,
+}: {
+  slot: OcrSlot | undefined
+  onSelect: (value: number) => void
+  compact?: boolean
+}) {
+  if (!slot || slot.state === 'idle') return null
+  if (slot.state === 'reading') return (
     <p className={`flex items-center gap-1 text-[10px] text-slate-400 ${compact ? '' : 'mt-1'}`}>
       <Loader2 className="size-3 animate-spin shrink-0" />
       {!compact && 'กำลังอ่าน...'}
     </p>
   )
-  if (state === 'done') return (
-    <p className={`flex items-center gap-1 text-[10px] text-emerald-600 font-semibold ${compact ? '' : 'mt-1'}`}>
-      <ScanLine className="size-3 shrink-0" />
-      {compact ? 'OCR' : 'อ่านค่าได้แล้ว'}
-    </p>
+  if (slot.state === 'done' && slot.candidates.length > 0) return (
+    <div className={compact ? 'mt-1 max-w-28' : 'mt-1.5'}>
+      <p className="flex items-center gap-1 text-[10px] font-semibold text-emerald-600">
+        <ScanLine className="size-3 shrink-0" /> เลือกเลขที่ถูก
+      </p>
+      <div className="mt-1 flex flex-wrap gap-1">
+        {slot.candidates.map((value) => (
+          <button
+            key={value}
+            type="button"
+            onClick={() => onSelect(value)}
+            className="rounded-md border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700 hover:bg-emerald-100"
+          >
+            {value.toLocaleString('th-TH', { maximumFractionDigits: 2 })}
+          </button>
+        ))}
+      </div>
+      {!compact && <p className="mt-1 text-[10px] text-slate-400">หากไม่ถูก ให้กรอกเองได้เลย</p>}
+    </div>
   )
   return (
-    <p className={`flex items-center gap-1 text-[10px] text-amber-500 ${compact ? '' : 'mt-1'}`}>
-      <AlertCircle className="size-3 shrink-0" />
-      {compact ? '?' : 'อ่านไม่ได้ กรอกเอง'}
+    <p className={`flex items-start gap-1 text-[10px] text-amber-500 ${compact ? '' : 'mt-1'}`}>
+      <AlertCircle className="mt-0.5 size-3 shrink-0" />
+      {compact ? 'กรอกเอง' : slot.error ?? 'อ่านไม่ได้ กรุณากรอกเอง'}
     </p>
   )
 }
 
 // ── PhotoPicker component ─────────────────────────────────────
 function PhotoPicker({
-  slot, accentClass, compact = false, inputRef, onChange, onClear,
+  slot, accentClass, compact = false, inputRef, onChange, onClear, onRetry,
 }: {
   slot: PhotoSlot | undefined
   accentClass: string
@@ -671,6 +838,7 @@ function PhotoPicker({
   inputRef: (el: HTMLInputElement | null) => void
   onChange: (f: File) => void
   onClear: () => void
+  onRetry: () => void
 }) {
   const localRef = useRef<HTMLInputElement | null>(null)
   const preview  = slot?.preview ?? slot?.existing ?? null
@@ -683,7 +851,7 @@ function PhotoPicker({
   return (
     <div className="mt-1.5">
       {preview ? (
-        <div className="relative inline-block">
+        <div className="relative inline-block align-top">
           <a href={preview} target="_blank" rel="noreferrer">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
@@ -692,6 +860,16 @@ function PhotoPicker({
               className={`rounded-lg object-cover border border-slate-200 ${compact ? 'size-10' : 'h-20 w-full'}`}
             />
           </a>
+          {slot?.uploadState === 'uploading' && (
+            <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-slate-950/55 text-white">
+              <Loader2 className="size-4 animate-spin" />
+            </div>
+          )}
+          {slot?.uploadState === 'uploaded' && (
+            <span className="absolute bottom-1 left-1 flex size-4 items-center justify-center rounded-full bg-emerald-500 text-white shadow" title="อัปโหลดแล้ว">
+              <Check className="size-2.5" />
+            </span>
+          )}
           <button
             type="button"
             onClick={onClear}
@@ -699,6 +877,16 @@ function PhotoPicker({
           >
             <X className="size-2.5" />
           </button>
+          {slot?.uploadState === 'error' && (
+            <button
+              type="button"
+              onClick={onRetry}
+              className="absolute inset-x-1 bottom-1 inline-flex items-center justify-center gap-1 rounded-md bg-rose-600 px-1 py-0.5 text-[9px] font-semibold text-white shadow"
+              title={slot.error ?? 'อัปโหลดไม่สำเร็จ'}
+            >
+              <RefreshCw className="size-2.5" /> ลองใหม่
+            </button>
+          )}
         </div>
       ) : (
         <button

@@ -8,22 +8,27 @@ import { getAuthedUser } from '@/lib/require-admin'
 import { bangkokDateKey } from '@/lib/date-utils'
 import { dueDateForBillingMonth, prorateRent } from '@/lib/billing'
 
-async function uploadMeterPhoto(
+function meterPhotoPublicUrl(
   supabase: SupabaseClient,
-  file: File,
+  path: string
+): string {
+  return supabase.storage.from('meter-photos').getPublicUrl(path).data.publicUrl
+}
+
+function isValidDraftPhotoPath(
+  path: string,
+  userId: string,
   roomId: string,
   billingMonth: string,
   type: 'water' | 'electricity'
-): Promise<string | null> {
-  if (!file || file.size === 0) return null
-  const ext  = file.name.split('.').pop() ?? 'jpg'
-  const path = `${roomId}/${billingMonth}/${type}.${ext}`
-  const buf  = await file.arrayBuffer()
-  const { data: up } = await supabase.storage
-    .from('meter-photos')
-    .upload(path, buf, { contentType: file.type, upsert: true })
-  if (!up) return null
-  return supabase.storage.from('meter-photos').getPublicUrl(up.path).data.publicUrl
+) {
+  const prefix = `drafts/${userId}/${roomId}/${billingMonth}/${type}-`
+  return path.startsWith(prefix) && /^[0-9a-f-]+\.jpg$/i.test(path.slice(prefix.length))
+}
+
+function isValidExistingMeterPhotoUrl(supabase: SupabaseClient, value: string) {
+  const bucketRoot = meterPhotoPublicUrl(supabase, '')
+  return value.startsWith(bucketRoot)
 }
 
 // ─── Save Meter Readings + Generate Bills ────────────────────
@@ -97,13 +102,36 @@ export async function saveMeterAndGenerateBills(
       continue
     }
 
-    // Upload meter photos (optional)
-    const waterImgFile = formData.get(`room_${roomId}_water_image`) as File | null
-    const elecImgFile  = formData.get(`room_${roomId}_elec_image`)  as File | null
-    const [water_image_url, electricity_image_url] = await Promise.all([
-      waterImgFile ? uploadMeterPhoto(supabase, waterImgFile, roomId, billing_month, 'water') : Promise.resolve(null),
-      elecImgFile  ? uploadMeterPhoto(supabase, elecImgFile,  roomId, billing_month, 'electricity') : Promise.resolve(null),
-    ])
+    // Photos are uploaded directly from the browser to Supabase Storage.
+    // This action receives only a small path/URL and never proxies image bytes through Cloudflare.
+    const waterImagePath = String(formData.get(`room_${roomId}_water_image_path`) ?? '')
+    const electricityImagePath = String(formData.get(`room_${roomId}_elec_image_path`) ?? '')
+    const existingWaterUrl = String(formData.get(`room_${roomId}_water_existing_url`) ?? '')
+    const existingElectricityUrl = String(formData.get(`room_${roomId}_elec_existing_url`) ?? '')
+
+    if (waterImagePath && !isValidDraftPhotoPath(waterImagePath, authedUser.id, roomId, billing_month, 'water')) {
+      errors.push(`ห้อง ${roomId}: ตำแหน่งรูปมิเตอร์น้ำไม่ถูกต้อง`)
+      continue
+    }
+    if (electricityImagePath && !isValidDraftPhotoPath(electricityImagePath, authedUser.id, roomId, billing_month, 'electricity')) {
+      errors.push(`ห้อง ${roomId}: ตำแหน่งรูปมิเตอร์ไฟไม่ถูกต้อง`)
+      continue
+    }
+    if (existingWaterUrl && !isValidExistingMeterPhotoUrl(supabase, existingWaterUrl)) {
+      errors.push(`ห้อง ${roomId}: URL รูปมิเตอร์น้ำไม่ถูกต้อง`)
+      continue
+    }
+    if (existingElectricityUrl && !isValidExistingMeterPhotoUrl(supabase, existingElectricityUrl)) {
+      errors.push(`ห้อง ${roomId}: URL รูปมิเตอร์ไฟไม่ถูกต้อง`)
+      continue
+    }
+
+    const water_image_url = waterImagePath
+      ? meterPhotoPublicUrl(supabase, waterImagePath)
+      : existingWaterUrl || null
+    const electricity_image_url = electricityImagePath
+      ? meterPhotoPublicUrl(supabase, electricityImagePath)
+      : existingElectricityUrl || null
 
     const water_amount       = water_units * water_rate
     const electricity_amount = electricity_units * electricity_rate
