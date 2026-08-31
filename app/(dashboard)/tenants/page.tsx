@@ -6,6 +6,7 @@ import { CountUp } from '@/components/ui/count-up'
 import { UserPlus, Users, UserCheck, UserMinus, ClipboardList, UserSearch } from 'lucide-react'
 import { SyncLineButton } from './_components/sync-line-button'
 import { TenantsBrowser, type TenantRow } from './_components/tenants-browser'
+import { portalReadStatus, type PortalReadDelivery } from '@/lib/portal-read-status'
 
 type ContractRow = {
   status: string
@@ -24,15 +25,25 @@ type RawTenant = {
 export default async function TenantsPage() {
   const supabase = await createClient()
 
-  const { data: rawTenants } = await supabase
-    .from('tenants')
-    .select(`
+  // Billing month, not completion time: resending an older month must not
+  // replace the current round. An unfinished batch leaves the old round intact.
+  const [{ data: round, error: roundError }, { data: rawTenants }] = await Promise.all([
+    supabase.from('portal_bill_rounds')
+      .select('billing_month').not('completed_at', 'is', null)
+      .order('billing_month', { ascending: false }).limit(1).maybeSingle(),
+    supabase.from('tenants').select(`
       *,
       contracts!left (
         id, status, monthly_rent, start_date,
         rooms ( id, room_number, floor )
       )
-    `)
+    `),
+  ])
+  const { data: deliveries, error: deliveryError } = round
+    ? await supabase.from('portal_bill_deliveries')
+      .select('tenant_id, room_id, sent_at, first_sent_started_at, last_open_at')
+      .eq('billing_month', round.billing_month)
+    : { data: [], error: null }
 
   const getActive = (t: RawTenant) =>
     (t.contracts ?? []).find((c) => c.status === 'active') ?? null
@@ -63,6 +74,10 @@ export default async function TenantsPage() {
 
   const tenantRows: TenantRow[] = allTenants.map((t) => {
     const active = getActive(t)
+    const portal = portalReadStatus(t.last_portal_open_at, round?.billing_month ?? null,
+      ((deliveries ?? []) as PortalReadDelivery[]).filter((d) =>
+        d.tenant_id === t.id && d.room_id === active?.rooms?.id),
+      !roundError && !deliveryError)
     return {
       id:                t.id,
       full_name:         t.full_name,
@@ -71,7 +86,8 @@ export default async function TenantsPage() {
       roomId:            active?.rooms?.id ?? null,
       roomNumber:        active?.rooms?.room_number ?? null,
       hasActiveContract: !!active,
-      portalOpened:      !!t.last_portal_open_at,
+      portalOpened:      portal.opened,
+      portalLabel:       portal.label,
     }
   })
 
@@ -108,6 +124,7 @@ export default async function TenantsPage() {
       </div>
 
       {/* ── Searchable tenant list ── */}
+      {round && <p className="text-xs text-slate-500">สถานะเปิด Portal สำหรับรอบบิล {new Date(round.billing_month + 'T00:00:00+07:00').toLocaleDateString('th-TH', { month: 'long', year: 'numeric', timeZone: 'Asia/Bangkok' })} · เริ่มรอบเมื่อส่งจากปุ่มแจ้งทุกห้องผ่าน LINE ในหน้าบิล / ชำระเงินครบแล้ว</p>}
       <TenantsBrowser tenants={tenantRows} />
     </div>
   )

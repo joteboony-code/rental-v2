@@ -18,6 +18,7 @@ export type TenantRow = {
   roomNumber: string | null
   hasActiveContract: boolean
   portalOpened: boolean
+  portalLabel: string
 }
 
 type Filter = 'all' | 'active' | 'inactive'
@@ -125,8 +126,8 @@ export function TenantsBrowser({ tenants }: { tenants: TenantRow[] }) {
                     : <StatusBadge label="ไม่มีสัญญา" tone="slate" />
                   }
                   {t.portalOpened
-                    ? <StatusBadge label="เปิด Portal แล้ว" tone="emerald" />
-                    : <span className="text-[11px] font-medium text-slate-300">ยังไม่เปิด Portal</span>
+                    ? <StatusBadge label={t.portalLabel} tone="emerald" />
+                    : <span className="text-[11px] font-medium text-slate-400">{t.portalLabel}</span>
                   }
                 </div>
               </div>

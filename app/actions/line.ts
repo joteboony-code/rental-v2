@@ -967,6 +967,7 @@ export async function sendBulkLineBillNotification(
   const user = await getAuthedUser()
   if (!user) return emptyResult('ไม่มีสิทธิ์ใช้งาน')
   const supabase = await createClient()
+  if (!/^\d{4}-(0[1-9]|1[0-2])-01$/.test(billingMonth)) return emptyResult('รอบบิลไม่ถูกต้อง')
 
   const retryRoomIds = [...new Set(
     targetRoomIds.filter((id) => /^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(id))
@@ -1072,6 +1073,17 @@ export async function sendBulkLineBillNotification(
 
   if (statementError) return emptyResult(`โหลดรายละเอียดบิลไม่สำเร็จ: ${statementError.message}`)
 
+  // Only this /bills bulk-send action starts a read round; opening the menu,
+  // individual notifications and overdue reminders never touch this state.
+  const { error: roundError } = await supabase.rpc('admin_prepare_portal_bill_round', {
+    p_billing_month: billingMonth,
+    p_create: retryRoomIds.length === 0,
+  })
+  if (roundError) {
+    console.error('[line-bulk] prepare portal round failed', { message: roundError.message })
+    return emptyResult('เตรียมรอบติดตาม Portal ไม่สำเร็จ ยังไม่ได้ส่ง LINE กรุณาตรวจการติดตั้ง SQL หรือลองใหม่')
+  }
+
   type StatementWithRecipient = StatementBill & {
     tenants?: { line_user_id: string | null } | null
   }
@@ -1084,7 +1096,7 @@ export async function sendBulkLineBillNotification(
   }
 
   const failures: BulkLineFailure[] = []
-  const successful: Array<{ bills: CurrentBill[]; combinedRoomCount: number }> = []
+  const successful: Array<{ bills: CurrentBill[]; combinedRoomCount: number; lineUserId: string; startedAt: string }> = []
   let recipients = 0
 
   function roomInfo(group: LineGroup) {
@@ -1117,6 +1129,7 @@ export async function sendBulkLineBillNotification(
       allStmtRooms.map((room) => room.dueDate).filter(Boolean).sort()[0] ??
       bangkokDateKey()
 
+    const startedAt = new Date().toISOString()
     try {
       if (allStmtRooms.length >= 2) {
         const portalUrl = buildTenantPortalUrl(activeLineConfig.liffId, activeLineConfig.appUrl)
@@ -1186,7 +1199,7 @@ export async function sendBulkLineBillNotification(
         }
       }
       recipients++
-      successful.push({ bills: group.bills, combinedRoomCount: allStmtRooms.length })
+      successful.push({ bills: group.bills, combinedRoomCount: allStmtRooms.length, lineUserId: group.lineUserId, startedAt })
     } catch (error) {
       failures.push({ ...rooms, reason: bulkLineFailureReason(error), retryable: true })
     }
@@ -1200,6 +1213,23 @@ export async function sendBulkLineBillNotification(
 
   const sent = successful.reduce((sum, result) => sum + result.bills.length, 0)
   const failed = failures.reduce((sum, failure) => sum + failure.roomIds.length, 0)
+
+  let roundMessage = ''
+  const { data: roundResult, error: finishError } = await supabase.rpc('admin_finish_portal_bill_round', {
+    p_billing_month: billingMonth,
+    p_deliveries: successful.flatMap(({ bills: sentBills, lineUserId, startedAt }) =>
+      sentBills.map((bill) => ({ bill_id: bill.id, line_user_id: lineUserId, started_at: startedAt }))),
+  })
+  if (finishError) {
+    console.error('[line-bulk] finish portal round failed', { message: finishError.message })
+    roundMessage = ' · บันทึกรอบ Portal ไม่สำเร็จ (ผลส่ง LINE ด้านบนยังถูกต้อง)'
+  } else {
+    const round = roundResult as { completed: boolean; activated: boolean; pending: number }
+    if (round.activated) roundMessage = ' · เริ่มนับการเปิด Portal ของรอบบิลนี้แล้ว'
+    else if (round.completed) roundMessage = ' · รอบนี้เริ่มนับแล้ว ไม่รีเซ็ตการเปิด Portal ซ้ำ'
+    else if (round.pending > 0) roundMessage = ` · ยังไม่เริ่มรอบ Portal รอส่งอีก ${round.pending} ห้องที่มี LINE`
+    if (round.completed) revalidatePath('/tenants')
+  }
 
   // One awaited batch insert replaces two floating subrequests per room.
   let auditWarning = ''
@@ -1247,7 +1277,7 @@ export async function sendBulkLineBillNotification(
   const message =
     `ส่งสำเร็จ ${sent} ห้อง (${recipients} LINE)` +
     (failed > 0 ? ` · ส่งไม่ได้ ${failed} ห้อง` : '') +
-    auditWarning
+    auditWarning + roundMessage
 
   return {
     success: sent > 0,

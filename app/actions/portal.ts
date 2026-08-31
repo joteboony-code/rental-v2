@@ -191,17 +191,22 @@ export async function getTenantPortalDashboard(portalToken: string, roomId?: str
     return { success: false, message: 'ยังไม่ได้เชื่อม LINE กับห้องพัก' }
   }
 
-  // บันทึกเวลาที่เปิด portal ล่าสุด (ใช้ service client เพราะ portal เป็น public/anon)
+  const portalData = data as TenantPortalData
+  // Record only the authenticated recipient and the room returned by the
+  // authorization RPC. Previewing as admin does not count as a tenant opening.
   try {
-    const svc = createServiceClient()
-    await svc.from('tenants').update({ last_portal_open_at: new Date().toISOString() }).eq('line_user_id', lineUserId)
+    const { error: trackingError } = await supabase.rpc('record_portal_bill_open', {
+      p_line_user_id: lineUserId,
+      p_tenant_id: portalData.tenant.id,
+      p_room_id: portalData.room?.id ?? null,
+    })
+    if (trackingError) console.error('[portal] record open failed', { message: trackingError.message })
   } catch { /* ไม่ critical — เปิด portal ต่อได้ */ }
 
   const svc2 = createServiceClient()
   const { data: settings } = await svc2.from('settings').select('promptpay_id, promptpay_name').eq('id', 1).maybeSingle()
 
   // Generate short-lived signed URLs for payment slips (bucket เป็น private)
-  const portalData = data as TenantPortalData
   const svc3 = createServiceClient()
   for (const bill of portalData.bills ?? []) {
     bill.detail_url = buildBillDetailPath(bill.id)

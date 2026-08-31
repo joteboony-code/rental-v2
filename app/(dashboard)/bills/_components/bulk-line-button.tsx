@@ -17,9 +17,15 @@ export function BulkLineButton({ billingMonth }: { billingMonth: string }) {
     setPending(mode)
     setResult(null)
     setLastMode(mode)
-    const res = await sendBulkLineBillNotification(billingMonth, mode, roomIds)
-    setResult(res)
-    setPending(null)
+    try {
+      const res = await sendBulkLineBillNotification(billingMonth, mode, roomIds)
+      setResult(res)
+    } catch {
+      setResult({ success: false, sent: 0, failed: 0, recipients: 0, failures: [],
+        message: 'การเชื่อมต่อขัดข้อง ผลการส่งอาจบันทึกไม่ครบ กรุณาตรวจประวัติส่ง LINE ก่อนส่งซ้ำ' })
+    } finally {
+      setPending(null)
+    }
   }
 
   if (!open) {
@@ -71,6 +77,10 @@ export function BulkLineButton({ billingMonth }: { billingMonth: string }) {
           </button>
         </div>
       </div>
+
+      <p className="max-w-xl text-xs text-slate-500 text-right">
+        ส่งครบห้องที่มี LINE แล้วจะเริ่มนับการเปิด Portal รอบบิลนี้ · ส่งซ้ำเดือนเดิมไม่รีเซ็ต
+      </p>
 
       {result && (
         <div className={`w-full max-w-xl space-y-2 text-xs px-3 py-2 rounded-xl ${
