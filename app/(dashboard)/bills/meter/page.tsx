@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { ChevronLeft, Droplets, Gauge, Zap } from 'lucide-react'
+import { ChevronLeft, Droplets, Gauge, ScanEye, Zap } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { MeterForm, type RoomRow } from './_components/meter-form'
 import { resolveMeterBaseline, type ActiveMeterBaseline } from '@/lib/meter-baseline'
@@ -158,6 +158,14 @@ export default async function MeterReadingPage({ searchParams }: Props) {
         </div>
 
         <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+          <Link
+            href={`/bills/meter/review?month=${currentMonth}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-600 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-800 sm:flex-none"
+          >
+            <ScanEye className="size-4" /> ตรวจทานมิเตอร์
+          </Link>
           <Link
             href={`/meter-baselines?month=${currentMonth}`}
             className="inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-600 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-800 sm:flex-none"
