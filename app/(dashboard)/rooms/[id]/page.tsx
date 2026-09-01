@@ -18,7 +18,11 @@ export default async function RoomDetailPage({ params }: { params: Promise<{ id:
   const [{ data: room }, { data: bills }, { data: repairs }, lineConfig] = await Promise.all([
     supabase
       .from('rooms')
-      .select(`*, registration_token, contracts!left ( id, status, start_date, end_date, monthly_rent, deposit_paid, tenants ( id, full_name, phone ) )`)
+      .select(`*, registration_token, contracts!left (
+        id, status, start_date, end_date, monthly_rent, deposit_paid,
+        line_recipient_user_id, line_recipient_display_name, line_recipient_picture_url,
+        tenants ( id, full_name, phone, line_user_id, line_display_name, line_picture_url )
+      )`)
       .eq('id', id)
       .single(),
     supabase
@@ -41,12 +45,33 @@ export default async function RoomDetailPage({ params }: { params: Promise<{ id:
   type ContractRow = {
     id: string; status: string; start_date: string; end_date: string | null
     monthly_rent: number; deposit_paid: number | null
-    tenants: { id: string; full_name: string; phone: string | null } | null
+    line_recipient_user_id: string | null
+    line_recipient_display_name: string | null
+    line_recipient_picture_url: string | null
+    tenants: {
+      id: string; full_name: string; phone: string | null
+      line_user_id: string | null; line_display_name: string | null; line_picture_url: string | null
+    } | null
   }
 
   const contracts = room.contracts as ContractRow[] | null
   const activeContract = contracts?.find((c) => c.status === 'active')
   const pastContracts = contracts?.filter((c) => c.status !== 'active') ?? []
+  const lineRecipient = activeContract?.line_recipient_user_id
+    ? {
+        userId: activeContract.line_recipient_user_id,
+        displayName: activeContract.line_recipient_display_name,
+        pictureUrl: activeContract.line_recipient_picture_url,
+        source: 'contract' as const,
+      }
+    : activeContract?.tenants?.line_user_id
+      ? {
+          userId: activeContract.tenants.line_user_id,
+          displayName: activeContract.tenants.line_display_name,
+          pictureUrl: activeContract.tenants.line_picture_url,
+          source: 'tenant' as const,
+        }
+      : null
 
   return (
     <div className="p-5 md:p-8 space-y-6 max-w-5xl">
@@ -189,6 +214,9 @@ export default async function RoomDetailPage({ params }: { params: Promise<{ id:
             appUrl={lineConfig?.app_url ?? null}
             liffId={lineConfig?.line_liff_id_pairing ?? null}
             hasActiveContract={Boolean(activeContract)}
+            contractId={activeContract?.id ?? null}
+            tenantId={activeContract?.tenants?.id ?? null}
+            lineRecipient={lineRecipient}
           />
 
           {/* Past tenants — history (แสดงเสมอ แม้ยังไม่มีประวัติ) */}
