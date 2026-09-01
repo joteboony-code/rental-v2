@@ -36,8 +36,16 @@ export function PromptPayQR({ promptpayId, promptpayName, amount }: Props) {
 
   return (
     <div className="flex flex-col items-center gap-3">
-      <div className="bg-white p-3 rounded-xl border shadow-sm">
-        <QRCode value={payload} size={180} level="M" />
+      {/* Keep at least four clear QR modules around the code. The 20px white
+          quiet zone also prevents dark cards from confusing older scanners. */}
+      <div className="shrink-0 rounded-xl border bg-white p-5 shadow-sm">
+        <QRCode
+          value={payload}
+          size={180}
+          level="M"
+          className="block size-[180px] shrink-0"
+          style={{ shapeRendering: 'crispEdges' }}
+        />
       </div>
 
       <div className="text-center space-y-1">
