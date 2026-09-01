@@ -34,6 +34,7 @@ export function PairForm({
   const [scriptReady, setScriptReady] = useState(false)
   const [lineUserId, setLineUserId] = useState('')
   const [lineIdToken, setLineIdToken] = useState('')
+  const [lineAccessToken, setLineAccessToken] = useState('')
   const [lineDisplayName, setLineDisplayName] = useState('')
   const [linePictureUrl, setLinePictureUrl] = useState('')
   const [liffStatus, setLiffStatus] = useState<LiffStatus>(liffId ? 'loading' : 'no-liff')
@@ -52,9 +53,11 @@ export function PairForm({
         if (cancelled) return
         if (!liff.isLoggedIn()) { setLiffStatus('need-login'); return }
         const [profile, idToken] = await Promise.all([liff.getProfile(), liff.getIDToken()])
+        const accessToken = liff.getAccessToken()
         if (cancelled) return
         setLineUserId(profile.userId)
         setLineIdToken(idToken ?? '')
+        setLineAccessToken(accessToken ?? '')
         setLineDisplayName(profile.displayName ?? '')
         setLinePictureUrl(profile.pictureUrl ?? '')
         setLiffStatus('ok')
@@ -98,7 +101,7 @@ export function PairForm({
 
   const inLiff = liffStatus === 'ok'
   const isFriend = friendStatus === 'friend'
-  const confirmDisabled = pending || !lineUserId || !isFriend
+  const confirmDisabled = pending || !lineUserId || !lineIdToken || !lineAccessToken || !isFriend
 
   return (
     <>
@@ -230,6 +233,7 @@ export function PairForm({
         <form action={action} className="space-y-3">
           <input type="hidden" name="room_number"        value={initialRoomNumber} />
           <input type="hidden" name="id_token"           value={lineIdToken} />
+          <input type="hidden" name="line_access_token" value={lineAccessToken} />
           <input type="hidden" name="line_display_name"  value={lineDisplayName} />
           <input type="hidden" name="line_picture_url"   value={linePictureUrl} />
 

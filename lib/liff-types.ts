@@ -12,4 +12,5 @@ export type LiffClient = {
   getFriendship: () => Promise<{ friendFlag: boolean }>
   requestFriendship: () => Promise<void>
   getIDToken: () => string | null
+  getAccessToken: () => string | null
 }

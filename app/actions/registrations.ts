@@ -8,6 +8,7 @@ import { revalidatePath } from 'next/cache'
 import { isRateLimited, getClientIp } from '@/lib/rate-limit'
 import { notifyOwner } from '@/lib/notify-owner'
 import { bangkokDateKey } from '@/lib/date-utils'
+import { lineFriendshipErrorMessage, verifyLineFriendship } from '@/lib/line-friendship'
 
 export type SubmitRegistrationResult = {
   success: boolean
@@ -161,29 +162,57 @@ export async function submitRegistration(formData: FormData): Promise<SubmitRegi
 
   const registrationToken = String(formData.get('registration_token') ?? '').trim()
   const lineIdToken     = String(formData.get('line_id_token')     ?? '').trim() || null
+  const lineAccessToken = String(formData.get('line_access_token') ?? '').trim() || null
   const lineDisplayName = String(formData.get('line_display_name') ?? '').trim() || null
   const linePictureUrl  = String(formData.get('line_picture_url')  ?? '').trim() || null
+
+  // Reject invalid links and excessive retries before calling external APIs.
+  if (!registrationToken) return { success: false, message: 'ลิงก์ไม่ถูกต้อง กรุณาสแกน QR ใหม่' }
+  const ip = await getClientIp()
+  if (await isRateLimited(`registration:${ip}`, 3, 600)) {
+    return { success: false, message: 'ส่งคำขอบ่อยเกินไป กรุณารอสักครู่แล้วลองใหม่' }
+  }
+
+  if (!lineIdToken || !lineAccessToken) {
+    return { success: false, message: 'กรุณาเปิดลิงก์ผ่าน LINE และเพิ่ม LINE OA ก่อนลงทะเบียน' }
+  }
 
   // Verify LINE ID token server-side
   let lineUserId: string | null = null
   let verifiedName: string | null = lineDisplayName
   let verifiedPicture: string | null = linePictureUrl
-  if (lineIdToken) {
-    const loginChannelId = process.env.LINE_LOGIN_CHANNEL_ID
-    if (loginChannelId) {
+  const loginChannelId = process.env.LINE_LOGIN_CHANNEL_ID
+  if (!loginChannelId) {
+    return { success: false, message: 'ระบบยังไม่ได้ตั้งค่า LINE Login Channel' }
+  }
+  try {
       const verifyRes = await fetch('https://api.line.me/oauth2/v2.1/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({ id_token: lineIdToken, client_id: loginChannelId }),
+        signal: AbortSignal.timeout(8_000),
       })
-      if (verifyRes.ok) {
-        const lineProfile = await verifyRes.json() as { sub?: string; name?: string; picture?: string }
-        lineUserId = lineProfile.sub ?? null
-        verifiedName = lineProfile.name ?? lineDisplayName
-        verifiedPicture = lineProfile.picture ?? linePictureUrl
+      if (!verifyRes.ok) {
+        return { success: false, message: 'ยืนยันตัวตน LINE ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง' }
       }
-      // If verify fails, treat as no-LINE (goes to pending)
-    }
+      const lineProfile = await verifyRes.json() as { sub?: string; name?: string; picture?: string }
+      lineUserId = lineProfile.sub ?? null
+      verifiedName = lineProfile.name ?? lineDisplayName
+      verifiedPicture = lineProfile.picture ?? linePictureUrl
+  } catch {
+    return { success: false, message: 'ตรวจสอบบัญชี LINE ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง' }
+  }
+  if (!lineUserId) {
+    return { success: false, message: 'ไม่สามารถดึง LINE User ID ได้ กรุณาลองใหม่' }
+  }
+
+  const friendship = await verifyLineFriendship({
+    accessToken: lineAccessToken,
+    expectedUserId: lineUserId,
+    loginChannelId,
+  })
+  if (!friendship.success) {
+    return { success: false, message: lineFriendshipErrorMessage(friendship.reason) }
   }
   const fullName        = String(formData.get('full_name')         ?? '').trim()
   const phone           = String(formData.get('phone')             ?? '').trim()
@@ -191,14 +220,6 @@ export async function submitRegistration(formData: FormData): Promise<SubmitRegi
   const moveInDate      = String(formData.get('move_in_date')      ?? '').trim() || null
   const note            = String(formData.get('note')              ?? '').trim() || null
   const depositPaid     = Math.max(0, Math.min(Number(formData.get('deposit_paid') ?? 0) || 0, 1_000_000))
-
-  // ใช้ registration_token เป็นหลักเท่านั้น — ห้ามเชื่อ room_id/room_number จาก client
-  if (!registrationToken) return { success: false, message: 'ลิงก์ไม่ถูกต้อง กรุณาสแกน QR ใหม่' }
-
-  // Rate limit: 3 submissions per IP per 10 minutes
-  const ip = await getClientIp()
-  if (await isRateLimited(`registration:${ip}`, 3, 600))
-    return { success: false, message: 'ส่งคำขอบ่อยเกินไป กรุณารอสักครู่แล้วลองใหม่' }
 
   if (!fullName)          return { success: false, message: 'กรุณากรอกชื่อ-นามสกุล' }
   if (fullName.length < 2 || fullName.length > 200) return { success: false, message: 'ชื่อต้องยาว 2-200 ตัวอักษร' }
@@ -228,9 +249,6 @@ export async function submitRegistration(formData: FormData): Promise<SubmitRegi
 
   const pendingReasons: string[] = []
   let matchedTenantId: string | null = null
-
-  // ไม่มี line_user_id → เข้า pending เสมอ ห้าม auto approve
-  if (!lineUserId) pendingReasons.push('ไม่ได้เปิดผ่านแอป LINE จึงยังไม่มีข้อมูล LINE')
 
   // Case B: ห้องมีผู้เช่าอยู่แล้ว → pending และ match กับผู้เช่าปัจจุบัน
   // (สำหรับผู้เช่าเดิมสแกน QR เพื่อเพิ่ม LINE/เบอร์ — approve จะอัปเดต tenant เดิม)

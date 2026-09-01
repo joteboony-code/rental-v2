@@ -4,7 +4,7 @@ import Script from 'next/script'
 import { useEffect, useState, useTransition } from 'react'
 import { submitRegistration, type SubmitRegistrationResult } from '@/app/actions/registrations'
 import type { LiffClient } from '@/lib/liff-types'
-import { CheckCircle2, Loader2, RefreshCw, UserRound, AlertTriangle } from 'lucide-react'
+import { CheckCircle2, Loader2, RefreshCw, UserRound, AlertTriangle, LogIn } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 
 declare global {
@@ -14,6 +14,7 @@ declare global {
 type Room = { id: string; room_number: string; status: string; monthly_rent: number }
 
 type LiffStatus = 'loading' | 'ok' | 'need-login' | 'no-liff' | 'error'
+type FriendStatus = 'unchecked' | 'checking' | 'friend' | 'not-friend' | 'error'
 
 export function RegisterForm({ room, liffId, registrationToken }: { room: Room; liffId: string | null; registrationToken: string | null }) {
   const [scriptReady, setScriptReady] = useState(false)
@@ -22,6 +23,8 @@ export function RegisterForm({ room, liffId, registrationToken }: { room: Room; 
   const [lineDisplayName, setLineDisplayName] = useState('')
   const [linePictureUrl, setLinePictureUrl] = useState('')
   const [lineIdToken, setLineIdToken] = useState('')
+  const [lineAccessToken, setLineAccessToken] = useState('')
+  const [friendStatus, setFriendStatus] = useState<FriendStatus>('unchecked')
   const [result, setResult] = useState<SubmitRegistrationResult | null>(null)
   const [isPending, startTransition] = useTransition()
 
@@ -38,10 +41,12 @@ export function RegisterForm({ room, liffId, registrationToken }: { room: Room; 
         const profile = await liff.getProfile()
         if (cancelled) return
         const idToken = liff.getIDToken()
+        const accessToken = liff.getAccessToken()
         setLineUserId(profile.userId)
         setLineDisplayName(profile.displayName ?? '')
         setLinePictureUrl(profile.pictureUrl ?? '')
         setLineIdToken(idToken ?? '')
+        setLineAccessToken(accessToken ?? '')
         setLiffStatus('ok')
       } catch {
         if (!cancelled) setLiffStatus('error')
@@ -51,8 +56,39 @@ export function RegisterForm({ room, liffId, registrationToken }: { room: Room; 
     return () => { cancelled = true }
   }, [liffId, scriptReady])
 
+  useEffect(() => {
+    if (liffStatus !== 'ok') return
+    checkFriendship()
+  }, [liffStatus])
+
+  async function checkFriendship() {
+    setFriendStatus('checking')
+    try {
+      const friendship = await window.liff?.getFriendship()
+      setFriendStatus(friendship?.friendFlag ? 'friend' : 'not-friend')
+    } catch {
+      setFriendStatus('error')
+    }
+  }
+
+  async function handleRequestFriendship() {
+    try {
+      await window.liff?.requestFriendship()
+    } finally {
+      await checkFriendship()
+    }
+  }
+
+  function loginWithLine() {
+    window.liff?.login({ redirectUri: window.location.href })
+  }
+
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
+    if (friendStatus !== 'friend' || !lineIdToken || !lineAccessToken) {
+      setResult({ success: false, message: 'กรุณาเพิ่ม LINE OA หรือปลดบล็อกก่อนลงทะเบียน' })
+      return
+    }
     const fd = new FormData(e.currentTarget)
     startTransition(async () => {
       const res = await submitRegistration(fd)
@@ -122,8 +158,19 @@ export function RegisterForm({ room, liffId, registrationToken }: { room: Room; 
       )}
 
       {liffStatus === 'need-login' && (
-        <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-500 text-center">
-          เปิดลิงก์นี้ในแอป LINE เพื่อดึงข้อมูล LINE อัตโนมัติ
+        <button
+          type="button"
+          onClick={loginWithLine}
+          className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 shadow-sm"
+        >
+          <LogIn className="size-4" /> เข้าสู่ระบบ LINE
+        </button>
+      )}
+
+      {(liffStatus === 'no-liff' || liffStatus === 'error') && (
+        <div className="rounded-2xl bg-white px-5 py-5 text-center shadow-sm">
+          <p className="font-semibold text-slate-700">กรุณาเปิดลิงก์ผ่านแอป LINE</p>
+          <p className="mt-1 text-xs text-slate-400">ระบบต้องตรวจสอบ LINE OA ก่อนลงทะเบียน</p>
         </div>
       )}
 
@@ -137,18 +184,47 @@ export function RegisterForm({ room, liffId, registrationToken }: { room: Room; 
                 ? <img src={linePictureUrl} alt="" className="size-12 object-cover" referrerPolicy="no-referrer" />
                 : <UserRound className="size-6 text-slate-400" />}
             </div>
-            <div>
+            <div className="min-w-0 flex-1">
               <p className="font-semibold text-slate-800 text-sm">{lineDisplayName || 'บัญชี LINE'}</p>
               <p className="text-xs text-emerald-600 font-medium">✓ ดึง LINE User ID แล้ว</p>
             </div>
+            <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${
+              friendStatus === 'friend' ? 'bg-emerald-50 text-emerald-700' :
+              friendStatus === 'not-friend' ? 'bg-red-50 text-red-600' :
+              'bg-slate-100 text-slate-400'
+            }`}>
+              {friendStatus === 'checking' ? '...' : friendStatus === 'friend' ? 'เพิ่มแล้ว ✓' : friendStatus === 'not-friend' ? 'ยังไม่เพิ่ม' : '?'}
+            </span>
           </div>
         </div>
+      )}
+
+      {liffStatus === 'ok' && lineUserId && friendStatus !== 'friend' && (
+        <button
+          type="button"
+          onClick={handleRequestFriendship}
+          className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#06C755] text-sm font-bold text-white shadow-sm active:opacity-90"
+        >
+          <span className="text-lg font-light">+</span> เพิ่ม LINE OA / ปลดบล็อก
+        </button>
+      )}
+
+      {liffStatus === 'ok' && lineUserId && (
+        <button
+          type="button"
+          onClick={checkFriendship}
+          className="flex h-10 w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white text-xs font-semibold text-slate-500 shadow-sm"
+        >
+          <RefreshCw className={`size-3.5 ${friendStatus === 'checking' ? 'animate-spin' : ''}`} />
+          ตรวจสอบสถานะ LINE OA อีกครั้ง
+        </button>
       )}
 
       {/* Registration form */}
       <form onSubmit={handleSubmit} className="space-y-3">
         <input type="hidden" name="registration_token" value={registrationToken ?? ''} />
         <input type="hidden" name="line_id_token"     value={lineIdToken} />
+        <input type="hidden" name="line_access_token" value={lineAccessToken} />
         <input type="hidden" name="line_display_name" value={lineDisplayName} />
         <input type="hidden" name="line_picture_url"  value={linePictureUrl} />
 
@@ -197,15 +273,15 @@ export function RegisterForm({ room, liffId, registrationToken }: { room: Room; 
 
         <button
           type="submit"
-          disabled={isPending}
+          disabled={isPending || friendStatus !== 'friend' || !lineIdToken || !lineAccessToken}
           className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#1a3a6b] text-sm font-bold text-white shadow-sm disabled:opacity-50"
         >
           {isPending ? <><Loader2 className="size-4 animate-spin" /> กำลังส่ง...</> : <><CheckCircle2 className="size-4" /> ยืนยันลงทะเบียน</>}
         </button>
 
-        {!lineUserId && (liffStatus === 'no-liff' || liffStatus === 'error') && (
-          <p className="text-center text-xs text-slate-400">
-            หากไม่ได้เปิดผ่าน LINE ระบบจะไม่สามารถผูก LINE ได้อัตโนมัติ
+        {friendStatus !== 'friend' && (
+          <p className="rounded-xl bg-amber-50 px-4 py-2.5 text-center text-xs text-amber-700">
+            กรุณาเพิ่ม LINE OA ก่อน จึงจะกดยืนยันลงทะเบียนได้
           </p>
         )}
       </form>

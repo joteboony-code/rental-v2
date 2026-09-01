@@ -5,6 +5,7 @@ import { createServiceClient } from '@/lib/supabase/service'
 import { getLineMessagingConfig } from '@/lib/line-integration'
 import { logAudit } from './audit'
 import { getAuthedUser } from '@/lib/require-admin'
+import { lineFriendshipErrorMessage, verifyLineFriendship } from '@/lib/line-friendship'
 import { revalidatePath } from 'next/cache'
 
 export async function unlinkTenantLine(tenantId: string): Promise<{ success: boolean; message?: string }> {
@@ -71,10 +72,11 @@ export async function pairTenantLine(
 ): Promise<PairLineState> {
   const roomNumber  = String(formData.get('room_number') ?? '').trim()
   const idToken     = String(formData.get('id_token')    ?? '').trim()
+  const accessToken = String(formData.get('line_access_token') ?? '').trim()
   const displayName = String(formData.get('line_display_name') ?? '').trim() || null
   const pictureUrl  = String(formData.get('line_picture_url')  ?? '').trim() || null
 
-  if (!roomNumber || !idToken) {
+  if (!roomNumber || !idToken || !accessToken) {
     return {
       success: false,
       message: 'กรุณาเปิดหน้านี้ผ่าน LINE เพื่อดึง LINE User ID อัตโนมัติ',
@@ -87,18 +89,33 @@ export async function pairTenantLine(
     return { success: false, message: 'ระบบยังไม่ได้ตั้งค่า LINE Login Channel' }
   }
 
-  const verifyRes = await fetch('https://api.line.me/oauth2/v2.1/verify', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({ id_token: idToken, client_id: loginChannelId }),
-  })
-  if (!verifyRes.ok) {
-    return { success: false, message: 'ยืนยันตัวตน LINE ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง' }
+  let lineProfile: { sub?: string; name?: string; picture?: string }
+  try {
+    const verifyRes = await fetch('https://api.line.me/oauth2/v2.1/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ id_token: idToken, client_id: loginChannelId }),
+      signal: AbortSignal.timeout(8_000),
+    })
+    if (!verifyRes.ok) {
+      return { success: false, message: 'ยืนยันตัวตน LINE ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง' }
+    }
+    lineProfile = await verifyRes.json() as { sub?: string; name?: string; picture?: string }
+  } catch {
+    return { success: false, message: 'ตรวจสอบบัญชี LINE ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง' }
   }
-  const lineProfile = await verifyRes.json() as { sub?: string; name?: string; picture?: string }
   const lineUserId = lineProfile.sub
   if (!lineUserId) {
     return { success: false, message: 'ไม่สามารถดึง LINE User ID ได้ กรุณาลองใหม่' }
+  }
+
+  const friendship = await verifyLineFriendship({
+    accessToken,
+    expectedUserId: lineUserId,
+    loginChannelId,
+  })
+  if (!friendship.success) {
+    return { success: false, message: lineFriendshipErrorMessage(friendship.reason) }
   }
 
   // ใช้ชื่อ/รูปจาก LINE API (server-verified) แทนที่จะเชื่อ client
