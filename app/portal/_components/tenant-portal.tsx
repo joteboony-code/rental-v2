@@ -56,7 +56,10 @@ export function TenantPortal({ liffId, adminPreview = false, initialRoomId }: Te
   const dashboardRequestId                  = useRef(0)
   const repairsRequestId                    = useRef(0)
 
-  const loadDashboard = useCallback((token = portalToken, roomId?: string) => {
+  // The caller must pass the current token explicitly. Keeping portalToken out of
+  // this callback's dependencies prevents a refreshed session token from
+  // restarting the LIFF authentication effect on slower devices.
+  const loadDashboard = useCallback((token: string, roomId?: string) => {
     if (!adminPreview && !token) return
     if (adminPreview && !roomId) return
     const requestId = ++dashboardRequestId.current
@@ -76,7 +79,7 @@ export function TenantPortal({ liffId, adminPreview = false, initialRoomId }: Te
         }
       }
     })
-  }, [adminPreview, portalToken])
+  }, [adminPreview])
 
   const loadRepairs = useCallback(async (token = portalToken, roomId = selectedRoomId) => {
     if (!adminPreview && !token) return
