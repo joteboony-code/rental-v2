@@ -177,7 +177,7 @@ export function TenantPortal({ liffId, adminPreview = false, initialRoomId }: Te
     }
   }, [adminPreview, tab, repairs, portalToken, selectedRoomId, loadRepairs])
 
-  const currentBill    = data?.bills[0] ?? null
+  const currentBill    = data?.bills.find((bill) => isBillPayable(bill.status, bill.remaining_amount)) ?? data?.bills[0] ?? null
   const monthlyRent    = data?.contract?.monthly_rent ?? 0
   const totalOutstanding = useMemo(() =>
     data?.bills.reduce(
@@ -309,7 +309,7 @@ export function TenantPortal({ liffId, adminPreview = false, initialRoomId }: Te
                     ยังไม่พบสัญญาเช่าที่กำลังใช้งาน
                   </div>
                 )}
-                {currentBill && <CurrentBillCard bill={currentBill} promptpay={data.promptpay} />}
+                {currentBill && <CurrentBillCard bill={currentBill} promptpay={data.promptpay} paymentAmount={totalOutstanding} />}
                 <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
                   <div className="mb-3 flex items-center gap-2">
                     <Clock className="size-4 text-slate-400" />
@@ -410,9 +410,11 @@ function PortalLoadingState({ status }: { status: string }) {
 function CurrentBillCard({
   bill,
   promptpay,
+  paymentAmount,
 }: {
   bill: TenantPortalData['bills'][number]
   promptpay: TenantPortalData['promptpay']
+  paymentAmount: number
 }) {
   return (
     <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
@@ -449,13 +451,18 @@ function CurrentBillCard({
         <span className="text-sm font-semibold text-slate-800">{dateFmt.format(new Date(bill.due_date))}</span>
       </div>
 
-      {isBillPayable(bill.status, bill.remaining_amount) && promptpay.id && (
+      {paymentAmount > 0 && promptpay.id && (
         <div className="mt-4 border-t border-slate-100 pt-4">
-          <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-slate-400">สแกน QR ชำระเงิน</p>
+          <p className="mb-1 text-xs font-semibold uppercase tracking-widest text-slate-400">สแกน QR ชำระยอดค้างทั้งหมด</p>
+          {paymentAmount > bill.remaining_amount && (
+            <p className="mb-3 text-xs text-amber-600">
+              รวมบิลเดือนก่อนแล้ว ฿{money.format(paymentAmount)}
+            </p>
+          )}
           <PromptPayQR
             promptpayId={promptpay.id}
             promptpayName={promptpay.name ?? ''}
-            amount={bill.remaining_amount}
+            amount={paymentAmount}
           />
         </div>
       )}

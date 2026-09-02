@@ -19,12 +19,22 @@ vi.mock('@/lib/supabase/server', () => ({ createClient: async () => ({
     let data = table === 'bills' ? [...mock.bills] : []
     const chain = {
       select: () => chain,
-      eq: (key: string, value: unknown) => { mock.filters.push([key, value]); return chain },
+      update: () => chain,
+      eq: (key: string, value: unknown) => {
+        mock.filters.push([key, value])
+        if (key === 'billing_month') data = data.filter((b) => b.billing_month === value)
+        if (key === 'tenant_id') data = data.filter((b) => b.tenant_id === value)
+        if (key === 'status') data = data.filter((b) => b.status === value)
+        return chain
+      },
       in: (key: string, values: string[]) => {
         mock.filters.push([key, values])
         if (key === 'room_id') data = data.filter((b) => values.includes(b.room_id as string))
+        if (key === 'tenant_id') data = data.filter((b) => values.includes(b.tenant_id as string))
+        if (key === 'status') data = data.filter((b) => values.includes(b.status as string))
         return chain
       },
+      lt: () => chain,
       order: () => chain,
       insert: mock.insert,
       then: (resolve: (value: unknown) => unknown) => Promise.resolve({ data, error: null }).then(resolve),
@@ -65,6 +75,30 @@ describe('bulk LINE portal round integration', () => {
       expect.objectContaining({ bill_id: room1, line_user_id: 'U-override', started_at: expect.any(String) }),
     ]))
     expect(mock.revalidate).toHaveBeenCalledWith('/tenants')
+  })
+  it('includes old outstanding bills for a recipient who has only one room', async () => {
+    const current = bill(room1, 'U1')
+    current.total_amount = 3944
+    const old = {
+      ...bill('old-bill', 'U1'),
+      id: 'old-bill',
+      room_id: room1,
+      tenant_id: current.tenant_id,
+      billing_month: '2026-07-01',
+      due_date: '2026-08-05',
+      total_amount: 3722,
+      rooms: current.rooms,
+    }
+    mock.bills = [current, old]
+
+    const result = await sendBulkLineBillNotification('2026-08-01', 'flex')
+
+    expect(result.sent).toBe(1)
+    const request = JSON.parse(mock.fetch.mock.calls[0][1].body)
+    const message = JSON.stringify(request.messages)
+    expect(message).toContain('ยอดค้างเก่า')
+    expect(message).toContain('3,722')
+    expect(message).toContain('7,666')
   })
   it('preserves successful rooms when another room fails, and leaves the round inactive', async () => {
     mock.fetch.mockImplementation(async (_url, options) => {

@@ -241,6 +241,15 @@ export async function sendOverdueReminders(
   const today    = bangkokDateKey()
   const todayThai = thaiDate(today)
 
+  const { error: overdueSyncError } = await supabase
+    .from('bills')
+    .update({ status: 'overdue' })
+    .eq('status', 'pending')
+    .lt('due_date', today)
+  if (overdueSyncError) {
+    return { success: false, sent: 0, snoozed: 0, noLine: 0, failed: 0, message: `อัปเดตสถานะบิลเกินกำหนดไม่สำเร็จ: ${overdueSyncError.message}` }
+  }
+
   const { data: rawBills, error: billsError } = await supabase
     .from('bills')
     .select(`

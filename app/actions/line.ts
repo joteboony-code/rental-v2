@@ -153,11 +153,12 @@ function buildFlexBubble(data: {
 }
 
 function billRow(label: string, amount: number, color = '#334155'): object {
+  const displayAmount = amount < 0 ? `-฿${fmt(Math.abs(amount))}` : `฿${fmt(amount)}`
   return {
     type: 'box', layout: 'horizontal', margin: 'sm',
     contents: [
       { type: 'text', text: label, size: 'sm', color: '#64748B', flex: 1 },
-      { type: 'text', text: '฿' + fmt(amount), size: 'sm', color, align: 'end', weight: 'bold' },
+      { type: 'text', text: displayAmount, size: 'sm', color, align: 'end', weight: 'bold' },
     ],
   }
 }
@@ -178,6 +179,8 @@ type RoomStatement = {
   otherAmt: number
   otherNote: string | null
   currentTotal: number
+  currentPaid: number
+  currentRemaining: number
   meterRecordedAt: string | null
   meterReading: MeterReadingDetails | null
   overdueBills: { billId: string; billingMonth: string; remaining: number }[]
@@ -200,6 +203,7 @@ type StatementBill = {
   rooms: { room_number: string; floor: number | null } | null
   meter_readings: (MeterReadingDetails & { reading_date: string | null; created_at: string }) | null
   payments: { amount: number }[] | null
+  tenants?: { line_user_id: string | null } | null
   contracts?: { line_recipient_user_id: string | null } | null
 }
 
@@ -219,6 +223,8 @@ function buildRoomStatements(allBills: StatementBill[]): {
   const rooms: RoomStatement[] = []
   for (const [, roomBills] of byRoom) {
     const main = roomBills[0]
+    const mainPaid = (main.payments ?? []).reduce((sum, payment) => sum + Number(payment.amount), 0)
+    const mainRemaining = Math.max(0, Number(main.total_amount) - mainPaid)
     const overdueBills = roomBills
       .slice(1)
       .reverse()
@@ -246,6 +252,8 @@ function buildRoomStatements(allBills: StatementBill[]): {
       otherAmt: Number(main.other_amount),
       otherNote: main.other_note,
       currentTotal: Number(main.total_amount),
+      currentPaid: mainPaid,
+      currentRemaining: mainRemaining,
       meterRecordedAt: main.meter_readings?.reading_date ?? main.meter_readings?.created_at ?? null,
       meterReading: main.meter_readings,
       overdueBills,
@@ -259,7 +267,7 @@ function buildRoomStatements(allBills: StatementBill[]): {
     return roomA - roomB || a.roomNumber.localeCompare(b.roomNumber)
   })
 
-  const grandTotal = rooms.reduce((sum, room) => sum + room.currentTotal + room.overdueTotal, 0)
+  const grandTotal = rooms.reduce((sum, room) => sum + room.currentRemaining + room.overdueTotal, 0)
   const earliestDueDate =
     rooms.map((room) => room.dueDate).filter(Boolean).sort()[0] ??
     bangkokDateKey()
@@ -267,8 +275,13 @@ function buildRoomStatements(allBills: StatementBill[]): {
   return { rooms, grandTotal, earliestDueDate }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function fetchRoomStatements(supabase: any, tenantId: string): Promise<{
+async function fetchRecipientStatements(
+  // Supabase's relation-select builder is shared by browser and service clients.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  tenantId: string,
+  lineUserId: string
+): Promise<{
   rooms: RoomStatement[]
   grandTotal: number
   earliestDueDate: string
@@ -280,6 +293,7 @@ async function fetchRoomStatements(supabase: any, tenantId: string): Promise<{
       rent_amount, water_amount, electricity_amount, wifi_amount, trash_amount, other_amount, other_note,
       total_amount,
       rooms ( room_number, floor ),
+      tenants ( line_user_id ),
       contracts ( line_recipient_user_id ),
       meter_readings (
         reading_date, created_at,
@@ -292,9 +306,13 @@ async function fetchRoomStatements(supabase: any, tenantId: string): Promise<{
     .in('status', ['pending', 'overdue'])
     .order('billing_month', { ascending: false })
 
-  const fallbackRecipientBills = ((rawBills ?? []) as unknown as StatementBill[])
-    .filter((bill) => !bill.contracts?.line_recipient_user_id)
-  return buildRoomStatements(fallbackRecipientBills)
+  const recipientBills = ((rawBills ?? []) as unknown as StatementBill[])
+    .filter((bill) => getEffectiveLineUserId(bill.contracts, bill.tenants) === lineUserId)
+  return buildRoomStatements(recipientBills)
+}
+
+function needsCombinedStatement(rooms: RoomStatement[]): boolean {
+  return rooms.length >= 2 || rooms.some((room) => room.overdueBills.length > 0)
 }
 
 function buildCombinedFlexBubble(data: {
@@ -359,7 +377,11 @@ function buildCombinedFlexBubble(data: {
     if (r.otherAmt > 0) body.push(billRow(`📦 ${r.otherNote || 'ค่าอื่น ๆ'}`, r.otherAmt))
 
     // Room total = current bill + overdue
-    const roomTotal = r.currentTotal + r.overdueTotal
+    if (r.currentPaid > 0) {
+      body.push(billRow('ชำระเดือนนี้แล้ว', -r.currentPaid, '#059669'))
+    }
+
+    const roomTotal = r.currentRemaining + r.overdueTotal
     body.push({ type: 'separator', margin: 'md', color: '#E2E8F0' })
     body.push({
       type: 'box', layout: 'horizontal', margin: 'md',
@@ -442,6 +464,9 @@ function buildCombinedTextMessage(data: {
       lines.push(...meterLines.map((line) => `   ${line}`))
     }
     lines.push(`   รวม ฿${fmt(room.currentTotal)}`)
+    if (room.currentPaid > 0) {
+      lines.push(`   ชำระเดือนนี้แล้ว ฿${fmt(room.currentPaid)} · คงเหลือ ฿${fmt(room.currentRemaining)}`)
+    }
     for (const overdue of room.overdueBills) {
       lines.push(`   ⚠️ ค้าง ${thaiMonth(overdue.billingMonth)} ฿${fmt(overdue.remaining)}`)
     }
@@ -528,11 +553,19 @@ export async function sendLineBillNotification(
     })
   }
 
+  const { error: overdueSyncError } = await supabase
+    .from('bills')
+    .update({ status: 'overdue' })
+    .eq('tenant_id', bill.tenant_id)
+    .eq('status', 'pending')
+    .lt('due_date', bangkokDateKey())
+  if (overdueSyncError) {
+    console.error('[line-bill] overdue status sync failed', { message: overdueSyncError.message })
+  }
+
   const { rooms: allRooms, grandTotal: allTotal, earliestDueDate } =
-    contract?.line_recipient_user_id
-      ? { rooms: [], grandTotal: 0, earliestDueDate: bangkokDateKey() }
-      : await fetchRoomStatements(supabase, bill.tenant_id as string)
-  if (!contract?.line_recipient_user_id && allRooms.length >= 2) {
+    await fetchRecipientStatements(supabase, bill.tenant_id as string, lineUserId)
+  if (needsCombinedStatement(allRooms)) {
     const combinedUrl = buildTenantPortalUrl(lineConfig.liffId, lineConfig.appUrl)
     try {
       if (mode === 'flex') {
@@ -969,6 +1002,13 @@ export async function sendBulkLineBillNotification(
   const supabase = await createClient()
   if (!/^\d{4}-(0[1-9]|1[0-2])-01$/.test(billingMonth)) return emptyResult('รอบบิลไม่ถูกต้อง')
 
+  const { error: overdueSyncError } = await supabase
+    .from('bills')
+    .update({ status: 'overdue' })
+    .eq('status', 'pending')
+    .lt('due_date', bangkokDateKey())
+  if (overdueSyncError) return emptyResult(`อัปเดตสถานะบิลเกินกำหนดไม่สำเร็จ: ${overdueSyncError.message}`)
+
   const retryRoomIds = [...new Set(
     targetRoomIds.filter((id) => /^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(id))
   )].slice(0, 100)
@@ -1122,7 +1162,7 @@ export async function sendBulkLineBillNotification(
       return na - nb || a.roomNumber.localeCompare(b.roomNumber)
     })
     const allGrandTotal = allStmtRooms.reduce(
-      (sum, room) => sum + room.currentTotal + room.overdueTotal,
+      (sum, room) => sum + room.currentRemaining + room.overdueTotal,
       0
     )
     const allEarliestDue =
@@ -1131,7 +1171,7 @@ export async function sendBulkLineBillNotification(
 
     const startedAt = new Date().toISOString()
     try {
-      if (allStmtRooms.length >= 2) {
+      if (needsCombinedStatement(allStmtRooms)) {
         const portalUrl = buildTenantPortalUrl(activeLineConfig.liffId, activeLineConfig.appUrl)
         const message = mode === 'flex'
           ? buildCombinedFlexBubble({
