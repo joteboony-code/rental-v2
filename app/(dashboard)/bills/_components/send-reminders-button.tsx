@@ -24,7 +24,9 @@ export function SendRemindersButton({
     sent: number
     snoozed: number
     noLine: number
+    failed: number
     message: string
+    failures?: string[]
   } | null>(null)
 
   async function send(mode: 'text' | 'flex') {
@@ -124,6 +126,11 @@ export function SendRemindersButton({
             <p className="font-semibold">{result.message}</p>
             {result.success && result.snoozed > 0 && (
               <p className="text-emerald-600 mt-0.5">งดแจ้งเตือน {result.snoozed} ห้อง (ตามที่ตั้งค่าไว้)</p>
+            )}
+            {result.failures && result.failures.length > 0 && (
+              <ul className="mt-1.5 space-y-1">
+                {result.failures.map((failure) => <li key={failure}>• {failure}</li>)}
+              </ul>
             )}
           </div>
         </div>

@@ -34,6 +34,16 @@ async function pushMessage(to: string, token: string, messages: object[]) {
   if (!res.ok) throw new Error(`LINE API ${res.status}: ${await res.text()}`)
 }
 
+function reminderFailureReason(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error)
+  if (/LINE API 400/i.test(message)) return 'รูปแบบข้อความไม่ถูกต้อง'
+  if (/LINE API 401|LINE API 403/i.test(message)) return 'LINE token ไม่มีสิทธิ์หรือหมดอายุ'
+  if (/LINE API 404/i.test(message)) return 'ไม่พบผู้รับ หรือผู้รับบล็อก LINE OA'
+  if (/LINE API 429/i.test(message)) return 'LINE จำกัดโควตาหรือความถี่การส่ง'
+  if (/fetch failed|network/i.test(message)) return 'เชื่อมต่อ LINE ไม่สำเร็จ'
+  return message.slice(0, 120) || 'ไม่ทราบสาเหตุ'
+}
+
 function buildPortalFlex(portalUrl: string) {
   return {
     type: 'flex',
@@ -165,7 +175,7 @@ function buildBillFlexCard(
         backgroundColor: headerBg,
         contents: [
           { type: 'text', text: isOverdue ? '🚨 แจ้งเตือนค่าเช่าค้างชำระ' : '🔔 แจ้งเตือนค่าเช่า', color: '#ffffff', weight: 'bold', size: 'md' },
-          { type: 'text', text: `🏠 ห้อง ${roomNumber}  ·  ${tenantName}`, color: 'rgba(255,255,255,0.85)', size: 'sm', margin: 'xs' },
+          { type: 'text', text: `🏠 ห้อง ${roomNumber}  ·  ${tenantName}`, color: '#FFFFFFD9', size: 'sm', margin: 'xs' },
         ],
       },
       body: {
@@ -231,6 +241,7 @@ export async function sendOverdueReminders(
   failed: number
   message: string
   ownerSummary?: string
+  failures?: string[]
 }> {
   // ตรวจสิทธิ์เอง — action นี้ใช้ service client (bypass RLS) และยิง LINE push (เปลืองโควต้า)
   if (!(await getAuthedUser())) {
@@ -301,6 +312,7 @@ export async function sendOverdueReminders(
 
   let sent = 0, snoozed = 0, noLine = 0, failed = 0
   const sentRooms: string[] = []
+  const failures: string[] = []
 
   for (const [, tenantBills] of byTenant) {
     const firstBill = tenantBills[0]
@@ -381,8 +393,11 @@ export async function sendOverdueReminders(
       await pushMessage(lineUserId, lineConfig.channelAccessToken, messages)
       sent++
       sentRooms.push(`ห้อง ${roomNumber}: ${fmt(totalOwed)} บาท${hasOverdue ? ' 🔴' : ''}`)
-    } catch {
+    } catch (error) {
       failed++
+      const reason = reminderFailureReason(error)
+      failures.push(`ห้อง ${roomNumber}: ${reason}`)
+      console.error('[reminders] LINE push failed', { roomNumber, reason })
     }
   }
 
@@ -408,7 +423,7 @@ export async function sendOverdueReminders(
   if (snoozed > 0) parts.push(`งดแจ้ง ${snoozed} ห้อง`)
   if (noLine  > 0) parts.push(`ไม่มี LINE ${noLine} ห้อง`)
 
-  return { success: sent > 0, sent, snoozed, noLine, failed, message: parts.join(' · ') }
+  return { success: sent > 0, sent, snoozed, noLine, failed, message: parts.join(' · '), failures }
 }
 
 // ── Update reminder settings ─────────────────────────────────
