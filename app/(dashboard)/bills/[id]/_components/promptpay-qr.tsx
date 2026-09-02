@@ -41,9 +41,9 @@ export function PromptPayQR({ promptpayId, promptpayName, amount }: Props) {
       <div className="shrink-0 rounded-xl border bg-white p-5 shadow-sm">
         <QRCode
           value={payload}
-          size={180}
-          level="M"
-          className="block size-[180px] shrink-0"
+          size={200}
+          level="H"
+          className="block size-[200px] shrink-0"
           style={{ shapeRendering: 'crispEdges' }}
         />
       </div>

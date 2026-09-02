@@ -31,3 +31,9 @@ export function prorateRent(
 
   return Math.round((monthlyRent * (daysInMonth - startDay + 1)) / daysInMonth)
 }
+
+export function isBillPayable(status: string, remainingAmount: number): boolean {
+  return (status === 'pending' || status === 'overdue')
+    && Number.isFinite(remainingAmount)
+    && remainingAmount > 0
+}

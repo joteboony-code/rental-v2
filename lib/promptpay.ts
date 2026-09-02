@@ -26,16 +26,23 @@ function crc16(str: string): string {
  */
 export function generatePromptPayPayload(phoneOrId: string, amount?: number): string {
   let id = phoneOrId.replace(/\D/g, '')
+  let proxyTag: '01' | '02'
 
   // Phone: 10 digits starting with 0 → convert to 0066XXXXXXXXX (13 chars)
   if (id.startsWith('0') && id.length === 10) {
     id = '0066' + id.slice(1)
+    proxyTag = '01'
+  } else if (id.length === 13) {
+    // Thai QR Payment reserves subtag 02 for National ID / Tax ID.
+    proxyTag = '02'
+  } else {
+    throw new Error('PromptPay ID must be a Thai mobile number or a 13-digit National/Tax ID')
   }
 
   // Merchant account info (tag 29 for PromptPay)
   const merchantAccount =
     field('00', 'A000000677010111') +  // PromptPay AID
-    field('01', id)                     // phone proxy
+    field(proxyTag, id)
 
   const payload =
     field('00', '01') +                 // Payload format indicator

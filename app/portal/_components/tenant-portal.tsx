@@ -17,6 +17,7 @@ const PromptPayQR = dynamic(
 import { getTenantPortalDashboard, getPortalRepairs, getPortalRooms, verifyAndGetPortalToken, type TenantPortalData, type PortalRepairItem, type PortalRoom } from '@/app/actions/portal'
 import { getAdminPortalRepairs, getAdminPortalRooms, getAdminTenantPortalDashboard } from '@/app/actions/portal-admin'
 import { roomRow } from '@/lib/room-utils'
+import { isBillPayable } from '@/lib/billing'
 import { Badge } from '@/components/ui/badge'
 import { RepairSubmit } from './repair-submit'
 import { RepairHistory } from './repair-history'
@@ -46,12 +47,15 @@ export function TenantPortal({ liffId, adminPreview = false, initialRoomId }: Te
   const [portalToken, setPortalToken]       = useState('')
   const [status, setStatus]                 = useState(adminPreview ? 'กำลังโหลดข้อมูล Portal' : liffId ? 'กำลังเชื่อมต่อ LINE' : 'กำลังเตรียมข้อมูลห้อง')
   const [data, setData]                     = useState<TenantPortalData | null>(null)
-  const [error, setError]                   = useState('')
+  const [error, setError]                   = useState(
+    !adminPreview && !liffId ? 'ระบบยังไม่ได้ตั้งค่า LINE Portal กรุณาติดต่อผู้ดูแล' : ''
+  )
   const [tab, setTab]                       = useState<Tab>('bills')
   const [repairs, setRepairs]               = useState<PortalRepairItem[] | null>(null)
   const [repairsLoading, setRepairsLoading] = useState(false)
   const [rooms, setRooms]                   = useState<PortalRoom[]>([])
   const [selectedRoomId, setSelectedRoomId] = useState<string | undefined>(undefined)
+  const [authAttempt, setAuthAttempt]       = useState(0)
   const [, startTransition]                 = useTransition()
   const dashboardRequestId                  = useRef(0)
   const repairsRequestId                    = useRef(0)
@@ -122,10 +126,16 @@ export function TenantPortal({ liffId, adminPreview = false, initialRoomId }: Te
   useEffect(() => {
     if (adminPreview || !liffId || !scriptReady) return
     let cancelled = false
+    const timeoutId = window.setTimeout(() => {
+      if (!cancelled) {
+        setError('เชื่อมต่อ LINE ใช้เวลานานเกินไป กรุณาลองใหม่อีกครั้ง')
+      }
+    }, 15_000)
     async function loadLineProfile() {
       try {
+        setError('')
         const liff = window.liff
-        if (!liff) { setStatus('โหลด LIFF SDK ไม่สำเร็จ'); return }
+        if (!liff) { setError('โหลด LINE SDK ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง'); return }
         await liff.init({ liffId: liffId! })
         if (cancelled) return
         if (!liff.isLoggedIn()) { setStatus('กำลังเข้าสู่ระบบ LINE'); liff.login({ redirectUri: window.location.href }); return }
@@ -136,7 +146,7 @@ export function TenantPortal({ liffId, adminPreview = false, initialRoomId }: Te
         setStatus('กำลังยืนยันตัวตน...')
         const tokenRes = await verifyAndGetPortalToken(idToken ?? '')
         if (cancelled) return
-        if (!tokenRes.success) { setStatus(tokenRes.message); return }
+        if (!tokenRes.success) { setError(tokenRes.message); return }
         setPortalToken(tokenRes.token)
         setStatus('เชื่อมต่อ LINE แล้ว')
         const { rooms: activeRooms } = await getPortalRooms(tokenRes.token)
@@ -146,12 +156,17 @@ export function TenantPortal({ liffId, adminPreview = false, initialRoomId }: Te
         loadDashboard(tokenRes.token, firstRoomId)
       } catch (err) {
         console.error(err)
-        if (!cancelled) setStatus('ยังดึงข้อมูลจาก LINE ไม่ได้')
+        if (!cancelled) setError('ยังดึงข้อมูลจาก LINE ไม่ได้ กรุณาลองใหม่อีกครั้ง')
+      } finally {
+        window.clearTimeout(timeoutId)
       }
     }
     loadLineProfile()
-    return () => { cancelled = true }
-  }, [adminPreview, liffId, loadDashboard, scriptReady])
+    return () => {
+      cancelled = true
+      window.clearTimeout(timeoutId)
+    }
+  }, [adminPreview, authAttempt, liffId, loadDashboard, scriptReady])
 
   // Load repairs when switching to repair tab
   useEffect(() => {
@@ -165,7 +180,10 @@ export function TenantPortal({ liffId, adminPreview = false, initialRoomId }: Te
   const currentBill    = data?.bills[0] ?? null
   const monthlyRent    = data?.contract?.monthly_rent ?? 0
   const totalOutstanding = useMemo(() =>
-    data?.bills.reduce((sum, b) => sum + b.remaining_amount, 0) ?? 0, [data])
+    data?.bills.reduce(
+      (sum, bill) => sum + (isBillPayable(bill.status, bill.remaining_amount) ? bill.remaining_amount : 0),
+      0
+    ) ?? 0, [data])
 
   return (
     <>
@@ -173,8 +191,8 @@ export function TenantPortal({ liffId, adminPreview = false, initialRoomId }: Te
         <Script
           src="https://static.line-scdn.net/liff/edge/2/sdk.js"
           strategy="afterInteractive"
-          onLoad={() => setScriptReady(true)}
-          onError={() => setStatus('โหลด LIFF SDK ไม่สำเร็จ')}
+          onReady={() => setScriptReady(true)}
+          onError={() => setError('โหลด LINE SDK ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง')}
         />
       )}
 
@@ -182,9 +200,28 @@ export function TenantPortal({ liffId, adminPreview = false, initialRoomId }: Te
         {!data && !error && <PortalLoadingState status={status} />}
 
         {error && (
-          <div className="flex items-start gap-2 rounded-2xl border border-rose-100 bg-rose-50 p-3 text-sm text-rose-700">
-            <AlertCircle className="mt-0.5 size-4 shrink-0" />
-            {error}
+          <div className="rounded-2xl border border-rose-100 bg-rose-50 p-4 text-sm text-rose-700">
+            <div className="flex items-start gap-2">
+              <AlertCircle className="mt-0.5 size-4 shrink-0" />
+              <span>{error}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setError('')
+                setStatus(adminPreview ? 'กำลังโหลดข้อมูล Portal' : 'กำลังเชื่อมต่อ LINE')
+                if (adminPreview && selectedRoomId) {
+                  loadDashboard('', selectedRoomId)
+                } else if (window.liff) {
+                  setAuthAttempt((attempt) => attempt + 1)
+                } else {
+                  window.location.reload()
+                }
+              }}
+              className="mt-3 rounded-xl bg-rose-600 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-rose-700"
+            >
+              ลองใหม่
+            </button>
           </div>
         )}
 
@@ -412,7 +449,7 @@ function CurrentBillCard({
         <span className="text-sm font-semibold text-slate-800">{dateFmt.format(new Date(bill.due_date))}</span>
       </div>
 
-      {bill.status !== 'paid' && bill.remaining_amount > 0 && promptpay.id && (
+      {isBillPayable(bill.status, bill.remaining_amount) && promptpay.id && (
         <div className="mt-4 border-t border-slate-100 pt-4">
           <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-slate-400">สแกน QR ชำระเงิน</p>
           <PromptPayQR

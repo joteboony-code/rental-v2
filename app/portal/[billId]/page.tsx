@@ -5,6 +5,7 @@ import { createServiceClient } from '@/lib/supabase/service'
 import { Droplets, Zap, Wifi, Trash2, User, Phone, CheckCircle, Clock, AlertTriangle } from 'lucide-react'
 import { roomRow } from '@/lib/room-utils'
 import { verifyBillToken } from '@/lib/portal-url'
+import { isBillPayable } from '@/lib/billing'
 import { QRWrapper } from './_components/qr-wrapper'
 
 export default async function PortalPage({
@@ -50,6 +51,7 @@ export default async function PortalPage({
 
   const totalPaid = (payments ?? []).reduce((s, p) => s + Number(p.amount), 0)
   const remaining = Math.max(0, Number(bill.total_amount) - totalPaid)
+  const payable = isBillPayable(bill.status, remaining)
 
   const month = new Date(bill.billing_month).toLocaleDateString('th-TH', { year: 'numeric', month: 'long' })
   const dueDate = new Date(bill.due_date).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })
@@ -196,13 +198,13 @@ export default async function PortalPage({
         )}
 
         {/* QR PromptPay */}
-        {bill.status !== 'paid' && settings?.promptpay_id && (
+        {payable && settings?.promptpay_id && (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
             <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-4 text-center">ชำระผ่าน QR PromptPay</p>
             <QRWrapper
               promptpayId={settings.promptpay_id}
               promptpayName={settings.promptpay_name ?? 'ห้องเช่า'}
-              amount={remaining > 0 ? remaining : Number(bill.total_amount)}
+              amount={remaining}
             />
           </div>
         )}
