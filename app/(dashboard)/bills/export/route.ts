@@ -20,7 +20,8 @@ export async function GET(request: NextRequest) {
     .from('bills')
     .select(`
       id, billing_month, due_date, status,
-      rent_amount, water_amount, electricity_amount, other_amount, total_amount,
+      rent_amount, water_amount, electricity_amount,
+      wifi_amount, trash_amount, other_amount, total_amount,
       rooms ( room_number, floor ),
       tenants ( full_name, phone )
     `)
@@ -76,7 +77,7 @@ export async function GET(request: NextRequest) {
   const csvHeaders = [
     ...(year ? ['เดือน'] : []),
     'ห้อง', 'แถว', 'ผู้เช่า', 'เบอร์โทร',
-    'ค่าเช่า', 'ค่าน้ำ', 'ค่าไฟ', 'อื่นๆ', 'รวม',
+    'ค่าเช่า', 'ค่าน้ำ', 'ค่าไฟ', 'ค่า WiFi', 'ค่าขยะ', 'อื่นๆ', 'รวม',
     'ชำระแล้ว', 'ยอดค้าง', 'วิธีชำระ', 'วันที่ชำระ',
     'สถานะ', 'ครบกำหนด',
   ]
@@ -106,6 +107,8 @@ export async function GET(request: NextRequest) {
       b.rent_amount,
       b.water_amount,
       b.electricity_amount,
+      b.wifi_amount,
+      b.trash_amount,
       b.other_amount,
       b.total_amount,
       totalPaid || '',
@@ -118,12 +121,13 @@ export async function GET(request: NextRequest) {
   })
 
   // Summary row
-  const summaryRow = [
-    'รวมทั้งหมด', '', '', '',
-    '', '', '', '', grandTotal,
-    grandPaid, Math.max(0, grandTotal - grandPaid), '', '',
-    '', '',
-  ]
+  const summaryRow = csvHeaders.map((header, index) => {
+    if (index === 0) return 'รวมทั้งหมด'
+    if (header === 'รวม') return grandTotal
+    if (header === 'ชำระแล้ว') return grandPaid
+    if (header === 'ยอดค้าง') return Math.max(0, grandTotal - grandPaid)
+    return ''
+  })
 
   const escape = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`
   const csv = [
