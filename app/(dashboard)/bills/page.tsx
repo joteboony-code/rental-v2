@@ -53,10 +53,15 @@ export default async function BillsPage({ searchParams }: Props) {
     billsQuery = billsQuery.eq('status', status)
   }
 
-  // ดึง filtered bills + all bills stats พร้อมกัน
-  const [{ data: rawBills }, { data: allBills }] = await Promise.all([
+  // ดึง filtered bills + สถิติเดือนที่เลือก + ยอดค้างจริงทุกเดือนพร้อมกัน
+  const [{ data: rawBills }, { data: allBills }, { data: outstandingBills }] = await Promise.all([
     billsQuery,
     supabase.from('bills').select('status, total_amount').eq('billing_month', billingMonth),
+    supabase
+      .from('bills')
+      .select('total_amount, payments ( amount )')
+      .in('status', ['pending', 'overdue'])
+      .limit(2000),
   ])
   // numeric sort by room_number (stored as text → "10" < "2" alphabetically)
   const bills = rawBills?.slice().sort((a, b) => {
@@ -73,6 +78,13 @@ export default async function BillsPage({ searchParams }: Props) {
               .reduce((s, b) => s + Number(b.total_amount), 0) ?? 0,
     total_amount: allBills?.reduce((s, b) => s + Number(b.total_amount), 0) ?? 0,
   }
+  const outstandingItems = (outstandingBills ?? [])
+    .map((bill) => {
+      const paid = (bill.payments ?? []).reduce((sum, payment) => sum + Number(payment.amount), 0)
+      return Math.max(0, Number(bill.total_amount) - paid)
+    })
+    .filter((remaining) => remaining >= 1)
+  const totalOutstanding = outstandingItems.reduce((sum, remaining) => sum + remaining, 0)
 
   const monthLabel = new Date(billingMonth).toLocaleDateString('th-TH', { year: 'numeric', month: 'long' })
 
@@ -154,11 +166,18 @@ export default async function BillsPage({ searchParams }: Props) {
       </form>
 
       {/* ── Stats row ── */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-4">
         <StatCard tone="slate"   label="ทั้งหมด"    value={<CountUp value={stats.total} />}   hint="รายการ" />
         <StatCard tone="amber"   label="รอชำระ"    value={<CountUp value={stats.pending} />} hint="รายการ" />
         <StatCard tone="emerald" label="ชำระแล้ว"  value={<CountUp value={stats.paid} />}    hint="รายการ" />
         <StatCard tone="rose"    label="เกินกำหนด" value={<CountUp value={stats.overdue} />} hint="รายการ" />
+        <StatCard
+          tone="rose"
+          label="ยอดค้างทั้งหมด"
+          value={<><span className="text-xl">฿</span><CountUp value={totalOutstanding} format="currency-th" /></>}
+          hint={`${outstandingItems.length} บิล · ทุกเดือน`}
+          className="col-span-2 md:col-span-1"
+        />
       </div>
 
       {/* ── Revenue + progress ── */}
