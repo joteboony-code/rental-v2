@@ -3,6 +3,7 @@
 import { getAuthedUser } from '@/lib/require-admin'
 import { createServiceClient } from '@/lib/supabase/service'
 import type { PortalRepairItem, PortalRoom, TenantPortalData } from './portal'
+import { createSignedStorageUrl } from '@/lib/storage-urls'
 
 type AdminPortalResult =
   | { success: true; data: TenantPortalData }
@@ -135,6 +136,19 @@ export async function getAdminTenantPortalDashboard(roomId: string): Promise<Adm
       }))
     const paidAmount = payments.reduce((sum, payment) => sum + Number(payment.amount), 0)
     const totalAmount = Number(bill.total_amount)
+    const [waterImageUrl, electricityImageUrl] = bill.meter_readings
+      ? await Promise.all([
+          createSignedStorageUrl(supabase, 'meter-photos', bill.meter_readings.water_image_url, 3600),
+          createSignedStorageUrl(supabase, 'meter-photos', bill.meter_readings.electricity_image_url, 3600),
+        ])
+      : [null, null]
+    const meter = bill.meter_readings
+      ? {
+          ...bill.meter_readings,
+          water_image_url: waterImageUrl,
+          electricity_image_url: electricityImageUrl,
+        }
+      : null
 
     return {
       id: bill.id,
@@ -151,15 +165,15 @@ export async function getAdminTenantPortalDashboard(roomId: string): Promise<Adm
       total_amount: totalAmount,
       paid_amount: paidAmount,
       remaining_amount: Math.max(0, totalAmount - paidAmount),
-      meter: bill.meter_readings
+      meter: meter
         ? {
-            ...bill.meter_readings,
-            water_prev: Number(bill.meter_readings.water_prev),
-            water_curr: Number(bill.meter_readings.water_curr),
-            water_units: Number(bill.meter_readings.water_units),
-            electricity_prev: Number(bill.meter_readings.electricity_prev),
-            electricity_curr: Number(bill.meter_readings.electricity_curr),
-            electricity_units: Number(bill.meter_readings.electricity_units),
+            ...meter,
+            water_prev: Number(meter.water_prev),
+            water_curr: Number(meter.water_curr),
+            water_units: Number(meter.water_units),
+            electricity_prev: Number(meter.electricity_prev),
+            electricity_curr: Number(meter.electricity_curr),
+            electricity_units: Number(meter.electricity_units),
           }
         : null,
       payments: payments.map((payment) => ({ ...payment, amount: Number(payment.amount) })),
@@ -216,5 +230,9 @@ export async function getAdminPortalRepairs(roomId: string): Promise<{
     .limit(20)
 
   if (error) return { success: false, message: error.message }
-  return { success: true, repairs: (data ?? []) as PortalRepairItem[] }
+  const repairs = await Promise.all(((data ?? []) as PortalRepairItem[]).map(async (repair) => ({
+    ...repair,
+    photo_url: await createSignedStorageUrl(supabase, 'repair-photos', repair.photo_url, 3600),
+  })))
+  return { success: true, repairs }
 }

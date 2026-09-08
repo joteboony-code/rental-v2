@@ -29,13 +29,15 @@ export async function GET(req: NextRequest) {
   const todayStr = bangkokDateKey()
 
   // Guard: ป้องกันส่งซ้ำในวันเดิม
-  const { data: alreadySent } = await supabase
+  const { data: alreadySent, error: previousError } = await supabase
     .from('audit_logs')
-    .select('id')
+    .select('id, new_value')
     .eq('action', 'cron_daily_summary_sent')
     .gte('created_at', `${todayStr}T00:00:00+07:00`)
     .lte('created_at', `${todayStr}T23:59:59+07:00`)
     .maybeSingle()
+  if (previousError) return NextResponse.json({ ok: false, error: 'Summary status unavailable' }, { status: 500 })
+  if (alreadySent?.new_value?.delivery_failed) return NextResponse.json({ ok: false, error: 'Previous delivery failed; manual review required' }, { status: 502 })
   if (alreadySent) {
     return NextResponse.json({ ok: true, skipped: 'already sent today' })
   }
@@ -45,12 +47,12 @@ export async function GET(req: NextRequest) {
   const in30Str = bangkokDateKey(in30)
 
   const [
-    { data: unpaidBills },
-    { data: dueToday },
-    { count: pendingSlipCount },
-    { count: openRepairCount },
-    { data: expiringContracts },
-    { data: promisesToday },
+    { data: unpaidBills, error: billsError },
+    { data: dueToday, error: dueError },
+    { count: pendingSlipCount, error: slipError },
+    { count: openRepairCount, error: repairError },
+    { data: expiringContracts, error: contractError },
+    { data: promisesToday, error: promiseError },
   ] = await Promise.all([
     // บิลค้างชำระทุกเดือน (ดึง room_number + billing_month มาด้วย)
     supabase.from('bills').select('total_amount, status, billing_month, rooms(room_number), payments(amount)').in('status', ['pending', 'overdue']).order('billing_month', { ascending: true }).limit(2000),
@@ -68,6 +70,9 @@ export async function GET(req: NextRequest) {
   ])
 
   // คำนวณยอดค้างจริงแยกรายบิล
+  if ([billsError, dueError, slipError, repairError, contractError, promiseError].some(Boolean)) {
+    return NextResponse.json({ ok: false, error: 'Summary data unavailable' }, { status: 500 })
+  }
   type PJ = { amount: number }
   type BJ = { total_amount: number; status: string; billing_month: string | null; rooms: { room_number: string } | null; payments: PJ[] | null }
   const unpaid = (unpaidBills ?? []) as unknown as BJ[]
@@ -179,13 +184,14 @@ export async function GET(req: NextRequest) {
       : null
 
   // Claim via audit log BEFORE sending — unique index on (date, action) rejects concurrent duplicates
-  const { error: auditErr } = await supabase.from('audit_logs').insert({
+  const { data: claim, error: auditErr } = await supabase.from('audit_logs').insert({
     action:      'cron_daily_summary_sent',
     entity_type: 'cron',
     description: `ส่งสรุปประจำวัน: ค้าง ${unpaidCount} บิล ฿${totalOwed}`,
     new_value:   { unpaidCount, totalOwed, date: todayStr },
-  })
+  }).select('id').single()
   if (auditErr) {
+    if (auditErr.code !== '23505') return NextResponse.json({ ok: false, error: 'Summary claim failed' }, { status: 500 })
     return NextResponse.json({ ok: true, skipped: 'already sent today' })
   }
 
@@ -193,10 +199,12 @@ export async function GET(req: NextRequest) {
     await notifyOwner(
       lines.join('\n'),
       'daily_summary',
-      reviewUrl ? { label: 'ตรวจสลิป', url: reviewUrl } : undefined
+      reviewUrl ? { label: 'ตรวจสลิป', url: reviewUrl } : undefined,
+      { strict: true }
     )
-  } catch (err) {
-    return NextResponse.json({ ok: false, error: String(err) })
+  } catch {
+    if (claim) await supabase.from('audit_logs').update({ new_value: { unpaidCount, totalOwed, date: todayStr, delivery_failed: true } }).eq('id', claim.id)
+    return NextResponse.json({ ok: false, error: 'Summary delivery failed' }, { status: 502 })
   }
 
   return NextResponse.json({

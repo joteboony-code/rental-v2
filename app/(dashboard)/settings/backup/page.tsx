@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { ChevronLeft, Cloud, DatabaseBackup, FileArchive, ShieldCheck } from 'lucide-react'
 import { BackupNowButton } from '../_components/backup-now-button'
-import { getBackupBucket, getBackupOverview, type BackupSummary } from '@/lib/backup'
+import { getBackupBucket, getBackupOverview, getCronOverview, type BackupSummary } from '@/lib/backup'
 
 const dateTime = new Intl.DateTimeFormat('th-TH', {
   dateStyle: 'medium',
@@ -33,9 +33,14 @@ export default async function BackupSettingsPage() {
   let configured = true
   let latest: BackupSummary | null = null
   let history: BackupSummary[] = []
+  let cron: Awaited<ReturnType<typeof getCronOverview>> = null
 
   try {
-    const overview = await getBackupOverview(await getBackupBucket())
+    const bucket = await getBackupBucket()
+    const [overview, cronOverview] = await Promise.all([
+      getBackupOverview(bucket), getCronOverview(bucket),
+    ])
+    cron = cronOverview
     latest = overview.latest
     history = overview.history
   } catch {
@@ -67,7 +72,7 @@ export default async function BackupSettingsPage() {
               <h2 className="text-sm font-semibold text-slate-800">Cloudflare R2</h2>
             </div>
             <p className="mt-1 text-xs text-slate-400">
-              สำรองอัตโนมัติหนึ่งครั้งเมื่อบิลรอบปัจจุบันชำระครบทุกห้อง เก็บในพื้นที่ Private และเข้ารหัส AES-256-GCM
+              สำรองทุกวัน เวลา 09:00 น. ไม่ต้องรอชำระครบ เก็บแบบ Private และเข้ารหัส AES-256-GCM รูปเดิมที่ไม่เปลี่ยนจะไม่เก็บซ้ำ
             </p>
           </div>
           <BackupNowButton disabled={!configured || latest?.status === 'running'} />
@@ -110,6 +115,25 @@ export default async function BackupSettingsPage() {
       </section>
 
       <section className="rounded-2xl border border-slate-100 bg-white shadow-sm">
+        <div className="border-b border-slate-100 px-5 py-4">
+          <h2 className="text-sm font-semibold text-slate-800">งานอัตโนมัติ</h2>
+          <p className="mt-1 text-xs text-slate-400">แสดงผลรอบล่าสุด หากไม่สำเร็จระบบจะพยายามแจ้งเจ้าของผ่านช่องทางที่ตั้งไว้</p>
+        </div>
+        {!cron ? <p className="p-5 text-sm text-slate-400">ยังไม่มีผลการทำงานหลังอัปเดตระบบ</p> : <div className="p-5 space-y-3">
+          {cron.overdue && <p className="text-sm text-rose-600">ไม่ได้รับผลรอบใหม่เกิน 36 ชั่วโมง กรุณาตรวจ Cron Trigger</p>}
+          {cron.results.map(result => {
+            const labels = { reminders: 'แจ้งเตือนค่าเช่า', contracts: 'สัญญาใกล้หมดอายุ', 'daily-summary': 'สรุปประจำวัน', backup: 'สำรองข้อมูล' }
+            return <div key={result.job} className="flex justify-between items-center gap-3 text-sm">
+              <span className="text-slate-700">{labels[result.job]}</span>
+              <StatusBadge status={result.status} />
+            </div>
+          })}
+          <p className="text-xs text-slate-400">รอบล่าสุด {dateTime.format(new Date(cron.startedAt))}</p>
+          {cron.alertFailed && <p className="text-sm text-rose-600">ส่งแจ้งเจ้าของไม่สำเร็จ กรุณาตรวจช่องทาง LINE / Telegram</p>}
+        </div>}
+      </section>
+
+      <section className="rounded-2xl border border-slate-100 bg-white shadow-sm">
         <div className="flex items-center gap-2 border-b border-slate-100 px-5 py-4">
           <FileArchive className="size-4 text-slate-400" />
           <h2 className="text-sm font-semibold text-slate-800">ประวัติ Backup ล่าสุด</h2>
@@ -125,7 +149,7 @@ export default async function BackupSettingsPage() {
                     {dateTime.format(new Date(item.completedAt ?? item.startedAt))}
                   </p>
                   <p className="mt-0.5 text-xs text-slate-400">
-                    {item.totalRows.toLocaleString('th-TH')} แถว · {item.totalFiles.toLocaleString('th-TH')} ไฟล์ · {formatBytes(item.encryptedBytes)}
+                    {item.totalRows.toLocaleString('th-TH')} แถว · {item.totalFiles.toLocaleString('th-TH')} ไฟล์ · เขียนเพิ่ม {formatBytes(item.encryptedBytes)}
                   </p>
                 </div>
                 <StatusBadge status={item.status} />

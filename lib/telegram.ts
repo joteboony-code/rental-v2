@@ -3,7 +3,8 @@ export async function sendOwnerTelegramMessage(
   text: string,
   token: string,
   chatId: string,
-  link?: { label: string; url: string }
+  link?: { label: string; url: string },
+  strict = false,
 ): Promise<void> {
   try {
     const payload: Record<string, unknown> = { chat_id: chatId, text }
@@ -16,10 +17,12 @@ export async function sendOwnerTelegramMessage(
       body: JSON.stringify(payload),
     })
     if (!res.ok) {
+      if (strict) throw new Error(`Telegram delivery failed (${res.status})`)
       const errBody = await res.text().catch(() => '')
       console.error('[telegram]', res.status, errBody)
     }
   } catch (e) {
+    if (strict) throw e
     console.error('[telegram]', e)
   }
 }

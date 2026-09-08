@@ -13,6 +13,7 @@ import { signPortalToken, verifyPortalToken } from '@/lib/portal-session'
 import { buildBillDetailPath } from '@/lib/portal-url'
 import { isRateLimited } from '@/lib/rate-limit'
 import { notifyOwner } from '@/lib/notify-owner'
+import { createSignedStorageUrl } from '@/lib/storage-urls'
 
 export type TenantPortalData = {
   tenant: {
@@ -210,6 +211,14 @@ export async function getTenantPortalDashboard(portalToken: string, roomId?: str
   const svc3 = createServiceClient()
   for (const bill of portalData.bills ?? []) {
     bill.detail_url = buildBillDetailPath(bill.id)
+    if (bill.meter) {
+      const [waterImageUrl, electricityImageUrl] = await Promise.all([
+        createSignedStorageUrl(svc3, 'meter-photos', bill.meter.water_image_url, 3600),
+        createSignedStorageUrl(svc3, 'meter-photos', bill.meter.electricity_image_url, 3600),
+      ])
+      bill.meter.water_image_url = waterImageUrl
+      bill.meter.electricity_image_url = electricityImageUrl
+    }
     for (const payment of bill.payments ?? []) {
       if (payment.slip_url) {
         const path = payment.slip_url.split('/payment-slips/')[1]
@@ -266,7 +275,11 @@ export async function getPortalRepairs(
     .limit(20)
 
   if (error) return { success: false, message: error.message }
-  return { success: true, repairs: (data ?? []) as PortalRepairItem[] }
+  const repairs = await Promise.all(((data ?? []) as PortalRepairItem[]).map(async (repair) => ({
+    ...repair,
+    photo_url: await createSignedStorageUrl(supabase, 'repair-photos', repair.photo_url, 3600),
+  })))
+  return { success: true, repairs }
 }
 
 export async function submitPortalRepair(
@@ -309,7 +322,7 @@ export async function submitPortalRepair(
       .from('repair-photos')
       .upload(path, buffer, { contentType: photoFile.type, upsert: false })
     if (upload) {
-      photo_url = supabase.storage.from('repair-photos').getPublicUrl(upload.path).data.publicUrl
+      photo_url = upload.path
     }
   }
 

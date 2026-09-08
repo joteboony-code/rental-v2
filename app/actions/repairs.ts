@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { RepairSchema, type RepairFormState, type RepairStatus } from '@/lib/definitions'
 import { getAuthedUser } from '@/lib/require-admin'
+import { storageObjectPath } from '@/lib/storage-path'
 
 const MAX_PHOTO_SIZE = 5 * 1024 * 1024
 const ALLOWED_PHOTO_TYPES: Record<string, string> = {
@@ -53,8 +54,7 @@ export async function createRepair(
       .upload(path, buffer, { contentType: photoFile.type })
 
     if (upload) {
-      const { data: urlData } = supabase.storage.from('repair-photos').getPublicUrl(upload.path)
-      photo_url = urlData.publicUrl
+      photo_url = upload.path
     }
   }
 
@@ -106,13 +106,8 @@ export async function deleteRepair(id: string): Promise<void> {
     .single()
 
   if (data?.photo_url) {
-    try {
-      const url   = new URL(data.photo_url)
-      const parts = url.pathname.split('/repair-photos/')
-      if (parts[1]) {
-        await supabase.storage.from('repair-photos').remove([parts[1]])
-      }
-    } catch {}
+    const path = storageObjectPath(data.photo_url, 'repair-photos')
+    if (path) await supabase.storage.from('repair-photos').remove([path])
   }
 
   await supabase.from('repair_requests').delete().eq('id', id)

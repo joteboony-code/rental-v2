@@ -2,18 +2,11 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
-import type { SupabaseClient } from '@supabase/supabase-js'
 import { logAudit } from './audit'
 import { getAuthedUser } from '@/lib/require-admin'
 import { bangkokDateKey } from '@/lib/date-utils'
 import { dueDateForBillingMonth, prorateRent } from '@/lib/billing'
-
-function meterPhotoPublicUrl(
-  supabase: SupabaseClient,
-  path: string
-): string {
-  return supabase.storage.from('meter-photos').getPublicUrl(path).data.publicUrl
-}
+import { createServiceClient } from '@/lib/supabase/service'
 
 function isValidDraftPhotoPath(
   path: string,
@@ -24,11 +17,6 @@ function isValidDraftPhotoPath(
 ) {
   const prefix = `drafts/${userId}/${roomId}/${billingMonth}/${type}-`
   return path.startsWith(prefix) && /^[0-9a-f-]+\.jpg$/i.test(path.slice(prefix.length))
-}
-
-function isValidExistingMeterPhotoUrl(supabase: SupabaseClient, value: string) {
-  const bucketRoot = meterPhotoPublicUrl(supabase, '')
-  return value.startsWith(bucketRoot)
 }
 
 // ─── Save Meter Readings + Generate Bills ────────────────────
@@ -106,8 +94,6 @@ export async function saveMeterAndGenerateBills(
     // This action receives only a small path/URL and never proxies image bytes through Cloudflare.
     const waterImagePath = String(formData.get(`room_${roomId}_water_image_path`) ?? '')
     const electricityImagePath = String(formData.get(`room_${roomId}_elec_image_path`) ?? '')
-    const existingWaterUrl = String(formData.get(`room_${roomId}_water_existing_url`) ?? '')
-    const existingElectricityUrl = String(formData.get(`room_${roomId}_elec_existing_url`) ?? '')
 
     if (waterImagePath && !isValidDraftPhotoPath(waterImagePath, authedUser.id, roomId, billing_month, 'water')) {
       errors.push(`ห้อง ${roomId}: ตำแหน่งรูปมิเตอร์น้ำไม่ถูกต้อง`)
@@ -117,21 +103,10 @@ export async function saveMeterAndGenerateBills(
       errors.push(`ห้อง ${roomId}: ตำแหน่งรูปมิเตอร์ไฟไม่ถูกต้อง`)
       continue
     }
-    if (existingWaterUrl && !isValidExistingMeterPhotoUrl(supabase, existingWaterUrl)) {
-      errors.push(`ห้อง ${roomId}: URL รูปมิเตอร์น้ำไม่ถูกต้อง`)
-      continue
-    }
-    if (existingElectricityUrl && !isValidExistingMeterPhotoUrl(supabase, existingElectricityUrl)) {
-      errors.push(`ห้อง ${roomId}: URL รูปมิเตอร์ไฟไม่ถูกต้อง`)
-      continue
-    }
-
-    const water_image_url = waterImagePath
-      ? meterPhotoPublicUrl(supabase, waterImagePath)
-      : existingWaterUrl || null
-    const electricity_image_url = electricityImagePath
-      ? meterPhotoPublicUrl(supabase, electricityImagePath)
-      : existingElectricityUrl || null
+    // Store only the object path. The database RPC keeps the previous value when
+    // these are null, and authorized pages create short-lived signed URLs to view it.
+    const water_image_url = waterImagePath || null
+    const electricity_image_url = electricityImagePath || null
 
     const water_amount       = water_units * water_rate
     const electricity_amount = electricity_units * electricity_rate
@@ -327,43 +302,38 @@ export async function deleteBill(billId: string): Promise<{ success: boolean; me
 
 // ─── Mark Bill Paid ──────────────────────────────────────────
 export async function markBillPaid(billId: string): Promise<{ success: boolean; message: string }> {
-  if (!(await getAuthedUser())) return { success: false, message: 'ไม่มีสิทธิ์ใช้งาน' }
-  const supabase = await createClient()
-  const { data: bill } = await supabase
-    .from('bills')
-    .select('id, tenant_id, room_id, total_amount, payments(amount)')
-    .eq('id', billId)
-    .single()
+  const user = await getAuthedUser()
+  if (!user) return { success: false, message: 'ไม่มีสิทธิ์ใช้งาน' }
 
-  if (!bill) return { success: false, message: 'ไม่พบบิล' }
-
-  // คำนวณยอดค้างจริง แล้วสร้าง payment record เสมอ
-  type BillWithPayments = typeof bill & { payments: { amount: number }[] | null }
-  const b = bill as unknown as BillWithPayments
-  const alreadyPaid = (b.payments ?? []).reduce((s, p) => s + Number(p.amount), 0)
-  const remaining   = Math.max(0, Number(b.total_amount) - alreadyPaid)
-
-  if (remaining > 0) {
-    const { error: pe } = await supabase.from('payments').insert({
-      bill_id:        billId,
-      amount:         remaining,
-      payment_method: 'cash',
-      note:           'รับเงินสด (บันทึกโดยเจ้าของ)',
-      paid_at:        new Date().toISOString(),
-    })
-    if (pe) return { success: false, message: `บันทึกรายการชำระไม่สำเร็จ: ${pe.message}` }
+  const { data, error } = await createServiceClient().rpc('admin_mark_bill_paid', {
+    p_bill_id: billId,
+    p_recorded_by: user.id,
+  })
+  if (error || !data) {
+    return { success: false, message: error?.message ?? 'บันทึกรายการชำระไม่สำเร็จ' }
   }
-
-  const { error } = await supabase.from('bills').update({ status: 'paid' }).eq('id', billId)
-  if (error) return { success: false, message: error.message }
+  const payment = data as {
+    payment_id: string | null
+    amount: number
+    tenant_id: string | null
+    room_id: string | null
+    total_paid: number
+    total_amount: number
+  }
 
   logAudit({
     action: 'bill_mark_paid',
     entityType: 'bill',
     entityId: billId,
-    tenantId: bill?.tenant_id ?? null,
-    roomId: bill?.room_id ?? null,
-    description: `รับเงินสด ฿${remaining.toFixed(2)} (ทำเครื่องหมายชำระแล้ว)`,
+    tenantId: payment.tenant_id,
+    roomId: payment.room_id,
+    newValue: {
+      payment_id: payment.payment_id,
+      amount: Number(payment.amount),
+      total_paid: Number(payment.total_paid),
+      total_amount: Number(payment.total_amount),
+    },
+    description: `รับเงินสด ฿${Number(payment.amount).toFixed(2)} (ทำเครื่องหมายชำระแล้ว)`,
   }).catch(() => {})
 
   revalidatePath('/bills')

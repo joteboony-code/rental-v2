@@ -19,6 +19,10 @@ bucket_name = "pananth-rental-backup"
 # 02:00 UTC = 09:00 Thai time (UTC+7)
 crons = ["0 2 * * *"]
 
+[observability]
+enabled = true
+head_sampling_rate = 1
+
 [vars]
 # ตั้งค่า environment variables ใน Cloudflare dashboard > Workers > rental > Settings > Variables
 # NEXT_PUBLIC_SUPABASE_URL = "..."

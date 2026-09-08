@@ -7,6 +7,10 @@ import { TenantSchema, ContractSchema, type TenantFormState, type ContractFormSt
 import { getAuthedUser } from '@/lib/require-admin'
 import { bangkokDateKey } from '@/lib/date-utils'
 import { logAudit } from './audit'
+import { createSignedStorageUrl } from '@/lib/storage-urls'
+import { storageObjectPath } from '@/lib/storage-path'
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 // ─── Create Tenant ───────────────────────────────────────────
 export async function createTenant(
@@ -152,12 +156,22 @@ export async function createContract(
 export async function uploadContractImages(
   tenantId: string,
   formData: FormData
-): Promise<{ success: boolean; message: string; urls?: string[] }> {
+): Promise<{
+  success: boolean
+  message: string
+  documents?: Array<{ storedValue: string; url: string }>
+}> {
   if (!(await getAuthedUser())) return { success: false, message: 'กรุณายืนยันตัวตน 2 ชั้นก่อนทำรายการ' }
+  if (!UUID_PATTERN.test(tenantId)) return { success: false, message: 'ข้อมูลผู้เช่าไม่ถูกต้อง' }
   const supabase = await createClient()
 
   const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5 MB
-  const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf']
+  const ALLOWED_TYPES: Record<string, string> = {
+    'image/jpeg': 'jpg',
+    'image/png': 'png',
+    'image/webp': 'webp',
+    'application/pdf': 'pdf',
+  }
 
   const files = formData.getAll('contract_images') as File[]
   const validFiles = files.filter((f) => f && f.size > 0)
@@ -169,54 +183,76 @@ export async function uploadContractImages(
     if (file.size > MAX_FILE_SIZE) {
       return { success: false, message: `ไฟล์ "${file.name}" ขนาดเกิน 5 MB` }
     }
-    if (!ALLOWED_TYPES.includes(file.type)) {
+    if (!ALLOWED_TYPES[file.type]) {
       return { success: false, message: `ไฟล์ "${file.name}" ไม่รองรับ (รองรับ JPG, PNG, WebP, PDF เท่านั้น)` }
     }
   }
 
-  const newUrls: string[] = []
+  const newValues: string[] = []
+  const newDocuments: Array<{ storedValue: string; url: string }> = []
+  let tenantUpdateAttempted = false
 
-  for (const file of validFiles) {
-    const ext  = file.name.split('.').pop() ?? 'jpg'
-    const path = `${tenantId}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
+  try {
+    for (const file of validFiles) {
+      const ext  = ALLOWED_TYPES[file.type]
+      const path = `${tenantId}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
 
-    const { data: upload, error: uploadError } = await supabase.storage
-      .from('contract-documents')
-      .upload(path, await file.arrayBuffer(), { contentType: file.type, upsert: false })
+      const { data: upload, error: uploadError } = await supabase.storage
+        .from('contract-documents')
+        .upload(path, await file.arrayBuffer(), { contentType: file.type, upsert: false })
+      if (uploadError || !upload) throw new Error(uploadError?.message ?? 'อัพโหลดไม่สำเร็จ')
 
-    if (upload && !uploadError) {
-      const { data: urlData } = supabase.storage.from('contract-documents').getPublicUrl(upload.path)
-      newUrls.push(urlData.publicUrl)
+      newValues.push(upload.path)
+      const signedUrl = await createSignedStorageUrl(
+        supabase,
+        'contract-documents',
+        upload.path,
+        3600
+      )
+      if (!signedUrl) throw new Error('สร้างลิงก์เปิดเอกสารไม่สำเร็จ')
+      newDocuments.push({ storedValue: upload.path, url: signedUrl })
+    }
+
+    const { data: tenant, error: tenantError } = await supabase
+      .from('tenants')
+      .select('contract_images')
+      .eq('id', tenantId)
+      .single()
+    if (tenantError || !tenant) throw new Error(tenantError?.message ?? 'ไม่พบข้อมูลผู้เช่า')
+
+    const existing: string[] = (tenant.contract_images as string[] | null) ?? []
+    // A lost response does not prove the database failed to commit. Once this
+    // request starts, retain uploaded evidence even if the client sees an error.
+    tenantUpdateAttempted = true
+    const { error: updateError } = await supabase
+      .from('tenants')
+      .update({ contract_images: [...existing, ...newValues] })
+      .eq('id', tenantId)
+    if (updateError) throw new Error(updateError.message)
+
+    return {
+      success: true,
+      message: `อัพโหลดสำเร็จ ${newValues.length} ไฟล์`,
+      documents: newDocuments,
+    }
+  } catch (error) {
+    if (!tenantUpdateAttempted && newValues.length > 0) {
+      await supabase.storage.from('contract-documents').remove(newValues).catch(() => {})
+    }
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : 'อัพโหลดไม่สำเร็จ',
     }
   }
-
-  if (newUrls.length === 0) {
-    return { success: false, message: 'อัพโหลดไม่สำเร็จ' }
-  }
-
-  // Append new URLs to existing array
-  const { data: tenant } = await supabase
-    .from('tenants')
-    .select('contract_images')
-    .eq('id', tenantId)
-    .single()
-
-  const existing: string[] = (tenant?.contract_images as string[] | null) ?? []
-
-  await supabase
-    .from('tenants')
-    .update({ contract_images: [...existing, ...newUrls] })
-    .eq('id', tenantId)
-
-  return { success: true, message: `อัพโหลดสำเร็จ ${newUrls.length} ไฟล์`, urls: newUrls }
 }
 
 // ─── Delete Contract Document ────────────────────────────────
 export async function deleteContractImage(
   tenantId: string,
-  url: string
+  storedValue: string
 ): Promise<void> {
   if (!(await getAuthedUser())) return
+  if (!UUID_PATTERN.test(tenantId)) return
   const supabase = await createClient()
 
   // Remove from DB array
@@ -227,19 +263,17 @@ export async function deleteContractImage(
     .single()
 
   const existing: string[] = (tenant?.contract_images as string[] | null) ?? []
-  await supabase
+  if (!existing.includes(storedValue)) return
+
+  const { error: updateError } = await supabase
     .from('tenants')
-    .update({ contract_images: existing.filter((u) => u !== url) })
+    .update({ contract_images: existing.filter((value) => value !== storedValue) })
     .eq('id', tenantId)
+  if (updateError) return
 
   // Remove from storage
-  try {
-    const urlObj = new URL(url)
-    const parts = urlObj.pathname.split('/contract-documents/')
-    if (parts[1]) {
-      await supabase.storage.from('contract-documents').remove([parts[1]])
-    }
-  } catch {}
+  const path = storageObjectPath(storedValue, 'contract-documents')
+  if (path) await supabase.storage.from('contract-documents').remove([path])
 
 }
 

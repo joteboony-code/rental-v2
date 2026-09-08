@@ -151,17 +151,20 @@ export function MeterForm({ rooms, billingMonth, waterRate, electricityRate, ano
         .from('meter-photos')
         .upload(path, compressed, { contentType: 'image/jpeg', upsert: false })
       if (uploadError) throw uploadError
-      const publicUrl = supabase.storage.from('meter-photos').getPublicUrl(path).data.publicUrl
+      const { data: signed } = await supabase.storage
+        .from('meter-photos')
+        .createSignedUrl(path, 3600)
+      const displayUrl = signed?.signedUrl ?? preview
       uploadedPath = path
 
       setPhotos(prev => ({
         ...prev,
         [roomId]: {
           ...prev[roomId],
-          [slot]: { file: null, preview: publicUrl, existing: null, path, uploadState: 'uploaded', error: null },
+          [slot]: { file: null, preview: displayUrl, existing: null, path, uploadState: 'uploaded', error: null },
         },
       }))
-      URL.revokeObjectURL(preview)
+      if (displayUrl !== preview) URL.revokeObjectURL(preview)
       if (previousSlot?.path) void supabase.storage.from('meter-photos').remove([previousSlot.path])
 
       if (!ocrEnabled) return
@@ -334,9 +337,7 @@ export function MeterForm({ rooms, billingMonth, waterRate, electricityRate, ano
       return false
     }
     if (roomPhotos?.water.path) fd.append(`room_${room.room_id}_water_image_path`, roomPhotos.water.path)
-    else if (roomPhotos?.water.existing) fd.append(`room_${room.room_id}_water_existing_url`, roomPhotos.water.existing)
     if (roomPhotos?.elec.path) fd.append(`room_${room.room_id}_elec_image_path`, roomPhotos.elec.path)
-    else if (roomPhotos?.elec.existing) fd.append(`room_${room.room_id}_elec_existing_url`, roomPhotos.elec.existing)
 
     try {
       const res = await saveMeterAndGenerateBills(fd)

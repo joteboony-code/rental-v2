@@ -3,6 +3,7 @@ import { ChevronLeft, Droplets, Gauge, ScanEye, Zap } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { MeterForm, type RoomRow } from './_components/meter-form'
 import { resolveMeterBaseline, type ActiveMeterBaseline } from '@/lib/meter-baseline'
+import { createSignedStorageUrl } from '@/lib/storage-urls'
 
 interface Props {
   searchParams: Promise<{ month?: string }>
@@ -87,6 +88,13 @@ export default async function MeterReadingPage({ searchParams }: Props) {
   const prevMap = Object.fromEntries((prevReadings    ?? []).map((r) => [r.room_id, r]))
   const thisMap = Object.fromEntries((thisMonthReadings ?? []).map((r) => [r.room_id, r]))
   const adjustmentMap = Object.fromEntries((baselineAdjustments ?? []).map((r) => [r.room_id, r]))
+  const signedImageMap = Object.fromEntries(await Promise.all((thisMonthReadings ?? []).map(async (reading) => {
+    const [water, electricity] = await Promise.all([
+      createSignedStorageUrl(supabase, 'meter-photos', reading.water_image_url, 3600),
+      createSignedStorageUrl(supabase, 'meter-photos', reading.electricity_image_url, 3600),
+    ])
+    return [reading.room_id, { water, electricity }] as const
+  })))
 
   type RoomJoin   = { room_number: string; floor: number | null }
   type TenantJoin = { full_name: string }
@@ -123,8 +131,8 @@ export default async function MeterReadingPage({ searchParams }: Props) {
       electricity_prev:      baseline.electricity,
       water_curr:            Number(curr?.water_curr ?? 0),
       electricity_curr:      Number(curr?.electricity_curr ?? 0),
-      water_image_url:       (curr as { water_image_url?: string | null } | undefined)?.water_image_url ?? null,
-      electricity_image_url: (curr as { electricity_image_url?: string | null } | undefined)?.electricity_image_url ?? null,
+      water_image_url:       signedImageMap[c.room_id]?.water ?? null,
+      electricity_image_url: signedImageMap[c.room_id]?.electricity ?? null,
       // Anomaly
       prev_water_units:  prevWaterUnits,
       prev_elec_units:   prevElecUnits,

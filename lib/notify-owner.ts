@@ -50,9 +50,12 @@ function buildLineFlexMessage(text: string, link: { label: string; url: string }
   }
 }
 
-async function sendOwnerLineMessage(text: string, link?: { label: string; url: string }): Promise<void> {
+async function sendOwnerLineMessage(text: string, link?: { label: string; url: string }, strict = false): Promise<void> {
   const lineConfig = await getLineMessagingConfig()
-  if (!lineConfig?.ownerLineUserId) return
+  if (!lineConfig?.ownerLineUserId) {
+    if (strict) throw new Error('Owner LINE recipient missing')
+    return
+  }
   const message = link ? buildLineFlexMessage(text, link) : { type: 'text', text }
   const res = await fetch('https://api.line.me/v2/bot/message/push', {
     method: 'POST',
@@ -60,12 +63,13 @@ async function sendOwnerLineMessage(text: string, link?: { label: string; url: s
     body: JSON.stringify({ to: lineConfig.ownerLineUserId, messages: [message] }),
   })
   if (!res.ok) {
+    if (strict) throw new Error(`Owner LINE delivery failed (${res.status})`)
     const body = await res.text().catch(() => '')
     console.error('[line owner notify]', res.status, body)
   }
 }
 
-export async function notifyOwner(text: string, type?: OwnerNotifyType, link?: { label: string; url: string }): Promise<void> {
+export async function notifyOwner(text: string, type?: OwnerNotifyType, link?: { label: string; url: string }, options?: { strict?: boolean }): Promise<void> {
   const supabase = createServiceClient()
   // Single DB read: fetch channel setting, toggles, AND telegram credentials together
   const { data: rawData, error: dbErr } = await supabase
@@ -75,6 +79,7 @@ export async function notifyOwner(text: string, type?: OwnerNotifyType, link?: {
     .maybeSingle()
 
   if (dbErr) console.error('[notify-owner] settings fetch failed', dbErr.message)
+  if (dbErr && options?.strict) throw new Error('Notification settings unavailable')
 
   const data = rawData as unknown as SettingsRow | null
 
@@ -94,21 +99,26 @@ export async function notifyOwner(text: string, type?: OwnerNotifyType, link?: {
     if (rawToken && chatId) {
       tasks.push(
         maybeDecryptSecret(rawToken)
-          .then((token) => sendOwnerTelegramMessage(text, token, chatId, link))
-          .catch((e) => { console.error('[telegram decrypt]', e) })
+          .then((token) => sendOwnerTelegramMessage(text, token, chatId, link, options?.strict))
+          .catch((e) => { if (options?.strict) throw e; console.error('[telegram decrypt]', e) })
       )
     } else {
+      if (options?.strict) tasks.push(Promise.reject(new Error('Telegram credentials missing')))
       console.warn('[notify-owner] Telegram credentials missing in settings')
     }
   }
 
   if (channel === 'line' || channel === 'both') {
-    tasks.push(sendOwnerLineMessage(text, link))
+    tasks.push(sendOwnerLineMessage(text, link, options?.strict))
   }
 
   if (tasks.length === 0) {
+    if (options?.strict) throw new Error('Owner notification channel missing')
     console.warn('[notify-owner] no channel configured — notification dropped')
   }
 
-  await Promise.allSettled(tasks)
+  const results = await Promise.allSettled(tasks)
+  if (options?.strict && results.some(result => result.status === 'rejected')) {
+    throw new Error('Owner notification delivery failed')
+  }
 }

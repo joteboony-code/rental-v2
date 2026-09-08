@@ -108,7 +108,7 @@ export async function GET(req: NextRequest) {
 
   const supabase = createServiceClient()
 
-  const [{ data: settings }, { data: lineSettings }] = await Promise.all([
+  const [{ data: settings, error: settingsError }, { data: lineSettings, error: lineError }] = await Promise.all([
     supabase
       .from('settings')
       .select('reminder_enabled, reminder_days, bank_accounts_text, water_unit_price, electricity_unit_price')
@@ -120,11 +120,12 @@ export async function GET(req: NextRequest) {
       .maybeSingle(),
   ])
 
+  if (settingsError || lineError) return NextResponse.json({ ok: false, error: 'Reminder settings unavailable' }, { status: 500 })
   if (!settings?.reminder_enabled) {
     return NextResponse.json({ ok: true, skipped: 'reminders disabled' })
   }
 
-  const todayDay = new Date().getDate()
+  const todayDay = Number(bangkokDateKey().slice(-2))
   const reminderDays = parseReminderDays(settings.reminder_days ?? '5,10,15,20,25')
   if (!reminderDays.includes(todayDay)) {
     return NextResponse.json({ ok: true, skipped: `not a reminder day (today=${todayDay}, days=${reminderDays.join(',')})` })
@@ -134,15 +135,19 @@ export async function GET(req: NextRequest) {
   if (!lineConfig) return NextResponse.json({ ok: false, error: 'LINE not configured' })
 
   const reminderKey = bangkokDateKey()
-  const { data: sentLog } = await supabase
+  const { data: sentLog, error: sentLogError } = await supabase
     .from('audit_logs')
-    .select('id')
+    .select('id, new_value')
     .eq('action', 'cron_reminders_sent')
     .eq('entity_type', 'cron')
     .eq('entity_id', reminderKey)
     .limit(1)
     .maybeSingle()
 
+  if (sentLogError) return NextResponse.json({ ok: false, error: 'Reminder status unavailable' }, { status: 500 })
+  if (sentLog?.new_value?.completed === false || Number(sentLog?.new_value?.failed ?? 0) > 0 || sentLog?.new_value?.owner_failed) {
+    return NextResponse.json({ ok: false, error: 'Previous reminder run incomplete; manual review required' }, { status: 502 })
+  }
   if (sentLog) {
     return NextResponse.json({ ok: true, skipped: 'reminders already sent today', date: reminderKey })
   }
@@ -152,6 +157,7 @@ export async function GET(req: NextRequest) {
     entity_type: 'cron',
     entity_id: reminderKey,
     description: `Automated reminders started for ${reminderKey}`,
+    new_value: { completed: false },
   })
 
   if (lockError) {
@@ -167,7 +173,7 @@ export async function GET(req: NextRequest) {
   const bankText = settings.bank_accounts_text ?? ''
 
   // Get ALL pending/overdue bills across all months
-  const { data: bills } = await supabase
+  const { data: bills, error: billsError } = await supabase
     .from('bills')
     .select(`
       id, total_amount, due_date, billing_month,
@@ -183,26 +189,31 @@ export async function GET(req: NextRequest) {
     .order('billing_month', { ascending: true })
     .limit(2000)
 
+  if (billsError) return NextResponse.json({ ok: false, error: 'Reminder bills unavailable' }, { status: 500 })
   if (!bills || bills.length === 0) {
+    await supabase.from('audit_logs').update({ new_value: { completed: true, sent: 0 } }).eq('action', 'cron_reminders_sent').eq('entity_id', reminderKey)
     return NextResponse.json({ ok: true, sent: 0, message: 'no pending bills' })
   }
 
   // ข้ามบิลที่มีนัดจ่าย (promise) active และยังไม่ถึงกำหนด — ให้เกียรติคำสัญญา
-  const { data: activePromises } = await supabase
+  const { data: activePromises, error: promisesError } = await supabase
     .from('payment_promises')
     .select('bill_id, promise_date')
     .eq('status', 'active')
     .gte('promise_date', today)
     .limit(500)
+  if (promisesError) return NextResponse.json({ ok: false, error: 'Payment promises unavailable' }, { status: 500 })
   const promisedBillIds = new Set(
     (activePromises ?? []).map((p) => p.bill_id as string | null).filter((id): id is string => Boolean(id))
   )
   const skipPromiseCount = bills.filter((b) => promisedBillIds.has(b.id as string)).length
   const remindableBills = bills.filter((b) => !promisedBillIds.has(b.id as string))
   if (remindableBills.length === 0) {
+    await supabase.from('audit_logs').update({ new_value: { completed: true, sent: 0 } }).eq('action', 'cron_reminders_sent').eq('entity_id', reminderKey)
     return NextResponse.json({ ok: true, sent: 0, message: 'all bills have active promises', skipped: skipPromiseCount })
   }
 
+  let ownerFailed = false
   // Group bills by tenant
   type TJ = { full_name: string; line_user_id: string | null }
   type CJ = { line_recipient_user_id: string | null }
@@ -341,20 +352,22 @@ export async function GET(req: NextRequest) {
       await notifyOwner(
         ownerLines.join('\n'),
         'reminder_summary',
-        appUrl ? { label: 'ดูบิล', url: `${appUrl}/bills` } : undefined
+        appUrl ? { label: 'ดูบิล', url: `${appUrl}/bills` } : undefined,
+        { strict: true }
       )
-    } catch { /* silent */ }
+    } catch { ownerFailed = true }
   }
 
-  await supabase
+  const { error: finalLogError } = await supabase
     .from('audit_logs')
     .update({
       description: `Automated reminders sent for ${reminderKey}`,
-      new_value: { sent, failed, snoozed, noLine },
+      new_value: { completed: true, sent, failed, snoozed, noLine, owner_failed: ownerFailed },
     })
     .eq('action', 'cron_reminders_sent')
     .eq('entity_type', 'cron')
     .eq('entity_id', reminderKey)
 
-  return NextResponse.json({ ok: true, date: reminderKey, sent, failed, snoozed, noLine })
+  return NextResponse.json({ ok: !ownerFailed && !finalLogError, date: reminderKey, sent, failed, snoozed, noLine },
+    { status: ownerFailed || finalLogError ? 502 : 200 })
 }

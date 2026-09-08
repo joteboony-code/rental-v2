@@ -4,6 +4,7 @@ import { AlertCircle, ChevronLeft, Droplets, ImageOff, ScanEye, Zap } from 'luci
 import { createClient } from '@/lib/supabase/server'
 import { bangkokDateKey } from '@/lib/date-utils'
 import { roomRow } from '@/lib/room-utils'
+import { createSignedStorageUrl } from '@/lib/storage-urls'
 
 export const dynamic = 'force-dynamic'
 
@@ -103,7 +104,17 @@ export default async function MeterReviewPage({ searchParams }: {
     throw new Error('โหลดข้อมูลตรวจทานมิเตอร์ไม่สำเร็จ กรุณาลองใหม่')
   }
 
-  const readings = new Map((readingsResult.data as Reading[] ?? []).map((reading) => [reading.room_id, reading]))
+  const readings = new Map(await Promise.all(((readingsResult.data as Reading[] | null) ?? []).map(async (reading) => {
+    const [waterImageUrl, electricityImageUrl] = await Promise.all([
+      createSignedStorageUrl(supabase, 'meter-photos', reading.water_image_url, 3600),
+      createSignedStorageUrl(supabase, 'meter-photos', reading.electricity_image_url, 3600),
+    ])
+    return [reading.room_id, {
+      ...reading,
+      water_image_url: waterImageUrl,
+      electricity_image_url: electricityImageUrl,
+    }] as const
+  })))
   const activeTenants = new Map((contractsResult.data ?? []).map((contract) => [contract.room_id, tenantName(contract.tenants as TenantJoin)]))
   const billedTenants = new Map((billsResult.data ?? []).map((bill) => [bill.room_id, tenantName(bill.tenants as TenantJoin)]))
   // Include saved historical readings even when that room's contract is no longer active.

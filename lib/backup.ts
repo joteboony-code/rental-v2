@@ -2,35 +2,14 @@ import 'server-only'
 
 import { getCloudflareContext } from '@opennextjs/cloudflare'
 import { createServiceClient } from '@/lib/supabase/service'
-import { backupObjectPath, encryptBackupPayload } from '@/lib/backup-crypto'
+import { backupObjectPath, decryptBackupPayload, encryptBackupPayload } from '@/lib/backup-crypto'
+import { BACKUP_TABLES, OPTIONAL_BACKUP_TABLES, validateBackupData } from '@/lib/backup-schema'
+import type { CronReport } from '@/lib/cron-runner'
 
 const BACKUP_ROOT = 'rental-v2'
-const TABLE_PAGE_SIZE = 1_000
 const STORAGE_PAGE_SIZE = 20
 
-export const BACKUP_TABLES = [
-  'profiles',
-  'settings',
-  'rooms',
-  'tenants',
-  'contracts',
-  'meter_readings',
-  'bills',
-  'payments',
-  'repair_requests',
-  'leads',
-  'expenses',
-  'broadcast_history',
-  'audit_logs',
-  'line_message_templates',
-  'dorms',
-  'line_integrations',
-  'payment_promises',
-  'pending_slips',
-  'tenant_registration_requests',
-  'tenant_documents',
-  'tenant_credits',
-] as const
+export { BACKUP_TABLES } from '@/lib/backup-schema'
 
 type R2ObjectSummary = {
   key: string
@@ -38,7 +17,8 @@ type R2ObjectSummary = {
 }
 
 export type BackupBucket = {
-  get(key: string): Promise<{ text(): Promise<string> } | null>
+  get(key: string): Promise<{ text(): Promise<string>; arrayBuffer(): Promise<ArrayBuffer> } | null>
+  head(key: string): Promise<{ size: number; customMetadata?: Record<string, string> } | null>
   put(
     key: string,
     value: ArrayBuffer | string,
@@ -83,6 +63,7 @@ export type BackupSummary = {
   totalFiles: number
   encryptedBytes: number
   encryption: 'AES-256-GCM'
+  storageLayout?: 'indexed-v2'
   error?: string
 }
 
@@ -104,7 +85,7 @@ export async function getBackupBucket(): Promise<BackupBucket> {
   const { env } = await getCloudflareContext({ async: true })
   const bucket = env.BACKUP_BUCKET
   if (!bucket) throw new Error('BACKUP_BUCKET binding is not configured')
-  return bucket as unknown as BackupBucket
+  return bucket
 }
 
 function snapshotId(now: Date): string {
@@ -143,56 +124,29 @@ async function putEncrypted(
     },
     sha256: await sha256(encrypted),
   })
+  const stored = await bucket.get(key)
+  if (!stored) throw new Error('Backup read-back failed')
+  const restored = await decryptBackupPayload(await stored.arrayBuffer(), secret)
+  if (await digestHex(restored) !== await digestHex(payload)) throw new Error('Backup verification failed')
   return encrypted.byteLength
 }
 
-async function readAllRows(table: string): Promise<Record<string, unknown>[]> {
-  const supabase = createServiceClient()
-  const rows: Record<string, unknown>[] = []
-
-  for (let offset = 0; ; offset += TABLE_PAGE_SIZE) {
-    const { data, error } = await supabase
-      .from(table)
-      .select('*')
-      .range(offset, offset + TABLE_PAGE_SIZE - 1)
-
-    if (error) throw new Error(`Table ${table}: ${error.message}`)
-    const page = (data ?? []) as Record<string, unknown>[]
-    rows.push(...page)
-    if (page.length < TABLE_PAGE_SIZE) break
-  }
-
-  return rows
+async function digestHex(payload: ArrayBuffer | Uint8Array): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', payload as BufferSource)
+  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('')
 }
 
-async function backupDatabase(
-  bucket: BackupBucket,
-  prefix: string,
-  secret: string
-): Promise<{ tables: TableBackup[]; encryptedBytes: number }> {
-  const results: TableBackup[] = []
-  const tables: Record<string, Record<string, unknown>[]> = {}
-
-  for (const table of BACKUP_TABLES) {
-    const rows = await readAllRows(table)
-    tables[table] = rows
-    results.push({ table, rows: rows.length })
+async function backupDatabase(bucket: BackupBucket, prefix: string, secret: string) {
+  const { data, error } = await createServiceClient().rpc('admin_export_application_backup')
+  if (error) throw new Error(`Database export failed: ${error.code ?? 'unknown'}`)
+  const bundle = validateBackupData(data)
+  if (BACKUP_TABLES.some(table => !OPTIONAL_BACKUP_TABLES.has(table) && !(table in bundle.tables))) {
+    throw new Error('Incomplete database export')
   }
-
-  const compressed = await gzipJson({
-    version: 1,
-    exportedAt: new Date().toISOString(),
-    tables,
-  })
-  const encryptedBytes = await putEncrypted(
-    bucket,
-    `${prefix}/database/application-data.json.gz.enc`,
-    compressed,
-    secret,
-    'table'
-  )
-
-  return { tables: results, encryptedBytes }
+  const tables = Object.entries(bundle.tables).map(([table, rows]) => ({ table, rows: rows.length }))
+  const encryptedBytes = await putEncrypted(bucket, `${prefix}/database/application-data.json.gz.enc`,
+    await gzipJson(bundle), secret, 'table')
+  return { tables, encryptedBytes }
 }
 
 export async function backupStoragePage({
@@ -215,11 +169,23 @@ export async function backupStoragePage({
     sortBy: { column: 'name', order: 'asc' },
   })
   if (error) throw new Error(`Storage ${sourceBucket}: ${error.message}`)
+  if (data.hasNext && !data.nextCursor) throw new Error('Storage pagination cursor missing')
 
   let files = 0
   let encryptedBytes = 0
+  const index: { sourcePath: string; objectKey: string; contentType: string }[] = []
+  const keyId = await digestHex(encoder.encode(`backup-cache:${secret}`))
   for (const object of data.objects) {
     const sourcePath = object.key ?? object.name
+    const version = object.updated_at || crypto.randomUUID()
+    const hash = await digestHex(encoder.encode(JSON.stringify([keyId, sourceBucket, sourcePath, version, object.metadata])))
+    const objectKey = `${BACKUP_ROOT}/blobs/${hash}.enc`
+    const cached = await destinationBucket.head(objectKey)
+    if (cached) {
+      index.push({ sourcePath, objectKey, contentType: String(object.metadata?.mimetype ?? 'application/octet-stream') })
+      files += 1
+      continue
+    }
     const { data: file, error: downloadError } = await supabase.storage
       .from(sourceBucket)
       .download(sourcePath)
@@ -229,13 +195,19 @@ export async function backupStoragePage({
 
     encryptedBytes += await putEncrypted(
       destinationBucket,
-      `${snapshotPrefix}/storage/${backupObjectPath(sourceBucket)}/${backupObjectPath(sourcePath)}.enc`,
+      objectKey,
       await file.arrayBuffer(),
       secret,
       'storage'
     )
+    index.push({ sourcePath, objectKey, contentType: file.type || 'application/octet-stream' })
     files += 1
   }
+  const pageKey = await digestHex(encoder.encode(cursor ?? 'first'))
+  encryptedBytes += await putEncrypted(destinationBucket,
+    `${snapshotPrefix}/storage-index/${backupObjectPath(sourceBucket)}/${pageKey}.json.enc`,
+    encoder.encode(JSON.stringify({ bucket: sourceBucket, files: index })).buffer,
+    secret, 'storage')
 
   return {
     files,
@@ -327,6 +299,7 @@ export async function runBackup(providedBucket?: BackupBucket): Promise<BackupSu
     totalFiles: 0,
     encryptedBytes: 0,
     encryption: 'AES-256-GCM',
+    storageLayout: 'indexed-v2',
   }
 
   await writeStatus(bucket, latestKey, summary)
@@ -351,6 +324,7 @@ export async function runBackup(providedBucket?: BackupBucket): Promise<BackupSu
     summary.status = 'failed'
     summary.completedAt = new Date().toISOString()
     summary.error = safeError(error)
+    await writeStatus(bucket, `${BACKUP_ROOT}/manifests/${id}.json`, summary)
     await writeStatus(bucket, latestKey, summary)
     throw error
   }
@@ -360,7 +334,11 @@ async function readSummary(bucket: BackupBucket, key: string): Promise<BackupSum
   const object = await bucket.get(key)
   if (!object) return null
   try {
-    return JSON.parse(await object.text()) as BackupSummary
+    const summary = JSON.parse(await object.text()) as BackupSummary
+    if (summary.status === 'running' && Date.now() - Date.parse(summary.startedAt) > 30 * 60_000) {
+      return { ...summary, status: 'failed', error: 'Backup ค้างเกิน 30 นาที กรุณาตรวจสอบแล้วลองใหม่' }
+    }
+    return summary
   } catch {
     return null
   }
@@ -372,13 +350,30 @@ export async function getBackupOverview(providedBucket?: BackupBucket): Promise<
 }> {
   const bucket = providedBucket ?? await getBackupBucket()
   const latest = await readSummary(bucket, `${BACKUP_ROOT}/latest.json`)
-  const listed = await bucket.list({ prefix: `${BACKUP_ROOT}/manifests/`, limit: 100 })
-  const keys = listed.objects
-    .map((object) => object.key)
+  const allKeys: string[] = []
+  let cursor: string | undefined
+  do {
+    const page = await bucket.list({ prefix: `${BACKUP_ROOT}/manifests/`, limit: 1000, cursor })
+    allKeys.push(...page.objects.map(object => object.key))
+    cursor = page.truncated ? page.cursor : undefined
+    if (page.truncated && !cursor) throw new Error('Backup history cursor missing')
+  } while (cursor)
+  const keys = allKeys
     .filter((key) => key.endsWith('.json'))
     .sort((a, b) => b.localeCompare(a))
     .slice(0, 10)
   const history = (await Promise.all(keys.map((key) => readSummary(bucket, key))))
     .filter((item): item is BackupSummary => item !== null)
   return { latest, history }
+}
+
+export async function getCronOverview(bucket: BackupBucket): Promise<(CronReport & { overdue: boolean }) | null> {
+  const object = await bucket.get('rental-v2-state/cron/latest.json')
+  if (!object) return null
+  const report = JSON.parse(await object.text()) as CronReport
+  const now = Date.now()
+  return { ...report, overdue: now - Date.parse(report.startedAt) > 36 * 60 * 60_000,
+    results: report.results.map(result => result.status === 'running' && now - Date.parse(result.startedAt) > 30 * 60_000
+      ? { ...result, status: 'failed', reason: 'stale_run' } : result),
+  }
 }

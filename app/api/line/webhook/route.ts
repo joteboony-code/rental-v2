@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/service'
-import { bangkokDateKey } from '@/lib/date-utils'
 import { decryptSecret, maybeDecryptSecret } from '@/lib/crypto-secrets'
 import { DEFAULT_DORM_ID } from '@/lib/line-integration'
 import { buildBillPortalUrl } from '@/lib/portal-url'
@@ -54,11 +53,6 @@ function thaiMonth(dateStr: string) {
 
 function billSortKey(bill: { due_date?: string | null; billing_month: string }) {
   return bill.due_date ?? bill.billing_month
-}
-
-function isPastDue(dueDate?: string | null) {
-  if (!dueDate) return false
-  return dueDate < bangkokDateKey()
 }
 
 // ── savePendingSlip ──────────────────────────────────────────────────────────
@@ -630,7 +624,7 @@ async function handleSlipImage(
     }
     if (billsInput.length === 0) return { ok: true, paidBills: [] }
 
-    const { error } = await supabase.rpc('apply_multi_bill_payment', {
+    const { error } = await supabase.rpc('apply_multi_bill_payment_with_credit', {
       p_bills:    billsInput,
       p_method:   'transfer',
       p_slip_url: slipUrl,
@@ -638,6 +632,9 @@ async function handleSlipImage(
       p_note:     `สลิปจาก LINE${senderName ? ` (${senderName})` : ''}${note}`,
       p_paid_at:  paidAt,
       p_group_id: paymentGroupId,
+      p_credit_amount: Math.max(0, Math.round((amount - budget) * 100) / 100),
+      p_credit_tenant_id: tenant.id,
+      p_credit_room_id: billsToPay.length === 1 ? billsToPay[0].room_id : null,
     })
     if (error) return { ok: false, paidBills: [] }
 
@@ -647,20 +644,6 @@ async function handleSlipImage(
       amount:       b.amount,
     }))
     return { ok: true, paidBills }
-  }
-
-  const recordCredit = async (creditAmt: number, forTenantId: string, forRoomId: string | null) => {
-    try {
-      await supabase.from('tenant_credits').insert({
-        tenant_id: forTenantId,
-        room_id:   forRoomId,
-        amount:    creditAmt,
-        slip_url:  slipUrl,
-        slip_ref:  slipRef,
-        note:      `เงินเกินจากสลิป${slipRef ? ` Ref:${slipRef}` : ''} (โอนเกิน ฿${fmt(creditAmt)})`,
-        status:    'available',
-      })
-    } catch { /* non-blocking */ }
   }
 
   const logAutoPayment = async (matchRule: string, paidBills: PaidEntry[], creditAmt = 0) => {
@@ -684,7 +667,7 @@ async function handleSlipImage(
   }
 
   // ── Rule 1: unique single-bill exact match ─────────────────────────────────
-  const singleMatches = outstandingBills.filter((b) => Math.abs(b.remainingAmount - amount) < 1)
+  const singleMatches = outstandingBills.filter((b) => Math.abs(b.remainingAmount - amount) < 0.005)
 
   if (singleMatches.length === 1) {
     const bill     = singleMatches[0]
@@ -708,10 +691,6 @@ async function handleSlipImage(
     const totalPaid  = (allPmts ?? []).reduce((s, p) => s + Number(p.amount), 0)
     const remaining  = Math.max(0, Number(bill.total_amount) - totalPaid)
     const fullyPaid  = remaining < 1
-    const nextStatus = fullyPaid ? 'paid' : isPastDue(bill.due_date) ? 'overdue' : bill.status
-    if (nextStatus !== bill.status) {
-      await supabase.from('bills').update({ status: nextStatus }).eq('id', bill.id).eq('status', bill.status)
-    }
     const portalUrl = buildBillPortalUrl(bill.id, cfg.liffId, cfg.appUrl)
     const confirmation = buildPaymentFlex({ fullyPaid, roomNumber: billRoom, billingMonth: bill.billing_month, paidAmount: totalPaid, remaining, ref: slipRef, portalUrl })
     await reply(replyToken, token, fullyPaid ? withPaymentThankYou(confirmation) : [confirmation])
@@ -736,7 +715,7 @@ async function handleSlipImage(
       const billRoom  = (bill.rooms as unknown as RJ | null)?.room_number ?? '—'
       const creditAmt = amount - bill.remainingAmount
       // H3: Use RPC for atomic insert + retry safety
-      const { error: payErr } = await supabase.rpc('apply_multi_bill_payment', {
+      const { error: payErr } = await supabase.rpc('apply_multi_bill_payment_with_credit', {
         p_bills:    [{ id: bill.id, amount: bill.remainingAmount }],
         p_method:   'transfer',
         p_slip_url: slipUrl,
@@ -744,10 +723,11 @@ async function handleSlipImage(
         p_note:     `สลิปจาก LINE${senderName ? ` (${senderName})` : ''} (โอนเกิน ฿${fmt(creditAmt)})`,
         p_paid_at:  paidAt,
         p_group_id: paymentGroupId,
+        p_credit_amount: Math.round(creditAmt * 100) / 100,
+        p_credit_tenant_id: bill.tenant_id,
+        p_credit_room_id: bill.room_id,
       })
       if (!payErr) {
-        await supabase.from('bills').update({ status: 'paid' }).eq('id', bill.id)
-        await recordCredit(creditAmt, bill.tenant_id, bill.room_id)
         const portalUrl = buildBillPortalUrl(bill.id, cfg.liffId, cfg.appUrl)
         await reply(replyToken, token, withPaymentThankYou(buildPaymentFlex({
           fullyPaid: true, roomNumber: billRoom, billingMonth: bill.billing_month,
@@ -762,7 +742,7 @@ async function handleSlipImage(
   }
 
   // ── Rule 2: total of ALL outstanding (exact) ───────────────────────────────
-  if (outstandingBills.length >= 1 && Math.abs(totalOutstanding - amount) < 1) {
+  if (outstandingBills.length >= 1 && Math.abs(totalOutstanding - amount) < 0.005) {
     const { ok, paidBills } = await payBills(outstandingBills, ' (รวมยอดทุกห้อง)')
     if (ok) {
       const portalUrl = buildBillPortalUrl(outstandingBills[0].id, cfg.liffId, cfg.appUrl)
@@ -779,8 +759,6 @@ async function handleSlipImage(
   if (outstandingBills.length >= 1 && overAll > 0 && overAll <= OVERPAY_MAX) {
     const { ok, paidBills } = await payBills(outstandingBills, ' (รวมยอดทุกห้อง, เงินเกินบันทึกเป็นเครดิต)', totalOutstanding)
     if (ok) {
-      const roomId1 = outstandingBills.length === 1 ? outstandingBills[0].room_id : null
-      await recordCredit(overAll, tenant.id, roomId1)
       const portalUrl = buildBillPortalUrl(outstandingBills[0].id, cfg.liffId, cfg.appUrl)
       await reply(replyToken, token, withPaymentThankYou(buildMultiBillPaymentFlex({ tenantName: tenant.full_name, paidBills, totalPaid: totalOutstanding, transferAmount: amount, creditAmount: overAll, ref: slipRef, portalUrl })))
       await logAutoPayment('total_all_overpay', paidBills, overAll)
@@ -801,7 +779,7 @@ async function handleSlipImage(
   const roomTotalOverpay:  { rn: string; bills: typeof outstandingBills; over: number }[] = []
   for (const [rn, roomBills] of byRoom) {
     const roomTotal = roomBills.reduce((s, b) => s + b.remainingAmount, 0)
-    if (Math.abs(roomTotal - amount) < 1) roomTotalMatches.push({ rn, bills: roomBills })
+    if (Math.abs(roomTotal - amount) < 0.005) roomTotalMatches.push({ rn, bills: roomBills })
     const over = amount - roomTotal
     if (over > 0 && over <= OVERPAY_MAX) roomTotalOverpay.push({ rn, bills: roomBills, over })
   }
@@ -822,10 +800,8 @@ async function handleSlipImage(
   if (roomTotalMatches.length === 0 && roomTotalOverpay.length === 1) {
     const { rn, bills: roomBills, over } = roomTotalOverpay[0]
     const roomOutstanding = roomBills.reduce((s, b) => s + b.remainingAmount, 0)
-    const roomId1 = roomBills.length === 1 ? roomBills[0].room_id : null
     const { ok, paidBills } = await payBills(roomBills, ` (รวมยอดห้อง ${rn}, เงินเกินบันทึกเป็นเครดิต)`, roomOutstanding)
     if (ok) {
-      await recordCredit(over, tenant.id, roomId1)
       const portalUrl = buildBillPortalUrl(roomBills[0].id, cfg.liffId, cfg.appUrl)
       await reply(replyToken, token, withPaymentThankYou(buildMultiBillPaymentFlex({ tenantName: tenant.full_name, paidBills, totalPaid: roomOutstanding, transferAmount: amount, creditAmount: over, ref: slipRef, portalUrl })))
       await logAutoPayment('single_room_overpay', paidBills, over)

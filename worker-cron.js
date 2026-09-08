@@ -3,6 +3,7 @@
 // and adds a scheduled handler that fires all cron endpoints daily.
 export * from './.open-next/worker.js'
 import openNextWorker from './.open-next/worker.js'
+import { runScheduledJobs } from './lib/cron-runner.ts'
 
 const worker = {
   fetch(request, env, ctx) {
@@ -10,20 +11,7 @@ const worker = {
   },
 
   async scheduled(event, env, ctx) {
-    const secret = env.CRON_SECRET ?? ''
-    const headers = secret ? { 'x-cron-secret': secret } : {}
-    const cronPaths = [
-      '/api/cron/reminders',
-      '/api/cron/contracts',
-      '/api/cron/daily-summary',
-      '/api/cron/backup',
-    ]
-
-    ctx.waitUntil(Promise.allSettled(
-      cronPaths.map((path) =>
-        env.WORKER_SELF_REFERENCE.fetch(new Request(`https://self${path}`), { headers })
-      )
-    ))
+    ctx.waitUntil(runScheduledJobs(env))
   },
 }
 

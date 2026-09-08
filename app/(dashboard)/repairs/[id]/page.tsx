@@ -6,6 +6,7 @@ import { roomRow } from '@/lib/room-utils'
 import { RepairStatusBadge, RepairPriorityBadge } from '../_components/repair-status-badge'
 import { StatusUpdater } from '../_components/status-updater'
 import { DeleteRepairButton } from './_components/delete-repair-button'
+import { createSignedStorageUrl } from '@/lib/storage-urls'
 
 export default async function RepairDetailPage({
   params,
@@ -31,6 +32,12 @@ export default async function RepairDetailPage({
   type TenantJoin = { full_name: string }
   const room   = repair.rooms   as unknown as RoomJoin   | null
   const tenant = repair.tenants as unknown as TenantJoin | null
+  const repairPhotoUrl = await createSignedStorageUrl(
+    supabase,
+    'repair-photos',
+    repair.photo_url,
+    3600
+  )
 
   return (
     <div className="p-5 md:p-8 space-y-6 max-w-4xl">
@@ -73,11 +80,11 @@ export default async function RepairDetailPage({
         <div className="md:col-span-2 space-y-4">
 
           {/* Photo */}
-          {repair.photo_url && (
+          {repairPhotoUrl && (
             <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={repair.photo_url}
+                src={repairPhotoUrl}
                 alt="repair photo"
                 className="w-full max-h-72 object-contain"
               />

@@ -14,6 +14,7 @@ import { DeleteBillButton } from './_components/delete-bill-button'
 import { PromiseButton } from './_components/promise-button'
 import { getActivePromiseForBill } from '@/app/actions/promises'
 import { getEffectiveLineUserId } from '@/lib/line-recipient'
+import { createSignedStorageUrl } from '@/lib/storage-urls'
 
 export default async function BillDetailPage({
   params,
@@ -56,7 +57,16 @@ export default async function BillDetailPage({
   const tenant = bill.tenants        as unknown as TenantJoin | null
   const contract = bill.contracts    as unknown as ContractJoin | null
   const lineUserId = getEffectiveLineUserId(contract, tenant)
-  const meter  = bill.meter_readings as unknown as MeterJoin  | null
+  const rawMeter = bill.meter_readings as unknown as MeterJoin | null
+  const [waterImageUrl, electricityImageUrl] = rawMeter
+    ? await Promise.all([
+        createSignedStorageUrl(supabase, 'meter-photos', rawMeter.water_image_url, 3600),
+        createSignedStorageUrl(supabase, 'meter-photos', rawMeter.electricity_image_url, 3600),
+      ])
+    : [null, null]
+  const meter = rawMeter
+    ? { ...rawMeter, water_image_url: waterImageUrl, electricity_image_url: electricityImageUrl }
+    : null
 
   const totalPaid = (payments ?? []).reduce((s, p) => s + Number(p.amount), 0)
   const remaining = Math.max(0, Number(bill.total_amount) - totalPaid)

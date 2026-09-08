@@ -6,6 +6,7 @@ import { normalizeBillingMonth, type MeterBaselineReason } from '@/lib/meter-bas
 import { bangkokDateKey } from '@/lib/date-utils'
 import { getAuthedUser } from '@/lib/require-admin'
 import { createClient } from '@/lib/supabase/server'
+import { createSignedStorageUrl } from '@/lib/storage-urls'
 
 export default async function MeterBaselinesPage({
   searchParams,
@@ -96,6 +97,17 @@ export default async function MeterBaselinesPage({
     electricity_image_url: string | null
     created_at: string
   }
+  const adjustmentImageUrls = new Map(await Promise.all([
+    ...(adjustmentResult.data ?? []),
+    ...(historyResult.data ?? []),
+  ].map(async (raw) => {
+    const adjustment = raw as unknown as AdjustmentRow
+    const [waterImageUrl, electricityImageUrl] = await Promise.all([
+      createSignedStorageUrl(supabase, 'meter-photos', adjustment.water_image_url, 3600),
+      createSignedStorageUrl(supabase, 'meter-photos', adjustment.electricity_image_url, 3600),
+    ])
+    return [adjustment.id, { waterImageUrl, electricityImageUrl }] as const
+  })))
   const adjustmentByRoom = new Map<string, AdjustmentRow>()
   for (const raw of adjustmentResult.data ?? []) {
     const adjustment = raw as unknown as AdjustmentRow
@@ -123,8 +135,8 @@ export default async function MeterBaselinesPage({
               electricityBaseline: Number(adjustment.electricity_baseline),
               reasonCode: adjustment.reason_code,
               reasonNote: adjustment.reason_note,
-              waterImageUrl: adjustment.water_image_url,
-              electricityImageUrl: adjustment.electricity_image_url,
+              waterImageUrl: adjustmentImageUrls.get(adjustment.id)?.waterImageUrl ?? null,
+              electricityImageUrl: adjustmentImageUrls.get(adjustment.id)?.electricityImageUrl ?? null,
               createdAt: adjustment.created_at,
             }
           : null,
@@ -161,8 +173,8 @@ export default async function MeterBaselinesPage({
       electricityBaseline: Number(item.electricity_baseline),
       reasonCode: item.reason_code,
       reasonNote: item.reason_note,
-      waterImageUrl: item.water_image_url,
-      electricityImageUrl: item.electricity_image_url,
+      waterImageUrl: adjustmentImageUrls.get(item.id)?.waterImageUrl ?? null,
+      electricityImageUrl: adjustmentImageUrls.get(item.id)?.electricityImageUrl ?? null,
       createdAt: item.created_at,
       cancelledAt: item.cancelled_at,
       cancellationNote: item.cancellation_note,

@@ -11,6 +11,14 @@ const mock = vi.hoisted(() => ({
 
 vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => ({
+    storage: {
+      from: () => ({
+        createSignedUrl: async (path: string) => ({
+          data: { signedUrl: `https://signed.example/${path}` },
+          error: null,
+        }),
+      }),
+    },
     from: (table: string) => ({
       select: () => {
         const result = { data: mock.tables[table] ?? [], error: mock.errorTable === table ? { message: 'offline' } : null }
@@ -28,7 +36,7 @@ beforeEach(() => {
     rooms: [{ id: 'r10', room_number: '10' }, { id: 'r2', room_number: '2' }],
     contracts: [{ room_id: 'r2', tenants: { full_name: 'ผู้เช่าปัจจุบัน' } }],
     bills: [{ room_id: 'r10', tenants: { full_name: 'ผู้เช่าของบิลเดิม' } }],
-    meter_readings: [{ room_id: 'r10', water_prev: 0, water_curr: 0, electricity_prev: '8238', electricity_curr: '8318', water_image_url: 'https://example.com/water.jpg', electricity_image_url: null }],
+    meter_readings: [{ room_id: 'r10', water_prev: 0, water_curr: 0, electricity_prev: '8238', electricity_curr: '8318', water_image_url: 'r10/water.jpg', electricity_image_url: null }],
   }
 })
 
@@ -39,7 +47,7 @@ describe('meter review page', () => {
     expect(html).toContain('8,238')
     expect(html).toContain('เทียบกับเลขที่บันทึก 0')
     expect(html).toContain('class="block h-auto w-full"')
-    expect(html).not.toContain('href="https://example.com/water.jpg"')
+    expect(html).not.toContain('href="https://signed.example/r10/water.jpg"')
     expect(html).not.toContain('object-cover')
     expect(mock.eq).toHaveBeenCalledWith('meter_readings', 'billing_month', '2026-08-01')
   })

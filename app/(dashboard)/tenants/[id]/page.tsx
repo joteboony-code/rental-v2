@@ -50,6 +50,12 @@ export default async function TenantDetailPage({
   )
 
   const documents = await getTenantDocuments(id)
+  const contractImages = (await Promise.all(
+    (((tenant.contract_images as string[] | null) ?? []).map(async (storedValue) => ({
+      storedValue,
+      url: await createSignedStorageUrl(supabase, 'contract-documents', storedValue, 3600),
+    })))
+  )).filter((item): item is { storedValue: string; url: string } => Boolean(item.url))
 
   const activeContracts = contracts?.filter((c) => c.status === 'active') ?? []
   const hasActiveContract = activeContracts.length > 0
@@ -148,7 +154,7 @@ export default async function TenantDetailPage({
             </p>
             <ContractDocuments
               tenantId={id}
-              images={(tenant.contract_images as string[] | null) ?? []}
+              documents={contractImages}
             />
           </div>
 

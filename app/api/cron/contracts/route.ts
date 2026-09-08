@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
   in30.setDate(in30.getDate() + 30)
   const in30Str       = bangkokDateKey(in30)
 
-  const { data: contracts } = await supabase
+  const { data: contracts, error } = await supabase
     .from('contracts')
     .select(`id, end_date, monthly_rent, rooms(room_number), tenants(full_name)`)
     .eq('status', 'active')
@@ -32,6 +32,7 @@ export async function GET(req: NextRequest) {
     .order('end_date')
     .limit(500)
 
+  if (error) return NextResponse.json({ ok: false, error: 'Contracts query failed' }, { status: 500 })
   if (!contracts || contracts.length === 0) {
     return NextResponse.json({ ok: true, expiring: 0 })
   }
@@ -60,7 +61,8 @@ export async function GET(req: NextRequest) {
   await notifyOwner(
     lines.join('\n'),
     'expiring_contract',
-    appUrl ? { label: 'ดูผู้เช่า', url: `${appUrl}/tenants` } : undefined
+    appUrl ? { label: 'ดูผู้เช่า', url: `${appUrl}/tenants` } : undefined,
+    { strict: true }
   )
 
   return NextResponse.json({ ok: true, expiring: contracts.length })

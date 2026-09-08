@@ -35,8 +35,7 @@ async function uploadEvidence(
     .from('meter-photos')
     .upload(path, await file.arrayBuffer(), { contentType: file.type, upsert: false })
   if (error || !data) throw new Error(error?.message ?? 'อัปโหลดรูปหลักฐานไม่สำเร็จ')
-  const { data: publicUrl } = supabase.storage.from('meter-photos').getPublicUrl(data.path)
-  return { url: publicUrl.publicUrl, path: data.path }
+  return { url: data.path, path: data.path }
 }
 
 export async function setMeterBaseline(

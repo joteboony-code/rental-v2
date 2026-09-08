@@ -5,6 +5,8 @@ import { createClient } from '@/lib/supabase/server'
 import { sendPaymentReceiptNotification } from '@/lib/line-notify'
 import { logAudit } from './audit'
 import { getAuthedUser } from '@/lib/require-admin'
+import { createServiceClient } from '@/lib/supabase/service'
+import { storageObjectPath } from '@/lib/storage-path'
 
 const MAX_SLIP_SIZE = 5 * 1024 * 1024
 const ALLOWED_SLIP_TYPES: Record<string, string> = {
@@ -15,6 +17,7 @@ const ALLOWED_SLIP_TYPES: Record<string, string> = {
 }
 const VALID_PAYMENT_METHODS = ['cash', 'transfer', 'promptpay'] as const
 type PaymentMethod = typeof VALID_PAYMENT_METHODS[number]
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 export async function recordPayment(
   billId: string,
@@ -22,6 +25,7 @@ export async function recordPayment(
 ): Promise<{ success: boolean; message: string }> {
   const user = await getAuthedUser()
   if (!user) return { success: false, message: 'ไม่มีสิทธิ์ใช้งาน' }
+  if (!UUID_PATTERN.test(billId)) return { success: false, message: 'ข้อมูลบิลไม่ถูกต้อง' }
 
   const supabase = await createClient()
 
@@ -41,26 +45,8 @@ export async function recordPayment(
     return { success: false, message: 'จำนวนเงินสูงเกินไป กรุณาตรวจสอบ' }
   }
 
-  // Guard against double-submit: reject if same amount was recorded for this bill within 60 seconds
-  const oneMinAgo = new Date(Date.now() - 60_000).toISOString()
-  const { data: recentDup } = await supabase
-    .from('payments')
-    .select('id')
-    .eq('bill_id', billId)
-    .eq('amount', amount)
-    .gte('created_at', oneMinAgo)
-    .maybeSingle()
-  if (recentDup) {
-    return { success: false, message: 'การชำระนี้อาจถูกบันทึกไปแล้ว กรุณาตรวจสอบก่อนบันทึกซ้ำ' }
-  }
-
-  const { data: billMeta } = await supabase
-    .from('bills')
-    .select('tenant_id, room_id')
-    .eq('id', billId)
-    .single()
-
   let slip_url: string | null = null
+  let slipPath: string | null = null
   const slipFile = formData.get('slip') as File | null
 
   if (slipFile && slipFile.size > 0) {
@@ -87,74 +73,70 @@ export async function recordPayment(
 
     const { data: urlData } = supabase.storage.from('payment-slips').getPublicUrl(upload.path)
     slip_url = urlData.publicUrl
+    slipPath = upload.path
   }
 
-  const paymentPayload = {
-    bill_id: billId,
-    amount,
-    payment_method,
-    slip_url,
-    note,
-    paid_at,
-    recorded_by: user.id,
+  const { data, error } = await createServiceClient().rpc('admin_record_payment', {
+    p_bill_id: billId,
+    p_amount: amount,
+    p_payment_method: payment_method,
+    p_slip_url: slip_url,
+    p_note: note,
+    p_paid_at: paid_at,
+    p_recorded_by: user.id,
+  })
+  if (error || !data) {
+    // Validation errors prove the transaction did not commit, so its freshly
+    // uploaded slip is safe to remove. Keep the file on ambiguous network errors
+    // because the transaction may have committed even if the response was lost.
+    if (slipPath && ['22023', '23505', 'P0002'].includes(error?.code ?? '')) {
+      await supabase.storage.from('payment-slips').remove([slipPath]).catch(() => {})
+    }
+    const detail = error?.message ?? 'ไม่พบข้อมูลการชำระเงินที่บันทึก'
+    const message = detail.includes('exceeds remaining')
+      ? 'ยอดเงินเกินยอดค้างชำระ'
+      : detail.includes('already paid')
+        ? 'บิลนี้ชำระครบแล้ว'
+        : detail.includes('duplicate')
+          ? 'การชำระนี้อาจถูกบันทึกไปแล้ว กรุณาตรวจสอบก่อนบันทึกซ้ำ'
+          : `เกิดข้อผิดพลาด: ${detail}`
+    return { success: false, message }
   }
 
-  const { data: payment, error } = await supabase
-    .from('payments')
-    .insert(paymentPayload)
-    .select('id')
-    .single()
+  const payment = data as {
+    payment_id: string
+    tenant_id: string | null
+    room_id: string | null
+    total_paid: number
+    total_amount: number
+    bill_paid: boolean
+  }
 
-  if (error || !payment) return { success: false, message: `เกิดข้อผิดพลาด: ${error?.message ?? 'ไม่พบข้อมูลการชำระเงินที่บันทึก'}` }
-
-  logAudit({
+  await logAudit({
     action: 'payment_create',
     entityType: 'payment',
-    entityId: payment.id,
-    tenantId: billMeta?.tenant_id ?? null,
-    roomId: billMeta?.room_id ?? null,
-    newValue: { ...paymentPayload, id: payment.id, tenant_id: billMeta?.tenant_id ?? null, room_id: billMeta?.room_id ?? null },
+    entityId: payment.payment_id,
+    tenantId: payment.tenant_id,
+    roomId: payment.room_id,
+    newValue: {
+      id: payment.payment_id,
+      bill_id: billId,
+      amount,
+      payment_method,
+      slip_url,
+      note,
+      paid_at,
+      recorded_by: user.id,
+      tenant_id: payment.tenant_id,
+      room_id: payment.room_id,
+    },
     description: `บันทึกชำระเงิน ฿${amount.toLocaleString('th-TH')} (${payment_method})`,
   }).catch(() => {})
-
-  const { data: bill, error: billError } = await supabase
-    .from('bills')
-    .select('total_amount, status')
-    .eq('id', billId)
-    .single()
-
-  let billPaid = false
-  let syncWarning: string | null = null
-  if (billError) {
-    syncWarning = ` แต่ตรวจสถานะบิลไม่สำเร็จ: ${billError.message}`
-  } else if (bill) {
-    const { data: payments, error: paymentsError } = await supabase
-      .from('payments')
-      .select('amount')
-      .eq('bill_id', billId)
-
-    if (paymentsError) {
-      syncWarning = ` แต่รวมยอดชำระเพื่อตรวจสถานะบิลไม่สำเร็จ: ${paymentsError.message}`
-    } else {
-      const totalPaid = (payments ?? []).reduce((sum, payment) => sum + Number(payment.amount), 0)
-      billPaid = totalPaid >= Number(bill.total_amount)
-
-      if (billPaid && bill.status !== 'paid') {
-        const { error: statusError } = await supabase.from('bills').update({ status: 'paid' }).eq('id', billId)
-        if (statusError) {
-          syncWarning = ` แต่เปลี่ยนสถานะบิลเป็นชำระแล้วไม่สำเร็จ: ${statusError.message}`
-        } else {
-          sendPaymentReceiptNotification(billId, totalPaid, Number(bill.total_amount)).catch(() => {})
-        }
-      } else if (!billPaid && bill.status !== 'paid') {
-        // partial payment — notify tenant of remaining amount
-        sendPaymentReceiptNotification(billId, totalPaid, Number(bill.total_amount)).catch(() => {})
-      } else if (!billPaid && bill.status === 'paid') {
-        const { error: statusError } = await supabase.from('bills').update({ status: 'pending' }).eq('id', billId)
-        if (statusError) syncWarning = ` แต่เปลี่ยนสถานะบิลกลับเป็นรอดำเนินการไม่สำเร็จ: ${statusError.message}`
-      }
-    }
-  }
+  await sendPaymentReceiptNotification(
+    billId,
+    Number(payment.total_paid),
+    Number(payment.total_amount)
+  ).catch(() => {})
 
   revalidatePath('/bills')
   revalidatePath(`/bills/${billId}`)
@@ -164,9 +146,7 @@ export async function recordPayment(
 
   return {
     success: true,
-    message: syncWarning
-      ? `บันทึกการชำระเงินแล้ว${syncWarning}`
-      : billPaid
+    message: payment.bill_paid
       ? 'บันทึกการชำระเงินแล้ว และอัปเดตสถานะบิลเป็นชำระแล้ว'
       : 'บันทึกการชำระเงินแล้ว',
   }
@@ -174,65 +154,44 @@ export async function recordPayment(
 
 export async function deletePayment(paymentId: string, billId: string): Promise<{ success: boolean; message: string }> {
   if (!(await getAuthedUser())) return { success: false, message: 'ไม่มีสิทธิ์ใช้งาน' }
+  if (!UUID_PATTERN.test(paymentId) || !UUID_PATTERN.test(billId)) {
+    return { success: false, message: 'ข้อมูลการชำระเงินไม่ถูกต้อง' }
+  }
   const supabase = await createClient()
 
-  const { data: payment } = await supabase
-    .from('payments')
-    .select('id, bill_id, amount, payment_method, slip_url, slip_ref, note, paid_at, bills(tenant_id, room_id)')
-    .eq('id', paymentId)
-    .single()
+  const { data, error } = await createServiceClient().rpc('admin_delete_payment', {
+    p_payment_id: paymentId,
+    p_bill_id: billId,
+  })
+  if (error || !data) {
+    return { success: false, message: `ลบไม่สำเร็จ: ${error?.message ?? 'ไม่พบรายการชำระเงิน'}` }
+  }
+  const payment = data as {
+    payment_id: string
+    amount: number
+    payment_method: string
+    slip_url: string | null
+    slip_ref: string | null
+    note: string | null
+    paid_at: string
+    tenant_id: string | null
+    room_id: string | null
+    slip_in_use: boolean
+  }
 
-  const { error: deleteError } = await supabase.from('payments').delete().eq('id', paymentId)
-  if (deleteError) return { success: false, message: `ลบไม่สำเร็จ: ${deleteError.message}` }
-
-  type PaymentBillJoin = { tenant_id: string | null; room_id: string | null }
-  const billJoin = payment?.bills as unknown as PaymentBillJoin | null
-  logAudit({
+  await logAudit({
     action: 'payment_delete',
     entityType: 'payment',
     entityId: paymentId,
-    tenantId: billJoin?.tenant_id ?? null,
-    roomId: billJoin?.room_id ?? null,
-    oldValue: payment ? {
-      id: payment.id,
-      bill_id: payment.bill_id,
-      tenant_id: billJoin?.tenant_id ?? null,
-      room_id: billJoin?.room_id ?? null,
-      amount: payment.amount,
-      payment_method: payment.payment_method,
-      slip_url: payment.slip_url,
-      slip_ref: payment.slip_ref,
-      note: payment.note,
-      paid_at: payment.paid_at,
-    } : { id: paymentId, bill_id: billId },
-    description: `ลบการชำระเงิน ฿${Number(payment?.amount ?? 0).toLocaleString('th-TH')} (bill: ${billId})`,
+    tenantId: payment.tenant_id,
+    roomId: payment.room_id,
+    oldValue: { ...payment, id: payment.payment_id, bill_id: billId },
+    description: `ลบการชำระเงิน ฿${Number(payment.amount).toLocaleString('th-TH')} (bill: ${billId})`,
   }).catch(() => {})
 
-  if (payment?.slip_url) {
-    try {
-      const url = new URL(payment.slip_url)
-      const parts = url.pathname.split('/payment-slips/')
-      if (parts[1]) {
-        await supabase.storage.from('payment-slips').remove([parts[1]])
-      }
-    } catch {}
-  }
-
-  const { data: bill } = await supabase
-    .from('bills')
-    .select('total_amount, status')
-    .eq('id', billId)
-    .single()
-
-  if (bill?.status === 'paid') {
-    const { data: remaining } = await supabase
-      .from('payments')
-      .select('amount')
-      .eq('bill_id', billId)
-    const totalPaid = (remaining ?? []).reduce((sum, payment) => sum + Number(payment.amount), 0)
-    if (totalPaid < Number(bill.total_amount)) {
-      await supabase.from('bills').update({ status: 'pending' }).eq('id', billId)
-    }
+  if (payment.slip_url && !payment.slip_in_use) {
+    const path = storageObjectPath(payment.slip_url, 'payment-slips')
+    if (path) await supabase.storage.from('payment-slips').remove([path])
   }
 
   revalidatePath('/bills')
