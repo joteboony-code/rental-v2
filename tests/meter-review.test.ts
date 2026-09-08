@@ -6,6 +6,7 @@ import MeterReviewPage from '@/app/(dashboard)/bills/meter/review/page'
 const mock = vi.hoisted(() => ({
   tables: {} as Record<string, unknown[]>,
   errorTable: '',
+  signingFailed: false,
   eq: vi.fn(),
 }))
 
@@ -13,8 +14,8 @@ vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => ({
     storage: {
       from: () => ({
-        createSignedUrl: async (path: string) => ({
-          data: { signedUrl: `https://signed.example/${path}` },
+        createSignedUrls: async (paths: string[]) => ({
+          data: paths.map(path => ({ path, signedUrl: mock.signingFailed ? null : `https://signed.example/${path}`, error: mock.signingFailed ? 'unavailable' : null })),
           error: null,
         }),
       }),
@@ -31,6 +32,7 @@ vi.mock('@/lib/supabase/server', () => ({
 beforeEach(() => {
   vi.stubGlobal('React', React)
   mock.errorTable = ''
+  mock.signingFailed = false
   mock.eq.mockClear()
   mock.tables = {
     rooms: [{ id: 'r10', room_number: '10' }, { id: 'r2', room_number: '2' }],
@@ -41,6 +43,13 @@ beforeEach(() => {
 })
 
 describe('meter review page', () => {
+  it('distinguishes a failed private URL from a missing photo', async () => {
+    mock.signingFailed = true
+    const html = renderToStaticMarkup(await MeterReviewPage({ searchParams: Promise.resolve({ month: '2026-08' }) }))
+    expect(html).toContain('โหลดรูปไม่สำเร็จ')
+    expect(html).toContain('ลองใหม่')
+    expect(html.slice(html.indexOf('ห้อง 10'))).not.toContain('ยังไม่มีรูปมิเตอร์น้ำของเดือนนี้')
+  })
   it('renders saved readings and full-width photos without image links or cropping', async () => {
     const html = renderToStaticMarkup(await MeterReviewPage({ searchParams: Promise.resolve({ month: '2026-08' }) }))
     expect(html).toContain('8,318')

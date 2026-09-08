@@ -1,10 +1,10 @@
-import Image from 'next/image'
+import { MeterPhoto } from '@/components/meter-photo'
 import Link from 'next/link'
 import { AlertCircle, ChevronLeft, Droplets, ImageOff, ScanEye, Zap } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { bangkokDateKey } from '@/lib/date-utils'
 import { roomRow } from '@/lib/room-utils'
-import { createSignedStorageUrl } from '@/lib/storage-urls'
+import { createSignedStorageUrls, storageObjectPath } from '@/lib/storage-urls'
 
 export const dynamic = 'force-dynamic'
 
@@ -32,12 +32,13 @@ function formatReading(value: Reading['water_curr'] | undefined) {
     : '—'
 }
 
-function MeterPanel({ type, roomNumber, previous, current, imageUrl }: {
+function MeterPanel({ type, roomNumber, previous, current, imageUrl, storedValue }: {
   type: 'water' | 'electricity'
   roomNumber: string
   previous: Reading['water_prev'] | undefined
   current: Reading['water_curr'] | undefined
   imageUrl: string | null | undefined
+  storedValue?: string | null
 }) {
   const isWater = type === 'water'
   const label = isWater ? 'น้ำ' : 'ไฟฟ้า'
@@ -59,14 +60,12 @@ function MeterPanel({ type, roomNumber, previous, current, imageUrl }: {
           <span>ใช้ไป <strong className={`font-semibold tabular-nums ${units !== null && units < 0 ? 'text-rose-600' : 'text-slate-700'}`}>{formatReading(units)}</strong> หน่วย</span>
         </div>
       </div>
-      {imageUrl ? (
+      {imageUrl || storedValue ? (
         // Keep the uploaded resolution: meter digits must not be cropped or recompressed by an image proxy.
-        <Image
+        <MeterPhoto
           src={imageUrl}
+          storedValue={storedValue}
           alt={`รูปมิเตอร์${label} ห้อง ${roomNumber} เทียบกับเลขที่บันทึก ${formatReading(current)}`}
-          width={1200}
-          height={1600}
-          unoptimized
           className="block h-auto w-full"
         />
       ) : (
@@ -104,17 +103,18 @@ export default async function MeterReviewPage({ searchParams }: {
     throw new Error('โหลดข้อมูลตรวจทานมิเตอร์ไม่สำเร็จ กรุณาลองใหม่')
   }
 
-  const readings = new Map(await Promise.all(((readingsResult.data as Reading[] | null) ?? []).map(async (reading) => {
-    const [waterImageUrl, electricityImageUrl] = await Promise.all([
-      createSignedStorageUrl(supabase, 'meter-photos', reading.water_image_url, 3600),
-      createSignedStorageUrl(supabase, 'meter-photos', reading.electricity_image_url, 3600),
-    ])
+  const rawReadings = (readingsResult.data as Reading[] | null) ?? []
+  const signedImages = await createSignedStorageUrls(supabase, 'meter-photos',
+    rawReadings.flatMap((r) => [r.water_image_url, r.electricity_image_url]), 3600)
+  const readings = new Map(rawReadings.map((reading) => {
     return [reading.room_id, {
       ...reading,
-      water_image_url: waterImageUrl,
-      electricity_image_url: electricityImageUrl,
+      water_image_url: signedImages.get(reading.water_image_url ?? '') ?? null,
+      electricity_image_url: signedImages.get(reading.electricity_image_url ?? '') ?? null,
+      water_image_path: storageObjectPath(reading.water_image_url, 'meter-photos'),
+      electricity_image_path: storageObjectPath(reading.electricity_image_url, 'meter-photos'),
     }] as const
-  })))
+  }))
   const activeTenants = new Map((contractsResult.data ?? []).map((contract) => [contract.room_id, tenantName(contract.tenants as TenantJoin)]))
   const billedTenants = new Map((billsResult.data ?? []).map((bill) => [bill.room_id, tenantName(bill.tenants as TenantJoin)]))
   // Include saved historical readings even when that room's contract is no longer active.
@@ -124,7 +124,7 @@ export default async function MeterReviewPage({ searchParams }: {
   const savedCount = rooms.filter((room) => readings.has(room.id)).length
   const missingPhotos = rooms.filter((room) => {
     const reading = readings.get(room.id)
-    return reading && (!reading.water_image_url || !reading.electricity_image_url)
+    return reading && (!reading.water_image_path || !reading.electricity_image_path)
   }).length
 
   return (
@@ -168,8 +168,8 @@ export default async function MeterReviewPage({ searchParams }: {
               {!reading && <p className="flex items-center gap-1 text-xs font-semibold text-amber-600"><AlertCircle className="size-4" /> ยังไม่ได้บันทึกมิเตอร์เดือนนี้</p>}
             </header>
             <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
-              <MeterPanel type="water" roomNumber={room.room_number} previous={reading?.water_prev} current={reading?.water_curr} imageUrl={reading?.water_image_url} />
-              <MeterPanel type="electricity" roomNumber={room.room_number} previous={reading?.electricity_prev} current={reading?.electricity_curr} imageUrl={reading?.electricity_image_url} />
+              <MeterPanel type="water" roomNumber={room.room_number} previous={reading?.water_prev} current={reading?.water_curr} imageUrl={reading?.water_image_url} storedValue={reading?.water_image_path} />
+              <MeterPanel type="electricity" roomNumber={room.room_number} previous={reading?.electricity_prev} current={reading?.electricity_curr} imageUrl={reading?.electricity_image_url} storedValue={reading?.electricity_image_path} />
             </div>
           </article>
         )

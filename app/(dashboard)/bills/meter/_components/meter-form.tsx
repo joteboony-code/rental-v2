@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Loader2, Zap, Droplets, Check, AlertCircle, AlertTriangle, CalendarDays, Camera, X, ListChecks, ScanLine, RefreshCw } from 'lucide-react'
 import { roomRow } from '@/lib/room-utils'
 import { createClient as createBrowserClient } from '@/lib/supabase/client'
+import { MeterPhoto } from '@/components/meter-photo'
 
 export interface RoomRow {
   room_id:             string
@@ -21,6 +22,8 @@ export interface RoomRow {
   electricity_curr:    number
   water_image_url:     string | null
   electricity_image_url: string | null
+  water_image_path?: string | null
+  electricity_image_path?: string | null
   // Anomaly detection
   prev_water_units:  number | null
   prev_elec_units:   number | null
@@ -77,6 +80,7 @@ async function compressImage(file: File, maxPx = 1200, quality = 0.82): Promise<
 type SaveStatus = 'idle' | 'loading' | 'saved' | 'error'
 type PhotoUploadState = 'idle' | 'uploading' | 'uploaded' | 'error'
 type PhotoSlot = {
+  existingPath?: string | null
   file: File | null
   preview: string | null
   existing: string | null
@@ -112,8 +116,8 @@ export function MeterForm({ rooms, billingMonth, waterRate, electricityRate, ano
     const init: Record<string, RoomPhotos> = {}
     rooms.forEach((r) => {
       init[r.room_id] = {
-        water: { file: null, preview: null, existing: r.water_image_url ?? null, path: null, uploadState: r.water_image_url ? 'uploaded' : 'idle', error: null },
-        elec:  { file: null, preview: null, existing: r.electricity_image_url ?? null, path: null, uploadState: r.electricity_image_url ? 'uploaded' : 'idle', error: null },
+        water: { existingPath: r.water_image_path, file: null, preview: null, existing: r.water_image_url ?? null, path: null, uploadState: r.water_image_url ? 'uploaded' : 'idle', error: null },
+        elec:  { existingPath: r.electricity_image_path, file: null, preview: null, existing: r.electricity_image_url ?? null, path: null, uploadState: r.electricity_image_url ? 'uploaded' : 'idle', error: null },
       }
     })
     return init
@@ -851,16 +855,10 @@ function PhotoPicker({
 
   return (
     <div className="mt-1.5">
-      {preview ? (
+      {preview || slot?.existingPath ? (
         <div className="relative inline-block align-top">
-          <a href={preview} target="_blank" rel="noreferrer">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={preview}
-              alt="มิเตอร์"
-              className={`rounded-lg object-cover border border-slate-200 ${compact ? 'size-10' : 'h-20 w-full'}`}
-            />
-          </a>
+          <MeterPhoto src={preview} storedValue={slot?.path ?? slot?.existingPath} alt="มิเตอร์" linked
+            className={`rounded-lg object-cover border border-slate-200 ${compact ? 'size-10' : 'h-20 w-full'}`} />
           {slot?.uploadState === 'uploading' && (
             <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-slate-950/55 text-white">
               <Loader2 className="size-4 animate-spin" />
