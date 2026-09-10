@@ -116,6 +116,10 @@ export default async function BillsPage({ searchParams }: Props) {
               className={buttonVariants({ variant: 'outline', size: 'sm' }) + ' hidden md:inline-flex rounded-xl gap-1.5 border-slate-200 text-slate-600 hover:bg-slate-50'}>
               <Wallet className="size-3.5" /> ประวัติชำระ
             </Link>
+            <Link href="/bills/reminder-history"
+              className={buttonVariants({ variant: 'outline', size: 'sm' }) + ' rounded-xl gap-1.5'}>
+              <History className="size-3.5" /> ผลแจ้งเตือน
+            </Link>
             <Link href="/bills/history"
               className={buttonVariants({ variant: 'outline', size: 'sm' }) + ' hidden md:inline-flex rounded-xl gap-1.5 border-slate-200 text-slate-600 hover:bg-slate-50'}>
               <History className="size-3.5" /> ประวัติบิล

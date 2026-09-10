@@ -5,6 +5,8 @@ import { buildBillPortalUrl } from '@/lib/portal-url'
 import { parseReminderDays } from '@/lib/reminder-utils'
 import { notifyOwner } from '@/lib/notify-owner'
 import { getEffectiveLineUserId } from '@/lib/line-recipient'
+import { skipReminder } from '@/lib/reminder-delivery'
+import { getCloudflareContext } from '@opennextjs/cloudflare'
 
 function isAuthorized(req: NextRequest) {
   const secret = process.env.CRON_SECRET
@@ -33,18 +35,6 @@ function bangkokDateKey(d = new Date()) {
     month: '2-digit',
     day: '2-digit',
   }).format(d)
-}
-
-async function pushMessage(to: string, token: string, messages: object[]) {
-  const res = await fetch('https://api.line.me/v2/bot/message/push', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ to, messages }),
-  })
-  if (!res.ok) {
-    const body = await res.text().catch(() => '')
-    throw new Error(`LINE API ${res.status}: ${body}`)
-  }
 }
 
 function buildPortalFlex(portalUrl: string, details: string, isOverdue: boolean) {
@@ -133,8 +123,13 @@ export async function GET(req: NextRequest) {
 
   const lineConfig = await getLineMessagingConfig()
   if (!lineConfig) return NextResponse.json({ ok: false, error: 'LINE not configured' })
+  const { env } = await getCloudflareContext({ async: true })
+  const self = env.WORKER_SELF_REFERENCE
+  if (!self) return NextResponse.json({ ok: false, error: 'Delivery binding missing' }, { status: 503 })
 
   const reminderKey = bangkokDateKey()
+  const { error: ledgerError } = await supabase.from('reminder_deliveries').select('id').limit(1)
+  if (ledgerError) return NextResponse.json({ ok: false, error: 'Run reminder delivery migration before enabling this release' }, { status: 503 })
   const { data: sentLog, error: sentLogError } = await supabase
     .from('audit_logs')
     .select('id, new_value')
@@ -145,10 +140,7 @@ export async function GET(req: NextRequest) {
     .maybeSingle()
 
   if (sentLogError) return NextResponse.json({ ok: false, error: 'Reminder status unavailable' }, { status: 500 })
-  if (sentLog?.new_value?.completed === false || Number(sentLog?.new_value?.failed ?? 0) > 0 || sentLog?.new_value?.owner_failed) {
-    return NextResponse.json({ ok: false, error: 'Previous reminder run incomplete; manual review required' }, { status: 502 })
-  }
-  if (sentLog) {
+  if (sentLog && sentLog.new_value?.delivery_version !== 2) {
     return NextResponse.json({ ok: true, skipped: 'reminders already sent today', date: reminderKey })
   }
 
@@ -157,15 +149,12 @@ export async function GET(req: NextRequest) {
     entity_type: 'cron',
     entity_id: reminderKey,
     description: `Automated reminders started for ${reminderKey}`,
-    new_value: { completed: false },
+    new_value: { completed: false, delivery_version: 2 },
   })
 
   if (lockError) {
     const code = (lockError as { code?: string }).code
-    if (code === '23505') {
-      return NextResponse.json({ ok: true, skipped: 'reminders already sent today', date: reminderKey })
-    }
-    return NextResponse.json({ ok: false, error: lockError.message }, { status: 500 })
+    if (code !== '23505') return NextResponse.json({ ok: false, error: 'Cannot record reminder run' }, { status: 500 })
   }
 
   const today = bangkokDateKey()
@@ -190,10 +179,8 @@ export async function GET(req: NextRequest) {
     .limit(2000)
 
   if (billsError) return NextResponse.json({ ok: false, error: 'Reminder bills unavailable' }, { status: 500 })
-  if (!bills || bills.length === 0) {
-    await supabase.from('audit_logs').update({ new_value: { completed: true, sent: 0 } }).eq('action', 'cron_reminders_sent').eq('entity_id', reminderKey)
-    return NextResponse.json({ ok: true, sent: 0, message: 'no pending bills' })
-  }
+  if (bills && bills.length >= 2000) return NextResponse.json({ ok: false, error: 'Too many bills; manual review required' }, { status: 503 })
+  if (!bills) return NextResponse.json({ ok: false, error: 'Reminder bills unavailable' }, { status: 500 })
 
   // ข้ามบิลที่มีนัดจ่าย (promise) active และยังไม่ถึงกำหนด — ให้เกียรติคำสัญญา
   const { data: activePromises, error: promisesError } = await supabase
@@ -203,15 +190,11 @@ export async function GET(req: NextRequest) {
     .gte('promise_date', today)
     .limit(500)
   if (promisesError) return NextResponse.json({ ok: false, error: 'Payment promises unavailable' }, { status: 500 })
+  if (activePromises && activePromises.length >= 500) return NextResponse.json({ ok: false, error: 'Too many promises; manual review required' }, { status: 503 })
   const promisedBillIds = new Set(
     (activePromises ?? []).map((p) => p.bill_id as string | null).filter((id): id is string => Boolean(id))
   )
-  const skipPromiseCount = bills.filter((b) => promisedBillIds.has(b.id as string)).length
-  const remindableBills = bills.filter((b) => !promisedBillIds.has(b.id as string))
-  if (remindableBills.length === 0) {
-    await supabase.from('audit_logs').update({ new_value: { completed: true, sent: 0 } }).eq('action', 'cron_reminders_sent').eq('entity_id', reminderKey)
-    return NextResponse.json({ ok: true, sent: 0, message: 'all bills have active promises', skipped: skipPromiseCount })
-  }
+  const remindableBills = bills
 
   let ownerFailed = false
   // Group bills by tenant
@@ -230,25 +213,37 @@ export async function GET(req: NextRequest) {
     byTenant.get(key)!.push(bill)
   }
 
-  let sent = 0, failed = 0, snoozed = 0, noLine = 0, totalReminded = 0
+  let sent = 0, failed = 0, snoozed = 0, noLine = 0
   const sentRooms: string[] = []
 
-  for (const [, tenantBills] of byTenant) {
+  for (const [recipientKey, tenantBills] of byTenant) {
     const firstBill = tenantBills[0]
     const tenant = firstBill.tenants as unknown as TJ | null
     const contract = firstBill.contracts as unknown as CJ | null
     const lineUserId = getEffectiveLineUserId(contract, tenant)
 
-    if (!lineUserId) { noLine++; continue }
+    const delivery = {
+      reminder_date: reminderKey, recipient_key: recipientKey,
+      rooms: [...new Set(tenantBills.map(b => (b.rooms as unknown as RJ | null)?.room_number ?? '—'))],
+      bill_ids: tenantBills.map(b => b.id as string), amount: 0,
+    }
+    if (!lineUserId) {
+      await skipReminder(supabase, delivery, 'no_line_recipient')
+      noLine++; continue
+    }
 
     // Snooze + fully-paid guard: skip bills that are snoozed or have no remaining balance
     const activeBills = tenantBills.filter((b) => {
+      if (promisedBillIds.has(b.id as string)) return false
       const s = b.snooze_until as string | null
       if (s && s >= today) return false
       const paid = ((b.payments as unknown as PJ[] | null) ?? []).reduce((ps, p) => ps + Number(p.amount), 0)
       return Math.max(0, Number(b.total_amount) - paid) >= 1
     })
-    if (activeBills.length === 0) { snoozed++; continue }
+    if (activeBills.length === 0) {
+      await skipReminder(supabase, delivery, 'promise_snooze_or_paid')
+      snoozed++; continue
+    }
 
     const allRoomNumbers = [...new Set(
       tenantBills.map((b) => (b.rooms as unknown as RJ | null)?.room_number).filter((n): n is string => Boolean(n))
@@ -259,7 +254,7 @@ export async function GET(req: NextRequest) {
       const paid = ((b.payments as unknown as PJ[] | null) ?? []).reduce((ps, p) => ps + Number(p.amount), 0)
       return s + Math.max(0, Number(b.total_amount) - paid)
     }, 0)
-    const hasOverdue = activeBills.some((b) => b.status === 'overdue')
+    const hasOverdue = activeBills.some((b) => b.due_date < today)
 
     // Use the latest bill's portal URL
     const latestBill = activeBills[activeBills.length - 1]
@@ -274,7 +269,7 @@ export async function GET(req: NextRequest) {
 
     for (const bill of activeBills) {
       const meter = bill.meter_readings as unknown as MJ | null
-      const isOverdue = bill.status === 'overdue'
+      const isOverdue = bill.due_date < today
       const monthLabel = thaiMonth(bill.billing_month as string)
       const paidAmt = ((bill.payments as unknown as PJ[] | null) ?? []).reduce((s, p) => s + Number(p.amount), 0)
       const remaining = Math.max(0, Number(bill.total_amount) - paidAmt)
@@ -320,26 +315,51 @@ export async function GET(req: NextRequest) {
     lines.push('📎 ส่งสลิปผ่านแชทนี้ได้เลยครับ 🙏')
 
     try {
-      await pushMessage(lineUserId, lineConfig.channelAccessToken, [
-        buildPortalFlex(portalUrl, lines.slice(2).join('\n'), hasOverdue),
-      ])
+      const response = await self.fetch(new Request('https://self/api/cron/reminders/delivery', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'x-cron-secret': process.env.CRON_SECRET! },
+        body: JSON.stringify({
+          row: { ...delivery, bill_ids: activeBills.map(b => b.id as string), amount: totalOwed },
+          to: lineUserId, messages: [buildPortalFlex(portalUrl, lines.slice(2).join('\n'), hasOverdue)],
+        }), signal: AbortSignal.timeout(45_000),
+      }))
+      const body = await response.json() as { ok?: boolean; result?: string }
+      if (!response.ok || !body.ok) throw new Error('Delivery needs review')
+      const result = body.result
+      if (result === 'existing') continue
+      if (result !== 'accepted') { failed++; continue }
       sent++
-      totalReminded += totalOwed
       sentRooms.push(`ห้อง ${roomNumber}: ${fmt(totalOwed)} บาท${hasOverdue ? ' 🔴' : ''}`)
     } catch {
       failed++
     }
   }
 
-  // Summary to owner — ส่งเฉพาะเมื่อมีการแจ้งเตือนจริง (sent > 0) และ toggle เปิด
-  if (sent > 0 && lineSettings?.bill_reminder_notify_enabled !== false) {
-    const totalAmt = totalReminded
+  const { data: persisted, error: persistedError } = await supabase.from('reminder_deliveries')
+    .select('status,rooms,reason,amount').eq('reminder_date', reminderKey).neq('recipient_key', '__owner_summary')
+  if (persistedError) return NextResponse.json({ ok: false, error: 'Cannot verify delivery results' }, { status: 503 })
+  failed = Math.max(failed, (persisted ?? []).filter(r => ['failed', 'unknown', 'sending'].includes(r.status)).length)
+  const accepted = (persisted ?? []).filter(r => r.status === 'accepted').length
+  // An insert-only owner claim also prevents duplicate summaries on concurrency
+  // and ambiguous network errors. A failed summary is visible in the ledger.
+  const { data: ownerClaim, error: ownerClaimError } = lineSettings?.bill_reminder_notify_enabled !== false
+    ? await supabase.from('reminder_deliveries').insert({
+      reminder_date: reminderKey, recipient_key: '__owner_summary', status: 'sending',
+    }).select('id').single()
+    : { data: null, error: null }
+  if (ownerClaimError && ownerClaimError.code !== '23505') ownerFailed = true
+  if (ownerClaimError?.code === '23505') {
+    const { data: previousOwner, error: previousOwnerError } = await supabase.from('reminder_deliveries')
+      .select('status').eq('reminder_date', reminderKey).eq('recipient_key', '__owner_summary').maybeSingle()
+    ownerFailed = Boolean(previousOwnerError) || previousOwner?.status !== 'accepted'
+  }
+  if (ownerClaim) {
+    const totalAmt = (persisted ?? []).filter(r => r.status === 'accepted').reduce((sum,r) => sum + Number(r.amount), 0)
     const overdueCount = [...byTenant.values()].filter((bs) => bs.some((b) => b.status === 'overdue')).length
     const ownerLines = [
       `📋 สรุปแจ้งเตือนอัตโนมัติ`,
       `🗓️ วันที่ ${todayThai}`,
       SEP,
-      `✅ ส่งสำเร็จ: ${sent} ห้อง`,
+      `✅ LINE รับคำขอ: ${accepted} ผู้รับ (ไม่ใช่สถานะอ่าน)`,
       `🔴 มียอดค้าง: ${overdueCount} ห้อง`,
       `❌ ส่งไม่สำเร็จ: ${failed} ห้อง`,
       `😴 งดแจ้งเตือน: ${snoozed} ห้อง`,
@@ -347,27 +367,36 @@ export async function GET(req: NextRequest) {
       `💰 ยอดค้างรวม: ${fmt(totalAmt)} บาท`,
     ]
     if (sentRooms.length > 0) { ownerLines.push(SEP); ownerLines.push(...sentRooms) }
+    ownerLines.push('ดูผลรายห้องและรายการที่ต้องตรวจสอบที่หน้าประวัติแจ้งเตือน')
+    for (const row of persisted ?? []) {
+      if (row.status !== 'accepted') ownerLines.push(`ห้อง ${row.rooms.join(', ')}: ${row.status} (${row.reason ?? 'ต้องตรวจสอบ'})`)
+    }
     const appUrl = (lineConfig?.appUrl ?? '').replace(/\/$/, '')
     try {
       await notifyOwner(
         ownerLines.join('\n'),
         'reminder_summary',
-        appUrl ? { label: 'ดูบิล', url: `${appUrl}/bills` } : undefined,
+        appUrl ? { label: 'ผลแจ้งเตือน', url: `${appUrl}/bills/reminder-history` } : undefined,
         { strict: true }
       )
     } catch { ownerFailed = true }
+    const { error: ownerResultError } = await supabase.from('reminder_deliveries').update({
+      status: ownerFailed ? 'unknown' : 'accepted', reason: ownerFailed ? 'owner_summary_uncertain' : 'owner_summary_sent',
+      updated_at: new Date().toISOString(),
+    }).eq('id', ownerClaim.id)
+    if (ownerResultError) ownerFailed = true
   }
 
   const { error: finalLogError } = await supabase
     .from('audit_logs')
     .update({
       description: `Automated reminders sent for ${reminderKey}`,
-      new_value: { completed: true, sent, failed, snoozed, noLine, owner_failed: ownerFailed },
+      new_value: { completed: true, delivery_version: 2, sent, failed, snoozed, noLine, owner_failed: ownerFailed },
     })
     .eq('action', 'cron_reminders_sent')
     .eq('entity_type', 'cron')
     .eq('entity_id', reminderKey)
 
-  return NextResponse.json({ ok: !ownerFailed && !finalLogError, date: reminderKey, sent, failed, snoozed, noLine },
-    { status: ownerFailed || finalLogError ? 502 : 200 })
+  return NextResponse.json({ ok: !failed && !ownerFailed && !finalLogError, date: reminderKey, sent, failed, snoozed, noLine },
+    { status: failed || ownerFailed || finalLogError ? 502 : 200 })
 }
