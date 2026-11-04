@@ -17,6 +17,7 @@ import { Badge } from '@/components/ui/badge'
 import { RepairSubmit } from './repair-submit'
 import { RepairHistory } from './repair-history'
 import { BankAccountCard } from './bank-account-card'
+import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, Legend } from 'recharts'
 import type { LiffClient } from '@/lib/liff-types'
 
 declare global { interface Window { liff?: LiffClient } }
@@ -306,6 +307,10 @@ export function TenantPortal({ liffId, adminPreview = false, initialRoomId }: Te
                   </div>
                 )}
                 {currentBill && <CurrentBillCard bill={currentBill} bankAccount={data.bankAccount} paymentAmount={totalOutstanding} />}
+
+                {/* กราฟแนวโน้มค่าน้ำค่าไฟรายเดือน */}
+                {data.bills.length > 1 && <UsageCharts bills={data.bills} />}
+
                 <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
                   <div className="mb-3 flex items-center gap-2">
                     <Clock className="size-4 text-slate-400" />
@@ -552,4 +557,44 @@ function StatusBadge({ status }: { status: string }) {
   if (status === 'paid')    return <Badge className="bg-emerald-50 text-emerald-700"><CheckCircle2 className="size-3" />{statusLabel[status]}</Badge>
   if (status === 'overdue') return <Badge className="bg-rose-50 text-rose-700"><AlertCircle className="size-3" />{statusLabel[status]}</Badge>
   return <Badge className="bg-amber-50 text-amber-700"><Clock className="size-3" />{statusLabel[status] ?? status}</Badge>
+}
+
+// กราฟแนวโน้มค่าน้ำ/ค่าไฟรายเดือน ของห้องนี้ (เรียงตามเดือน)
+function UsageCharts({ bills }: { bills: TenantPortalData['bills'] }) {
+  // bills จาก API เรียงตาม billing_month แล้ว ให้ไล่จากเก่าสุด -> ใหม่สุด
+  const data = bills.map((b) => ({
+    name: new Intl.DateTimeFormat('th-TH', { month: 'short', year: '2-digit' }).format(new Date(b.billing_month)),
+     ค่าน้ำ: Number(b.water_amount || 0),
+     ค่าไฟ: Number(b.electricity_amount || 0),
+    total: Number(b.total_amount || 0),
+  }))
+
+  if (data.length === 0) return null
+
+  return (
+    <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+      <div className="mb-3 flex items-center gap-2">
+        <Zap className="size-4 text-slate-400" />
+        <h2 className="text-sm font-semibold text-slate-800">แนวโน้มค่าใช้จ่ายรายเดือน</h2>
+      </div>
+      <div className="h-64 w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={data} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+            <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#94a3b8' }} tickLine={false} axisLine={{ stroke: '#e2e8f0' }} />
+            <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} tickLine={false} axisLine={false} width={44} />
+            <Tooltip
+              contentStyle={{ borderRadius: 12, border: '1px solid #e2e8f0', fontSize: 12 }}
+              formatter={(value) => `฿${money.format(Number(value))}`}
+              labelStyle={{ fontWeight: 600 }}
+            />
+            <Legend wrapperStyle={{ fontSize: 12 }} />
+            <Line type="monotone" dataKey="ค่าน้ำ" name="ค่าน้ำ" stroke="#0ea5e9" strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+            <Line type="monotone" dataKey="ค่าไฟ" name="ค่าไฟ" stroke="#f59e0b" strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+      <p className="mt-2 text-center text-xs text-slate-400">แสดงค่าน้ำและค่าไฟของบิลแต่ละเดือน</p>
+    </section>
+  )
 }
