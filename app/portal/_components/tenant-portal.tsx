@@ -538,8 +538,6 @@ function BillHistoryItem({ bill, adminPreview = false }: { bill: TenantPortalDat
         </Link>
       </div>
 
-      <MeterBlock bill={bill} />
-
       {bill.payments.length > 0 && (
         <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
           {bill.payments.map((p) => (
