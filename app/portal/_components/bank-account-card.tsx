@@ -53,26 +53,23 @@ export function BankAccountCard({
         </p>
       </div>
 
-      {bankName && (
-        <p className="text-sm font-semibold text-slate-800">{bankName}</p>
-      )}
-
-      <div className="mt-2 flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-4 py-3">
-        <div className="min-w-0">
-          {accountName && (
-            <p className="truncate text-xs text-slate-500">{accountName}</p>
-          )}
-          <p className="truncate font-mono text-xl font-bold tracking-wide text-slate-950">
-            {accountNo}
-          </p>
-        </div>
+      <div className="mt-2 rounded-2xl border-2 border-slate-950 bg-slate-50 px-4 py-4 text-center">
+        {bankName && (
+          <p className="text-sm font-semibold text-slate-700">{bankName}</p>
+        )}
+        {accountName && (
+          <p className="mt-0.5 text-xs text-slate-500">{accountName}</p>
+        )}
+        <p className="mt-1 break-all font-mono text-3xl font-extrabold tracking-wider text-slate-950">
+          {accountNo}
+        </p>
         <button
           type="button"
           onClick={handleCopy}
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-xl px-3.5 py-2 text-sm font-semibold transition-colors bg-slate-950 text-white hover:bg-slate-800"
+          className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-3 text-base font-bold text-white transition-colors hover:bg-slate-800 active:scale-[0.99]"
         >
-          {copied ? <Check className="size-4 text-emerald-400" /> : <Copy className="size-4" />}
-          {copied ? 'คัดลอกแล้ว' : 'คัดลอก'}
+          {copied ? <Check className="size-5 text-emerald-400" /> : <Copy className="size-5" />}
+          {copied ? 'คัดลอกแล้ว' : 'คัดลอกเลขบัญชี'}
         </button>
       </div>
 
