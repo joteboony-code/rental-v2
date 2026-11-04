@@ -2,6 +2,7 @@
 
 import { getAuthedUser } from '@/lib/require-admin'
 import { createServiceClient } from '@/lib/supabase/service'
+import { roomRow } from '@/lib/room-utils'
 import type { PortalRepairItem, PortalRoom, TenantPortalData } from './portal'
 import { createSignedStorageUrl } from '@/lib/storage-urls'
 
@@ -107,7 +108,7 @@ export async function getAdminTenantPortalDashboard(roomId: string): Promise<Adm
       .limit(24),
     supabase
       .from('settings')
-      .select('promptpay_id, promptpay_name, bank_account_no, bank_account_name, bank_name')
+      .select('promptpay_id, promptpay_name, bank_account_no, bank_account_name, bank_name, bank_name_1, bank_account_no_1, bank_account_name_1, bank_name_2, bank_account_no_2, bank_account_name_2, bank_name_3, bank_account_no_3, bank_account_name_3, bank_name_4, bank_account_no_4, bank_account_name_4, bank_name_5, bank_account_no_5, bank_account_name_5')
       .eq('id', 1)
       .maybeSingle(),
   ])
@@ -180,6 +181,13 @@ export async function getAdminTenantPortalDashboard(roomId: string): Promise<Adm
     }
   }))
 
+  const roomRowNum = contract.rooms?.room_number ? roomRow(contract.rooms.room_number) : 0
+  const s = settings as Record<string, string | null> | null
+  const suffix = roomRowNum >= 1 && roomRowNum <= 5 ? `_${roomRowNum}` : ''
+  const bankName    = (suffix ? s?.[`bank_name${suffix}`]         : s?.bank_name)         ?? null
+  const accountNo   = (suffix ? s?.[`bank_account_no${suffix}`]   : s?.bank_account_no)   ?? null
+  const accountName = (suffix ? s?.[`bank_account_name${suffix}`] : s?.bank_account_name) ?? null
+
   return {
     success: true,
     data: {
@@ -198,11 +206,11 @@ export async function getAdminTenantPortalDashboard(roomId: string): Promise<Adm
         name: settings?.promptpay_name ?? null,
       },
       bankAccount: {
-        bankName:    settings?.bank_name         ?? null,
-        accountNo:   settings?.bank_account_no   ?? null,
-        accountName: settings?.bank_account_name ?? null,
+        bankName,
+        accountNo,
+        accountName,
       },
-      bankAccountRow: 0,
+      bankAccountRow: roomRowNum,
     },
   }
 }
