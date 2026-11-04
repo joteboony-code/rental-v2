@@ -538,6 +538,8 @@ function BillHistoryItem({ bill, adminPreview = false }: { bill: TenantPortalDat
         </Link>
       </div>
 
+      <MeterBlock bill={bill} />
+
       {bill.payments.length > 0 && (
         <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
           {bill.payments.map((p) => (
@@ -564,9 +566,8 @@ function UsageCharts({ bills }: { bills: TenantPortalData['bills'] }) {
   // bills จาก API เรียงตาม billing_month แล้ว ให้ไล่จากเก่าสุด -> ใหม่สุด
   const data = bills.map((b) => ({
     name: new Intl.DateTimeFormat('th-TH', { month: 'short', year: '2-digit' }).format(new Date(b.billing_month)),
-     ค่าน้ำ: Number(b.water_amount || 0),
-     ค่าไฟ: Number(b.electricity_amount || 0),
-    total: Number(b.total_amount || 0),
+    water: Number(b.meter?.water_units ?? 0),
+    electricity: Number(b.meter?.electricity_units ?? 0),
   }))
 
   if (data.length === 0) return null
@@ -575,7 +576,7 @@ function UsageCharts({ bills }: { bills: TenantPortalData['bills'] }) {
     <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
       <div className="mb-3 flex items-center gap-2">
         <Zap className="size-4 text-slate-400" />
-        <h2 className="text-sm font-semibold text-slate-800">แนวโน้มค่าใช้จ่ายรายเดือน</h2>
+        <h2 className="text-sm font-semibold text-slate-800">แนวโน้มการใช้รายเดือน (หน่วย)</h2>
       </div>
       <div className="h-64 w-full">
         <ResponsiveContainer width="100%" height="100%">
@@ -585,16 +586,16 @@ function UsageCharts({ bills }: { bills: TenantPortalData['bills'] }) {
             <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} tickLine={false} axisLine={false} width={44} />
             <Tooltip
               contentStyle={{ borderRadius: 12, border: '1px solid #e2e8f0', fontSize: 12 }}
-              formatter={(value) => `฿${money.format(Number(value))}`}
+              formatter={(value) => `${Number(value)} หน่วย`}
               labelStyle={{ fontWeight: 600 }}
             />
             <Legend wrapperStyle={{ fontSize: 12 }} />
-            <Line type="monotone" dataKey="ค่าน้ำ" name="ค่าน้ำ" stroke="#0ea5e9" strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} />
-            <Line type="monotone" dataKey="ค่าไฟ" name="ค่าไฟ" stroke="#f59e0b" strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+            <Line type="monotone" dataKey="water" name="น้ำ (หน่วย)" stroke="#0ea5e9" strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+            <Line type="monotone" dataKey="electricity" name="ไฟ (หน่วย)" stroke="#f59e0b" strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} />
           </LineChart>
         </ResponsiveContainer>
       </div>
-      <p className="mt-2 text-center text-xs text-slate-400">แสดงค่าน้ำและค่าไฟของบิลแต่ละเดือน</p>
+      <p className="mt-2 text-center text-xs text-slate-400">แสดงจำนวนหน่วยน้ำและไฟของบิลแต่ละเดือน</p>
     </section>
   )
 }
