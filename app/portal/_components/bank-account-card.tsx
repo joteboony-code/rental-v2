@@ -22,6 +22,24 @@ export function BankAccountCard({
   const { bankName, accountNo, accountName } = bankAccount
   const hasAccount = Boolean(accountNo)
 
+  const getBankStyle = () => {
+    if (!bankName) return { bg: 'bg-slate-50', text: 'text-slate-950', subText: 'text-slate-500', btn: 'bg-slate-950', border: 'border-slate-950' }
+    
+    const name = bankName.toLowerCase()
+    if (name.includes('กสิกร')) {
+      return { bg: 'bg-[#00A950]', text: 'text-white', subText: 'text-emerald-100', btn: 'bg-white text-[#00A950]', border: 'border-[#00A950]' }
+    }
+    if (name.includes('ttb') || name.includes('ทหารไทย')) {
+      return { bg: 'bg-[#0056B3]', text: 'text-white', subText: 'text-blue-100', btn: 'bg-white text-[#0056B3]', border: 'border-[#0056B3]' }
+    }
+    if (name.includes('กรุงศรี')) {
+      return { bg: 'bg-[#FFD700]', text: 'text-slate-900', subText: 'text-slate-700', btn: 'bg-slate-900 text-white', border: 'border-amber-500' }
+    }
+    return { bg: 'bg-slate-50', text: 'text-slate-950', subText: 'text-slate-500', btn: 'bg-slate-950', border: 'border-slate-950' }
+  }
+
+  const style = getBankStyle()
+
   async function handleCopy() {
     if (!accountNo) return
     try {
@@ -53,20 +71,20 @@ export function BankAccountCard({
         </p>
       </div>
 
-      <div className="mt-2 rounded-2xl border-2 border-slate-950 bg-slate-50 px-4 py-4 text-center">
+      <div className={`mt-2 rounded-2xl border-2 ${style.border} ${style.bg} px-4 py-4 text-center transition-colors`}>
         {bankName && (
-          <p className="text-sm font-semibold text-slate-700">{bankName}</p>
+          <p className={`text-sm font-semibold ${style.text}`}>{bankName}</p>
         )}
         {accountName && (
-          <p className="mt-0.5 text-xs text-slate-500">{accountName}</p>
+          <p className={`mt-0.5 text-xs ${style.subText}`}>{accountName}</p>
         )}
-        <p className="mt-1 break-all font-mono text-3xl font-extrabold tracking-wider text-slate-950">
+        <p className={`mt-1 break-all font-mono text-3xl font-extrabold tracking-wider ${style.text}`}>
           {accountNo}
         </p>
         <button
           type="button"
           onClick={handleCopy}
-          className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-3 text-base font-bold text-white transition-colors hover:bg-slate-800 active:scale-[0.99]"
+          className={`mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl ${style.btn} px-4 py-3 text-base font-bold transition-colors hover:opacity-90 active:scale-[0.99]`}
         >
           {copied ? <Check className="size-5 text-emerald-400" /> : <Copy className="size-5" />}
           {copied ? 'คัดลอกแล้ว' : 'คัดลอกเลขบัญชี'}
