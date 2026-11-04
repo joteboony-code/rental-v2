@@ -202,6 +202,7 @@ export async function getAdminTenantPortalDashboard(roomId: string): Promise<Adm
         accountNo:   settings?.bank_account_no   ?? null,
         accountName: settings?.bank_account_name ?? null,
       },
+      bankAccountRow: 0,
     },
   }
 }

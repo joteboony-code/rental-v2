@@ -36,7 +36,7 @@ export default async function PortalPage({
       .eq('id', billId)
       .single(),
     supabase.from('payments').select('amount, payment_method, paid_at').eq('bill_id', billId).order('paid_at'),
-    supabase.from('settings').select('promptpay_id, promptpay_name, bank_account_no, bank_account_name, bank_name').eq('id', 1).single(),
+    supabase.from('settings').select('promptpay_id, promptpay_name, bank_account_no, bank_account_name, bank_name, bank_name_1, bank_account_no_1, bank_account_name_1, bank_name_2, bank_account_no_2, bank_account_name_2, bank_name_3, bank_account_no_3, bank_account_name_3').eq('id', 1).single(),
   ])
 
   if (!bill) notFound()
@@ -198,23 +198,30 @@ export default async function PortalPage({
         )}
 
         {/* ชำระผ่านเลขบัญชี */}
-        {payable && (settings?.bank_account_no || settings?.promptpay_id) && (
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-0 overflow-hidden">
-            <BankAccountCard
-              bankAccount={{
-                bankName:    (settings as { bank_name?: string | null } | null)?.bank_name,
-                accountNo:   (settings as { bank_account_no?: string | null } | null)?.bank_account_no,
-                accountName: (settings as { bank_account_name?: string | null } | null)?.bank_account_name,
-              }}
-              amountLabel={`ชำระยอดคงเหลือ ฿${fmt(remaining)}`}
-            />
-            {!settings?.bank_account_no && settings?.promptpay_id && (
-              <p className="px-5 pb-4 text-center text-xs text-amber-600">
-                ยังไม่ได้ตั้งเลขบัญชี กรุณาใช้ QR PromptPay ด้านล่าง
-              </p>
-            )}
-          </div>
-        )}
+        {(() => {
+          const s = settings as Record<string, string | null> | null
+          const row = room ? roomRow(room.room_number) : 0
+          const pick = (num?: string | null, n1?: string | null, n2?: string | null, n3?: string | null) =>
+            row === 1 ? n1 : row === 2 ? n2 : row === 3 ? n3 : num
+          const bankName    = pick(s?.bank_name,    s?.bank_name_1,    s?.bank_name_2,    s?.bank_name_3)
+          const accountNo   = pick(s?.bank_account_no, s?.bank_account_no_1, s?.bank_account_no_2, s?.bank_account_no_3)
+          const accountName = pick(s?.bank_account_name, s?.bank_account_name_1, s?.bank_account_name_2, s?.bank_account_name_3)
+          const hasAccount = Boolean(accountNo) || Boolean(s?.promptpay_id)
+          if (!payable || !hasAccount) return null
+          return (
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-0 overflow-hidden">
+              <BankAccountCard
+                bankAccount={{ bankName, accountNo, accountName }}
+                amountLabel={`ชำระยอดคงเหลือ ฿${fmt(remaining)}`}
+              />
+              {!accountNo && s?.promptpay_id && (
+                <p className="px-5 pb-4 text-center text-xs text-amber-600">
+                  ยังไม่ได้ตั้งเลขบัญชี กรุณาใช้ QR PromptPay ด้านล่าง
+                </p>
+              )}
+            </div>
+          )
+        })()}
 
         {/* Footer */}
         <p className="text-center text-xs text-slate-400 pb-8">
