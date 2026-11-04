@@ -130,9 +130,9 @@ export async function updatePaymentSettings(
   const bankAccountName  = String(formData.get('bank_account_name') ?? '').trim()
   const bankName         = String(formData.get('bank_name') ?? '').trim()
 
-  // Dropdown: กรอกบัญชีของแถวที่เลือก แล้วบันทึกลงช่องแถวนั้น
+  // Dropdown: กรอกบัญชีของแถวที่เลือก แล้วบันทึกลงช่องแถวนั้น (รองรับ 5 แถว)
   const selectedRow = Number(formData.get('selected_row') ?? '1')
-  const row = (selectedRow >= 1 && selectedRow <= 3) ? selectedRow : 1
+  const row = (selectedRow >= 1 && selectedRow <= 5) ? selectedRow : 1
   const targetName = `bank_name_${row}`
   const targetNo   = `bank_account_no_${row}`
   const targetAcc  = `bank_account_name_${row}`
@@ -175,7 +175,9 @@ export async function updatePaymentSettings(
 
   const rowCols = ['bank_name_1','bank_account_no_1','bank_account_name_1',
     'bank_name_2','bank_account_no_2','bank_account_name_2',
-    'bank_name_3','bank_account_no_3','bank_account_name_3']
+    'bank_name_3','bank_account_no_3','bank_account_name_3',
+    'bank_name_4','bank_account_no_4','bank_account_name_4',
+    'bank_name_5','bank_account_no_5','bank_account_name_5']
 
   const { data: before } = await supabase
     .from('settings').select('promptpay_id, bank_accounts_text, bank_account_no, bank_account_name, bank_name, ' + rowCols.join(', ')).eq('id', 1).single() as { data: Record<string, string | null> | null }

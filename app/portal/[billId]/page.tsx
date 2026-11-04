@@ -36,7 +36,7 @@ export default async function PortalPage({
       .eq('id', billId)
       .single(),
     supabase.from('payments').select('amount, payment_method, paid_at').eq('bill_id', billId).order('paid_at'),
-    supabase.from('settings').select('promptpay_id, promptpay_name, bank_account_no, bank_account_name, bank_name, bank_name_1, bank_account_no_1, bank_account_name_1, bank_name_2, bank_account_no_2, bank_account_name_2, bank_name_3, bank_account_no_3, bank_account_name_3').eq('id', 1).single(),
+    supabase.from('settings').select('promptpay_id, promptpay_name, bank_account_no, bank_account_name, bank_name, bank_name_1, bank_account_no_1, bank_account_name_1, bank_name_2, bank_account_no_2, bank_account_name_2, bank_name_3, bank_account_no_3, bank_account_name_3, bank_name_4, bank_account_no_4, bank_account_name_4, bank_name_5, bank_account_no_5, bank_account_name_5').eq('id', 1).single(),
   ])
 
   if (!bill) notFound()
@@ -201,11 +201,11 @@ export default async function PortalPage({
         {(() => {
           const s = settings as Record<string, string | null> | null
           const row = room ? roomRow(room.room_number) : 0
-          const pick = (num?: string | null, n1?: string | null, n2?: string | null, n3?: string | null) =>
-            row === 1 ? n1 : row === 2 ? n2 : row === 3 ? n3 : num
-          const bankName    = pick(s?.bank_name,    s?.bank_name_1,    s?.bank_name_2,    s?.bank_name_3)
-          const accountNo   = pick(s?.bank_account_no, s?.bank_account_no_1, s?.bank_account_no_2, s?.bank_account_no_3)
-          const accountName = pick(s?.bank_account_name, s?.bank_account_name_1, s?.bank_account_name_2, s?.bank_account_name_3)
+          // เลือกบัญชีตามแถวห้อง (รองรบั 5 แถว)
+          const suffix = row >= 1 && row <= 5 ? `_${row}` : ''
+          const bankName    = (suffix ? s?.[`bank_name${suffix}`]         : s?.bank_name)         ?? null
+          const accountNo   = (suffix ? s?.[`bank_account_no${suffix}`]   : s?.bank_account_no)   ?? null
+          const accountName = (suffix ? s?.[`bank_account_name${suffix}`] : s?.bank_account_name) ?? null
           const hasAccount = Boolean(accountNo) || Boolean(s?.promptpay_id)
           if (!payable || !hasAccount) return null
           return (

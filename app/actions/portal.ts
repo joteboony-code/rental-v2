@@ -213,7 +213,7 @@ export async function getTenantPortalDashboard(portalToken: string, roomId?: str
 
   const svc2 = createServiceClient()
   const { data: settings } = await svc2.from('settings')
-    .select('promptpay_id, promptpay_name, bank_account_no, bank_account_name, bank_name, bank_name_1, bank_account_no_1, bank_account_name_1, bank_name_2, bank_account_no_2, bank_account_name_2, bank_name_3, bank_account_no_3, bank_account_name_3')
+    .select('promptpay_id, promptpay_name, bank_account_no, bank_account_name, bank_name, bank_name_1, bank_account_no_1, bank_account_name_1, bank_name_2, bank_account_no_2, bank_account_name_2, bank_name_3, bank_account_no_3, bank_account_name_3, bank_name_4, bank_account_no_4, bank_account_name_4, bank_name_5, bank_account_no_5, bank_account_name_5')
     .eq('id', 1).maybeSingle()
 
   // Generate short-lived signed URLs for payment slips (bucket เป็น private)
@@ -242,12 +242,11 @@ export async function getTenantPortalDashboard(portalToken: string, roomId?: str
   const roomNumber = portalData.room?.room_number
   const row = roomNumber ? roomRow(roomNumber) : 0
   const s = settings as Record<string, string | null> | null
-  const pick = (num: string | null | undefined, n1: string | null | undefined, n2: string | null | undefined, n3: string | null | undefined) =>
-    row === 1 ? n1 : row === 2 ? n2 : row === 3 ? n3 : num
-
-  const selectedBankName    = pick(s?.bank_name,    s?.bank_name_1,    s?.bank_name_2,    s?.bank_name_3)
-  const selectedAccountNo   = pick(s?.bank_account_no, s?.bank_account_no_1, s?.bank_account_no_2, s?.bank_account_no_3)
-  const selectedAccountName = pick(s?.bank_account_name, s?.bank_account_name_1, s?.bank_account_name_2, s?.bank_account_name_3)
+  // เลือกบัญชีตามแถวห้อง (รองรับ 5 แถว)
+  const suffix = row >= 1 && row <= 5 ? `_${row}` : ''
+  const selectedBankName    = (suffix ? s?.[`bank_name${suffix}`]       : s?.bank_name)          ?? null
+  const selectedAccountNo   = (suffix ? s?.[`bank_account_no${suffix}`] : s?.bank_account_no)   ?? null
+  const selectedAccountName = (suffix ? s?.[`bank_account_name${suffix}`] : s?.bank_account_name) ?? null
 
   return {
     success: true,
