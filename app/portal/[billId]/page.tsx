@@ -2,7 +2,8 @@ export const dynamic = 'force-dynamic'
 
 import { notFound } from 'next/navigation'
 import { createServiceClient } from '@/lib/supabase/service'
-import { Droplets, Zap, Wifi, Trash2, User, Phone, CheckCircle, Clock, AlertTriangle } from 'lucide-react'
+import { createSignedStorageUrl } from '@/lib/storage-urls'
+import { Droplets, Zap, Wifi, Trash2, User, Phone, CheckCircle, Clock, AlertTriangle, Camera } from 'lucide-react'
 import { roomRow } from '@/lib/room-utils'
 import { verifyBillToken } from '@/lib/portal-url'
 import { isBillPayable } from '@/lib/billing'
@@ -31,7 +32,7 @@ export default async function PortalPage({
         *,
         rooms   ( room_number, floor ),
         tenants ( full_name, phone ),
-        meter_readings ( water_prev, water_curr, water_units, electricity_prev, electricity_curr, electricity_units )
+        meter_readings ( water_prev, water_curr, water_units, electricity_prev, electricity_curr, electricity_units, water_image_url, electricity_image_url )
       `)
       .eq('id', billId)
       .single(),
@@ -43,11 +44,22 @@ export default async function PortalPage({
 
   type RoomJoin   = { room_number: string; floor: number | null }
   type TenantJoin = { full_name: string; phone: string | null }
-  type MeterJoin  = { water_prev: number; water_curr: number; water_units: number; electricity_prev: number; electricity_curr: number; electricity_units: number }
+  type MeterJoin  = { water_prev: number; water_curr: number; water_units: number; electricity_prev: number; electricity_curr: number; electricity_units: number; water_image_url: string | null; electricity_image_url: string | null }
 
   const room   = bill.rooms          as unknown as RoomJoin   | null
   const tenant = bill.tenants        as unknown as TenantJoin | null
   const meter  = bill.meter_readings as unknown as MeterJoin  | null
+
+  // สร้าง signed URLs สำหรับภาพมิเตอร์ (bucket เป็น private → ต้องมีอายุสั้น)
+  const meterImg = { water: null as string | null, electricity: null as string | null }
+  if (meter) {
+    const [w, e] = await Promise.all([
+      createSignedStorageUrl(supabase, 'meter-photos', meter.water_image_url, 3600),
+      createSignedStorageUrl(supabase, 'meter-photos', meter.electricity_image_url, 3600),
+    ])
+    meterImg.water = w
+    meterImg.electricity = e
+  }
 
   const totalPaid = (payments ?? []).reduce((s, p) => s + Number(p.amount), 0)
   const remaining = Math.max(0, Number(bill.total_amount) - totalPaid)
@@ -178,6 +190,32 @@ export default async function PortalPage({
             </p>
           </div>
         </div>
+
+        {/* รูปมิเตอร์ */}
+        {(meterImg.water || meterImg.electricity) && (
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4">
+            <div className="mb-3 flex items-center gap-2">
+              <Camera className="size-4 text-slate-400" />
+              <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-widest">รูปมิเตอร์เดือนนี้</h2>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              {meterImg.water && (
+                <a href={meterImg.water} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-xl border border-slate-100">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={meterImg.water} alt="รูปมิเตอร์น้ำ" className="aspect-square w-full object-cover" />
+                  <p className="bg-slate-50 px-2 py-1.5 text-center text-xs text-slate-500">มิเตอร์น้ำ</p>
+                </a>
+              )}
+              {meterImg.electricity && (
+                <a href={meterImg.electricity} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-xl border border-slate-100">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={meterImg.electricity} alt="รูปมิเตอร์ไฟ" className="aspect-square w-full object-cover" />
+                  <p className="bg-slate-50 px-2 py-1.5 text-center text-xs text-slate-500">มิเตอร์ไฟ</p>
+                </a>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Payment status */}
         {totalPaid > 0 && (
