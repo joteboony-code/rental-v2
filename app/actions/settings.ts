@@ -130,14 +130,12 @@ export async function updatePaymentSettings(
   const bankAccountName  = String(formData.get('bank_account_name') ?? '').trim()
   const bankName         = String(formData.get('bank_name') ?? '').trim()
 
-  // บัญชีต่อแถว (row 1-3)
-  const rows = [1, 2, 3]
-  const bankByRow: Record<string, string> = {}
-  for (const row of rows) {
-    bankByRow[`bank_name_${row}`]         = String(formData.get(`bank_name_${row}`) ?? '').trim()
-    bankByRow[`bank_account_no_${row}`]   = String(formData.get(`bank_account_no_${row}`) ?? '').trim()
-    bankByRow[`bank_account_name_${row}`] = String(formData.get(`bank_account_name_${row}`) ?? '').trim()
-  }
+  // Dropdown: กรอกบัญชีของแถวที่เลือก แล้วบันทึกลงช่องแถวนั้น
+  const selectedRow = Number(formData.get('selected_row') ?? '1')
+  const row = (selectedRow >= 1 && selectedRow <= 3) ? selectedRow : 1
+  const targetName = `bank_name_${row}`
+  const targetNo   = `bank_account_no_${row}`
+  const targetAcc  = `bank_account_name_${row}`
 
   if (!currentPassword) return { message: 'กรุณายืนยันรหัสผ่านก่อนบันทึก' }
 
@@ -182,26 +180,27 @@ export async function updatePaymentSettings(
   const { data: before } = await supabase
     .from('settings').select('promptpay_id, bank_accounts_text, bank_account_no, bank_account_name, bank_name, ' + rowCols.join(', ')).eq('id', 1).single() as { data: Record<string, string | null> | null }
 
-  const rowUpdate: Record<string, string | null> = {}
-  for (const c of rowCols) rowUpdate[c] = bankByRow[c] || null
+  // บันทึก promptpay + bank_accounts_text + เฉพาะแถวที่เลือกใน drop-down
+  const rowUpdate: Record<string, string | null> = {
+    [targetName]: bankName || null,
+    [targetNo]:   bankAccountNo || null,
+    [targetAcc]:  bankAccountName || null,
+  }
 
   const { error } = await supabase
     .from('settings')
     .update({
       promptpay_id: promptpayId, promptpay_name: promptpayName, bank_accounts_text: bankAccountsText || null,
-      bank_account_no: bankAccountNo || null,
-      bank_account_name: bankAccountName || null,
-      bank_name: bankName || null,
       ...rowUpdate,
     })
     .eq('id', 1)
 
   if (error) return { message: `เกิดข้อผิดพลาด: ${error.message}` }
 
-  const changed = Object.keys(rowUpdate).some((c) => bankByRow[c] !== (before?.[c as keyof typeof before] ?? ''))
-    || promptpayId !== (before?.promptpay_id ?? '') || bankAccountsText !== (before?.bank_accounts_text ?? '')
-    || bankAccountNo !== (before?.bank_account_no ?? '') || bankAccountName !== (before?.bank_account_name ?? '')
-    || bankName !== (before?.bank_name ?? '')
+  const changed =
+    promptpayId !== (before?.promptpay_id ?? '') || promptpayName !== (before?.promptpay_name ?? '')
+    || bankAccountsText !== (before?.bank_accounts_text ?? '')
+    || Object.keys(rowUpdate).some((c) => rowUpdate[c] !== (before?.[c as keyof typeof before] ?? null))
 
   if (changed) {
     logAudit({
@@ -209,21 +208,15 @@ export async function updatePaymentSettings(
       entityType: 'settings',
       entityId: '1',
       oldValue: {
-        promptpay_id: before?.promptpay_id, bank_accounts_text: before?.bank_accounts_text,
-        bank_account_no: before?.bank_account_no, bank_account_name: before?.bank_account_name, bank_name: before?.bank_name,
-        ...Object.fromEntries(rowCols.map((c) => [c, before?.[c as keyof typeof before] ?? null])),
+        ...Object.fromEntries(Object.keys(rowUpdate).map((c) => [c, before?.[c as keyof typeof before] ?? null])),
       },
-      newValue: {
-        promptpay_id: promptpayId, bank_accounts_text: bankAccountsText,
-        bank_account_no: bankAccountNo, bank_account_name: bankAccountName, bank_name: bankName,
-        ...Object.fromEntries(rowCols.map((c) => [c, bankByRow[c] || null])),
-      },
-      description: `เปลี่ยนข้อมูลบัญชี/PromptPay (ยืนยัน${totp ? 'รหัสผ่าน + OTP' : 'รหัสผ่าน'}แล้ว)`,
+      newValue: rowUpdate,
+      description: `เปลี่ยนข้อมูลบัญชีแถวที่ ${row} (ยืนยัน${totp ? 'รหัสผ่าน + OTP' : 'รหัสผ่าน'}แล้ว)`,
     }).catch(() => {})
   }
 
   revalidatePath('/settings')
-  return { success: true, message: 'บันทึกข้อมูลการชำระเงินแล้ว' }
+  return { success: true, message: `บันทึกข้อมูลการชำระเงินของแถวที่ ${row} แล้ว` }
 }
 
 // ─── Change password + sign out all devices ─────────────────
