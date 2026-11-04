@@ -13,7 +13,9 @@ interface Props {
     | 'bank_name' | 'bank_account_no' | 'bank_account_name'
     | 'bank_name_1' | 'bank_account_no_1' | 'bank_account_name_1'
     | 'bank_name_2' | 'bank_account_no_2' | 'bank_account_name_2'
-    | 'bank_name_3' | 'bank_account_no_3' | 'bank_account_name_3'>
+    | 'bank_name_3' | 'bank_account_no_3' | 'bank_account_name_3'
+    | 'bank_name_4' | 'bank_account_no_4' | 'bank_account_name_4'
+    | 'bank_name_5' | 'bank_account_no_5' | 'bank_account_name_5'>
   mfaEnabled?: boolean
 }
 
@@ -21,6 +23,8 @@ const ROW_KEYS = {
   '1': { name: 'bank_name_1', no: 'bank_account_no_1', accountName: 'bank_account_name_1' },
   '2': { name: 'bank_name_2', no: 'bank_account_no_2', accountName: 'bank_account_name_2' },
   '3': { name: 'bank_name_3', no: 'bank_account_no_3', accountName: 'bank_account_name_3' },
+  '4': { name: 'bank_name_4', no: 'bank_account_no_4', accountName: 'bank_account_name_4' },
+  '5': { name: 'bank_name_5', no: 'bank_account_no_5', accountName: 'bank_account_name_5' },
 } as const
 
 export function PaymentSettingsForm({ settings, mfaEnabled }: Props) {
@@ -71,7 +75,7 @@ export function PaymentSettingsForm({ settings, mfaEnabled }: Props) {
           <div className="border-t border-slate-100 pt-4 space-y-4">
             <div>
               <p className="text-xs font-semibold text-slate-500">เลขบัญชีต่อแถว สำหรับชำระใน Portal (แสดงเฉพาะบัญชีที่ตรงแถวห้องของผู้เช่า)</p>
-              <p className="mt-1 text-xs text-slate-400">แถวที่ 1 = ห้อง 1–10 · แถวที่ 2 = ห้อง 11–20 · แถวที่ 3 = ห้อง 21–30</p>
+              <p className="mt-1 text-xs text-slate-400">แถวที่ 1 = ห้อง 1–10 · แถวที่ 2 = ห้อง 11–20 · แถวที่ 3 = ห้อง 21–30· แถวที่ 4 = ห้อง 31–40 ·  แถวที่ 5 = ห้อง 41–50</p>
             </div>
 
             <div className="space-y-1.5">
@@ -85,6 +89,8 @@ export function PaymentSettingsForm({ settings, mfaEnabled }: Props) {
                 <option value="1">แถวที่ 1 (ห้อง 1–10)</option>
                 <option value="2">แถวที่ 2 (ห้อง 11–20)</option>
                 <option value="3">แถวที่ 3 (ห้อง 21–30)</option>
+                <option value="4">แถวที่ 4 (ห้อง 31–40)</option>
+                <option value="5">แถวที่ 5 (ห้อง 41–50)</option>
               </select>
               <p className="text-xs text-slate-400">เลือกแถวที่ต้องการ แล้วกรอกบัญชีของแถวนั้น กดบันทึก</p>
             </div>

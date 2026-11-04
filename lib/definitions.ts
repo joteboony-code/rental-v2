@@ -335,6 +335,12 @@ export type Settings = {
   bank_name_3:                    string | null
   bank_account_no_3:              string | null
   bank_account_name_3:            string | null
+  bank_name_4:                    string | null
+  bank_account_no_4:              string | null
+  bank_account_name_4:            string | null
+  bank_name_5:                    string | null
+  bank_account_no_5:              string | null
+  bank_account_name_5:            string | null
   owner_name:                     string | null
   owner_id_card:                  string | null
   owner_address:                  string | null
