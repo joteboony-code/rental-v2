@@ -9,7 +9,11 @@ import { updatePaymentSettings } from '@/app/actions/settings'
 import type { Settings } from '@/lib/definitions'
 
 interface Props {
-  settings?: Pick<Settings, 'promptpay_id' | 'promptpay_name' | 'bank_accounts_text' | 'bank_account_no' | 'bank_account_name' | 'bank_name'>
+  settings?: Pick<Settings, 'promptpay_id' | 'promptpay_name' | 'bank_accounts_text'
+    | 'bank_name' | 'bank_account_no' | 'bank_account_name'
+    | 'bank_name_1' | 'bank_account_no_1' | 'bank_account_name_1'
+    | 'bank_name_2' | 'bank_account_no_2' | 'bank_account_name_2'
+    | 'bank_name_3' | 'bank_account_no_3' | 'bank_account_name_3'>
   mfaEnabled?: boolean
 }
 
@@ -51,40 +55,48 @@ export function PaymentSettingsForm({ settings, mfaEnabled }: Props) {
             </div>
           </div>
 
-          <div className="border-t border-slate-100 pt-4 space-y-4">
-            <p className="text-xs font-semibold text-slate-500">เลขบัญชีสำหรับชำระใน Portal (แสดงให้ผู้เช่าคัดลอก)</p>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label className="text-sm font-medium text-slate-700">ชื่อธนาคาร</Label>
-                <Input
-                  name="bank_name"
-                  defaultValue={settings?.bank_name ?? ''}
-                  placeholder="เช่น กสิกรไทย / ttb / กรุงศรี"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-sm font-medium text-slate-700">เลขบัญชี</Label>
-                <div className="relative">
-                  <Banknote className="absolute left-3 top-2.5 size-4 text-slate-400" />
+          <div className="border-t border-slate-100 pt-4 space-y-6">
+            <div>
+              <p className="text-xs font-semibold text-slate-500">เลขบัญชีต่อแถว สำหรับชำระใน Portal (แสดงเฉพาะบัญชีที่ตรงแถวห้องของผู้เช่า)</p>
+              <p className="mt-1 text-xs text-slate-400">แถวที่ 1 = ห้อง 1–10 · แถวที่ 2 = ห้อง 11–20 · แถวที่ 3 = ห้อง 21–30</p>
+            </div>
+
+            {[1, 2, 3].map((row) => (
+              <div key={row} className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4 space-y-3">
+                <p className="text-sm font-bold text-slate-700">แถวที่ {row}</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-sm font-medium text-slate-700">ชื่อธนาคาร</Label>
+                    <Input
+                      name={`bank_name_${row}`}
+                      defaultValue={settings?.[`bank_name_${row}` as keyof typeof settings] as string | undefined ?? ''}
+                      placeholder={row === 1 ? 'เช่น กสิกรไทย' : row === 2 ? 'เช่น กรุงศรี' : 'เช่น TTB'}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-sm font-medium text-slate-700">เลขบัญชี</Label>
+                    <div className="relative">
+                      <Banknote className="absolute left-3 top-2.5 size-4 text-slate-400" />
+                      <Input
+                        name={`bank_account_no_${row}`}
+                        defaultValue={settings?.[`bank_account_no_${row}` as keyof typeof settings] as string | undefined ?? ''}
+                        placeholder="เช่น 9197253892"
+                        className="pl-9 font-mono"
+                        inputMode="numeric"
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-sm font-medium text-slate-700">ชื่อบัญชี</Label>
                   <Input
-                    name="bank_account_no"
-                    defaultValue={settings?.bank_account_no ?? ''}
-                    placeholder="เช่น 9197253892"
-                    className="pl-9 font-mono"
-                    inputMode="numeric"
+                    name={`bank_account_name_${row}`}
+                    defaultValue={settings?.[`bank_account_name_${row}` as keyof typeof settings] as string | undefined ?? ''}
+                    placeholder="เช่น นายไพศาล ใจดี"
                   />
                 </div>
-                <p className="text-xs text-slate-400">ตัวเลขล้วน คัดลอกไปโอนได้เลย</p>
               </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-sm font-medium text-slate-700">ชื่อบัญชี</Label>
-              <Input
-                name="bank_account_name"
-                defaultValue={settings?.bank_account_name ?? ''}
-                placeholder="เช่น นายไพศาล ใจดี"
-              />
-            </div>
+            ))}
           </div>
 
           <div className="space-y-1.5">

@@ -11,6 +11,7 @@ const ALLOWED_REPAIR_PHOTO_TYPES: Record<string, string> = {
 }
 import { signPortalToken, verifyPortalToken } from '@/lib/portal-session'
 import { buildBillDetailPath } from '@/lib/portal-url'
+import { roomRow } from '@/lib/room-utils'
 import { isRateLimited } from '@/lib/rate-limit'
 import { notifyOwner } from '@/lib/notify-owner'
 import { createSignedStorageUrl } from '@/lib/storage-urls'
@@ -73,6 +74,7 @@ export type TenantPortalData = {
     accountNo: string | null
     accountName: string | null
   }
+  bankAccountRow: number
 }
 
 type PortalResult =
@@ -211,7 +213,7 @@ export async function getTenantPortalDashboard(portalToken: string, roomId?: str
 
   const svc2 = createServiceClient()
   const { data: settings } = await svc2.from('settings')
-    .select('promptpay_id, promptpay_name, bank_account_no, bank_account_name, bank_name')
+    .select('promptpay_id, promptpay_name, bank_account_no, bank_account_name, bank_name, bank_name_1, bank_account_no_1, bank_account_name_1, bank_name_2, bank_account_no_2, bank_account_name_2, bank_name_3, bank_account_no_3, bank_account_name_3')
     .eq('id', 1).maybeSingle()
 
   // Generate short-lived signed URLs for payment slips (bucket เป็น private)
@@ -237,19 +239,30 @@ export async function getTenantPortalDashboard(portalToken: string, roomId?: str
     }
   }
 
+  const roomNumber = portalData.room?.room_number
+  const row = roomNumber ? roomRow(roomNumber) : 0
+  const s = settings as Record<string, string | null> | null
+  const pick = (num: string | null | undefined, n1: string | null | undefined, n2: string | null | undefined, n3: string | null | undefined) =>
+    row === 1 ? n1 : row === 2 ? n2 : row === 3 ? n3 : num
+
+  const selectedBankName    = pick(s?.bank_name,    s?.bank_name_1,    s?.bank_name_2,    s?.bank_name_3)
+  const selectedAccountNo   = pick(s?.bank_account_no, s?.bank_account_no_1, s?.bank_account_no_2, s?.bank_account_no_3)
+  const selectedAccountName = pick(s?.bank_account_name, s?.bank_account_name_1, s?.bank_account_name_2, s?.bank_account_name_3)
+
   return {
     success: true,
     data: {
       ...portalData,
       promptpay: {
-        id:   (settings as { promptpay_id?: string | null } | null)?.promptpay_id   ?? null,
-        name: (settings as { promptpay_name?: string | null } | null)?.promptpay_name ?? null,
+        id:   s?.promptpay_id ?? null,
+        name: s?.promptpay_name ?? null,
       },
       bankAccount: {
-        bankName:    (settings as { bank_name?: string | null } | null)?.bank_name         ?? null,
-        accountNo:   (settings as { bank_account_no?: string | null } | null)?.bank_account_no   ?? null,
-        accountName: (settings as { bank_account_name?: string | null } | null)?.bank_account_name ?? null,
+        bankName:    selectedBankName    ?? null,
+        accountNo:   selectedAccountNo   ?? null,
+        accountName: selectedAccountName ?? null,
       },
+      bankAccountRow: row,
     },
   }
 }
