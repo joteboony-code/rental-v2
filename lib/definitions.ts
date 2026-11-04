@@ -289,6 +289,9 @@ export type SettingsFormState =
         due_day?:                      string[]
         promptpay_id?:                 string[]
         promptpay_name?:               string[]
+        bank_account_no?:              string[]
+        bank_account_name?:            string[]
+        bank_name?:                    string[]
         line_channel_access_token?:    string[]
         line_channel_secret?:          string[]
         line_oa_basic_id?:             string[]
@@ -320,6 +323,9 @@ export type Settings = {
   anomaly_threshold_pct:          number    // % increase to flag as anomaly
   slipok_branch_id:               string | null
   bank_accounts_text:             string | null
+  bank_account_no:                string | null
+  bank_account_name:              string | null
+  bank_name:                      string | null
   owner_name:                     string | null
   owner_id_card:                  string | null
   owner_address:                  string | null

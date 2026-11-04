@@ -107,7 +107,7 @@ export async function getAdminTenantPortalDashboard(roomId: string): Promise<Adm
       .limit(24),
     supabase
       .from('settings')
-      .select('promptpay_id, promptpay_name')
+      .select('promptpay_id, promptpay_name, bank_account_no, bank_account_name, bank_name')
       .eq('id', 1)
       .maybeSingle(),
   ])
@@ -196,6 +196,11 @@ export async function getAdminTenantPortalDashboard(roomId: string): Promise<Adm
       promptpay: {
         id: settings?.promptpay_id ?? null,
         name: settings?.promptpay_name ?? null,
+      },
+      bankAccount: {
+        bankName:    settings?.bank_name         ?? null,
+        accountNo:   settings?.bank_account_no   ?? null,
+        accountName: settings?.bank_account_name ?? null,
       },
     },
   }

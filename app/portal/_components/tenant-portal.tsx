@@ -2,7 +2,6 @@
 
 import Script from 'next/script'
 import Link from 'next/link'
-import dynamic from 'next/dynamic'
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import {
   AlertCircle, CalendarDays, CheckCircle2, Clock,
@@ -10,10 +9,6 @@ import {
   Wallet, Wrench, Wifi, Trash2, Zap,
 } from 'lucide-react'
 
-const PromptPayQR = dynamic(
-  () => import('@/app/(dashboard)/bills/[id]/_components/promptpay-qr').then((m) => m.PromptPayQR),
-  { ssr: false }
-)
 import { getTenantPortalDashboard, getPortalRepairs, getPortalRooms, verifyAndGetPortalToken, type TenantPortalData, type PortalRepairItem, type PortalRoom } from '@/app/actions/portal'
 import { getAdminPortalRepairs, getAdminPortalRooms, getAdminTenantPortalDashboard } from '@/app/actions/portal-admin'
 import { roomRow } from '@/lib/room-utils'
@@ -21,6 +16,7 @@ import { isBillPayable } from '@/lib/billing'
 import { Badge } from '@/components/ui/badge'
 import { RepairSubmit } from './repair-submit'
 import { RepairHistory } from './repair-history'
+import { BankAccountCard } from './bank-account-card'
 import type { LiffClient } from '@/lib/liff-types'
 
 declare global { interface Window { liff?: LiffClient } }
@@ -309,7 +305,7 @@ export function TenantPortal({ liffId, adminPreview = false, initialRoomId }: Te
                     ยังไม่พบสัญญาเช่าที่กำลังใช้งาน
                   </div>
                 )}
-                {currentBill && <CurrentBillCard bill={currentBill} promptpay={data.promptpay} paymentAmount={totalOutstanding} />}
+                {currentBill && <CurrentBillCard bill={currentBill} bankAccount={data.bankAccount} paymentAmount={totalOutstanding} />}
                 <section className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
                   <div className="mb-3 flex items-center gap-2">
                     <Clock className="size-4 text-slate-400" />
@@ -409,11 +405,11 @@ function PortalLoadingState({ status }: { status: string }) {
 
 function CurrentBillCard({
   bill,
-  promptpay,
+  bankAccount,
   paymentAmount,
 }: {
   bill: TenantPortalData['bills'][number]
-  promptpay: TenantPortalData['promptpay']
+  bankAccount: TenantPortalData['bankAccount']
   paymentAmount: number
 }) {
   return (
@@ -451,18 +447,11 @@ function CurrentBillCard({
         <span className="text-sm font-semibold text-slate-800">{dateFmt.format(new Date(bill.due_date))}</span>
       </div>
 
-      {paymentAmount > 0 && promptpay.id && (
+      {paymentAmount > 0 && bankAccount.accountNo && (
         <div className="mt-4 border-t border-slate-100 pt-4">
-          <p className="mb-1 text-xs font-semibold uppercase tracking-widest text-slate-400">สแกน QR ชำระยอดค้างทั้งหมด</p>
-          {paymentAmount > bill.remaining_amount && (
-            <p className="mb-3 text-xs text-amber-600">
-              รวมบิลเดือนก่อนแล้ว ฿{money.format(paymentAmount)}
-            </p>
-          )}
-          <PromptPayQR
-            promptpayId={promptpay.id}
-            promptpayName={promptpay.name ?? ''}
-            amount={paymentAmount}
+          <BankAccountCard
+            bankAccount={bankAccount}
+            amountLabel={`ชำระยอดค้างทั้งหมด ฿${money.format(paymentAmount)}`}
           />
         </div>
       )}
