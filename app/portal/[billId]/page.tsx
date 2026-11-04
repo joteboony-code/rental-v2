@@ -6,7 +6,7 @@ import { Droplets, Zap, Wifi, Trash2, User, Phone, CheckCircle, Clock, AlertTria
 import { roomRow } from '@/lib/room-utils'
 import { verifyBillToken } from '@/lib/portal-url'
 import { isBillPayable } from '@/lib/billing'
-import { QRWrapper } from './_components/qr-wrapper'
+import { BankAccountCard } from '../_components/bank-account-card'
 
 export default async function PortalPage({
   params,
@@ -36,7 +36,7 @@ export default async function PortalPage({
       .eq('id', billId)
       .single(),
     supabase.from('payments').select('amount, payment_method, paid_at').eq('bill_id', billId).order('paid_at'),
-    supabase.from('settings').select('promptpay_id, promptpay_name').eq('id', 1).single(),
+    supabase.from('settings').select('promptpay_id, promptpay_name, bank_account_no, bank_account_name, bank_name').eq('id', 1).single(),
   ])
 
   if (!bill) notFound()
@@ -197,15 +197,22 @@ export default async function PortalPage({
           </div>
         )}
 
-        {/* QR PromptPay */}
-        {payable && settings?.promptpay_id && (
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
-            <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-4 text-center">ชำระผ่าน QR PromptPay</p>
-            <QRWrapper
-              promptpayId={settings.promptpay_id}
-              promptpayName={settings.promptpay_name ?? 'ห้องเช่า'}
-              amount={remaining}
+        {/* ชำระผ่านเลขบัญชี */}
+        {payable && (settings?.bank_account_no || settings?.promptpay_id) && (
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-0 overflow-hidden">
+            <BankAccountCard
+              bankAccount={{
+                bankName:    (settings as { bank_name?: string | null } | null)?.bank_name,
+                accountNo:   (settings as { bank_account_no?: string | null } | null)?.bank_account_no,
+                accountName: (settings as { bank_account_name?: string | null } | null)?.bank_account_name,
+              }}
+              amountLabel={`ชำระยอดคงเหลือ ฿${fmt(remaining)}`}
             />
+            {!settings?.bank_account_no && settings?.promptpay_id && (
+              <p className="px-5 pb-4 text-center text-xs text-amber-600">
+                ยังไม่ได้ตั้งเลขบัญชี กรุณาใช้ QR PromptPay ด้านล่าง
+              </p>
+            )}
           </div>
         )}
 

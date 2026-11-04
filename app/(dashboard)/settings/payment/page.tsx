@@ -10,7 +10,7 @@ export default async function PaymentSettingsPage() {
   const [{ data: settings }, { data: factors }] = await Promise.all([
     supabase
       .from('settings')
-      .select('promptpay_id, promptpay_name, bank_accounts_text, owner_signature_url')
+      .select('promptpay_id, promptpay_name, bank_accounts_text, bank_account_no, bank_account_name, bank_name, owner_signature_url')
       .eq('id', 1)
       .single(),
     supabase.auth.mfa.listFactors(),

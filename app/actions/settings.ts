@@ -126,12 +126,20 @@ export async function updatePaymentSettings(
   const promptpayId      = String(formData.get('promptpay_id') ?? '').trim()
   const promptpayName    = String(formData.get('promptpay_name') ?? '').trim() || 'ห้องเช่า'
   const bankAccountsText = String(formData.get('bank_accounts_text') ?? '').trim()
+  const bankAccountNo    = String(formData.get('bank_account_no') ?? '').trim()
+  const bankAccountName  = String(formData.get('bank_account_name') ?? '').trim()
+  const bankName         = String(formData.get('bank_name') ?? '').trim()
 
   if (!currentPassword) return { message: 'กรุณายืนยันรหัสผ่านก่อนบันทึก' }
 
   // PromptPay ID: เบอร์มือถือ 10 หลัก (0xxxxxxxxx) หรือเลขบัตร/นิติบุคคล 13 หลัก หรือเว้นว่างได้
   if (promptpayId && !/^(0\d{9}|\d{13})$/.test(promptpayId)) {
     return { message: 'รหัส PromptPay ต้องเป็นเบอร์มือถือ 10 หลัก (0xxxxxxxxx) หรือเลขบัตรประชาชน/นิติบุคคล 13 หลัก' }
+  }
+
+  // เลขบัญชี: ตัวเลขหรือมีขีดคั่นได้ (เช่น 9197253892 หรือ 919-7-253892)
+  if (bankAccountNo && !/^[\d\s-]+$/.test(bankAccountNo.replace(/\./g, ''))) {
+    return { message: 'เลขบัญชีกรอกได้เฉพาะตัวเลขและเครื่องหมายขีด (-)' }
   }
 
   const user = await getAuthedUser()
@@ -159,22 +167,37 @@ export async function updatePaymentSettings(
   }
 
   const { data: before } = await supabase
-    .from('settings').select('promptpay_id, bank_accounts_text').eq('id', 1).single()
+    .from('settings').select('promptpay_id, bank_accounts_text, bank_account_no, bank_account_name, bank_name').eq('id', 1).single()
 
   const { error } = await supabase
     .from('settings')
-    .update({ promptpay_id: promptpayId, promptpay_name: promptpayName, bank_accounts_text: bankAccountsText || null })
+    .update({
+      promptpay_id: promptpayId, promptpay_name: promptpayName, bank_accounts_text: bankAccountsText || null,
+      bank_account_no: bankAccountNo || null,
+      bank_account_name: bankAccountName || null,
+      bank_name: bankName || null,
+    })
     .eq('id', 1)
 
   if (error) return { message: `เกิดข้อผิดพลาด: ${error.message}` }
 
-  if (promptpayId !== (before?.promptpay_id ?? '') || bankAccountsText !== (before?.bank_accounts_text ?? '')) {
+  if (
+    promptpayId !== (before?.promptpay_id ?? '') || bankAccountsText !== (before?.bank_accounts_text ?? '')
+    || bankAccountNo !== (before?.bank_account_no ?? '') || bankAccountName !== (before?.bank_account_name ?? '')
+    || bankName !== (before?.bank_name ?? '')
+  ) {
     logAudit({
       action: 'settings_update',
       entityType: 'settings',
       entityId: '1',
-      oldValue: { promptpay_id: before?.promptpay_id, bank_accounts_text: before?.bank_accounts_text },
-      newValue: { promptpay_id: promptpayId, bank_accounts_text: bankAccountsText },
+      oldValue: {
+        promptpay_id: before?.promptpay_id, bank_accounts_text: before?.bank_accounts_text,
+        bank_account_no: before?.bank_account_no, bank_account_name: before?.bank_account_name, bank_name: before?.bank_name,
+      },
+      newValue: {
+        promptpay_id: promptpayId, bank_accounts_text: bankAccountsText,
+        bank_account_no: bankAccountNo, bank_account_name: bankAccountName, bank_name: bankName,
+      },
       description: `เปลี่ยนข้อมูลบัญชี/PromptPay (ยืนยัน${totp ? 'รหัสผ่าน + OTP' : 'รหัสผ่าน'}แล้ว)`,
     }).catch(() => {})
   }

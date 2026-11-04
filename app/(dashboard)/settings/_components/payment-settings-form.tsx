@@ -9,7 +9,7 @@ import { updatePaymentSettings } from '@/app/actions/settings'
 import type { Settings } from '@/lib/definitions'
 
 interface Props {
-  settings?: Pick<Settings, 'promptpay_id' | 'promptpay_name' | 'bank_accounts_text'>
+  settings?: Pick<Settings, 'promptpay_id' | 'promptpay_name' | 'bank_accounts_text' | 'bank_account_no' | 'bank_account_name' | 'bank_name'>
   mfaEnabled?: boolean
 }
 
@@ -47,6 +47,42 @@ export function PaymentSettingsForm({ settings, mfaEnabled }: Props) {
                 name="promptpay_name"
                 defaultValue={settings?.promptpay_name ?? 'ห้องเช่า'}
                 placeholder="ชื่อร้าน / ชื่อเจ้าของ"
+              />
+            </div>
+          </div>
+
+          <div className="border-t border-slate-100 pt-4 space-y-4">
+            <p className="text-xs font-semibold text-slate-500">เลขบัญชีสำหรับชำระใน Portal (แสดงให้ผู้เช่าคัดลอก)</p>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label className="text-sm font-medium text-slate-700">ชื่อธนาคาร</Label>
+                <Input
+                  name="bank_name"
+                  defaultValue={settings?.bank_name ?? ''}
+                  placeholder="เช่น กสิกรไทย / ttb / กรุงศรี"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-sm font-medium text-slate-700">เลขบัญชี</Label>
+                <div className="relative">
+                  <Banknote className="absolute left-3 top-2.5 size-4 text-slate-400" />
+                  <Input
+                    name="bank_account_no"
+                    defaultValue={settings?.bank_account_no ?? ''}
+                    placeholder="เช่น 9197253892"
+                    className="pl-9 font-mono"
+                    inputMode="numeric"
+                  />
+                </div>
+                <p className="text-xs text-slate-400">ตัวเลขล้วน คัดลอกไปโอนได้เลย</p>
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium text-slate-700">ชื่อบัญชี</Label>
+              <Input
+                name="bank_account_name"
+                defaultValue={settings?.bank_account_name ?? ''}
+                placeholder="เช่น นายไพศาล ใจดี"
               />
             </div>
           </div>

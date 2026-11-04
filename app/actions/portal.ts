@@ -68,6 +68,11 @@ export type TenantPortalData = {
     }>
   }>
   promptpay: { id: string | null; name: string | null }
+  bankAccount: {
+    bankName: string | null
+    accountNo: string | null
+    accountName: string | null
+  }
 }
 
 type PortalResult =
@@ -205,7 +210,9 @@ export async function getTenantPortalDashboard(portalToken: string, roomId?: str
   } catch { /* ไม่ critical — เปิด portal ต่อได้ */ }
 
   const svc2 = createServiceClient()
-  const { data: settings } = await svc2.from('settings').select('promptpay_id, promptpay_name').eq('id', 1).maybeSingle()
+  const { data: settings } = await svc2.from('settings')
+    .select('promptpay_id, promptpay_name, bank_account_no, bank_account_name, bank_name')
+    .eq('id', 1).maybeSingle()
 
   // Generate short-lived signed URLs for payment slips (bucket เป็น private)
   const svc3 = createServiceClient()
@@ -237,6 +244,11 @@ export async function getTenantPortalDashboard(portalToken: string, roomId?: str
       promptpay: {
         id:   (settings as { promptpay_id?: string | null } | null)?.promptpay_id   ?? null,
         name: (settings as { promptpay_name?: string | null } | null)?.promptpay_name ?? null,
+      },
+      bankAccount: {
+        bankName:    (settings as { bank_name?: string | null } | null)?.bank_name         ?? null,
+        accountNo:   (settings as { bank_account_no?: string | null } | null)?.bank_account_no   ?? null,
+        accountName: (settings as { bank_account_name?: string | null } | null)?.bank_account_name ?? null,
       },
     },
   }
