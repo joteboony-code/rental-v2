@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Banknote, Check, Copy } from 'lucide-react'
+import { Ban, Banknote, Check, Copy } from 'lucide-react'
 
 type BankAccount = {
   bankName: string | null | undefined
@@ -38,7 +38,15 @@ export function BankAccountCard({
 
   return (
     <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
-      <div className="mb-3 flex items-center gap-2">
+      <div className="flex items-start gap-2 rounded-xl bg-amber-50 border border-amber-100 px-3 py-2.5">
+        <Ban className="mt-0.5 size-4 shrink-0 text-amber-600" />
+        <p className="text-xs text-amber-700">
+          <span className="font-semibold">ยกเลิกแล้ว</span> — ได้ยกเลิกการชำระผ่าน QR PromptPay ตามนโยบายใหม่
+          กรุณาโอนผ่านเลขบัญชีด้านล่างนี้แทน
+        </p>
+      </div>
+
+      <div className="mt-3 mb-3 flex items-center gap-2">
         <Banknote className="size-4 text-slate-400" />
         <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">
           ชำระผ่านเลขบัญชี
