@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { buttonVariants } from '@/components/ui/button'
-import { ChevronLeft, Pencil, Phone, CreditCard, User, Home, FileText, Calendar, LogOut, Plus, Download } from 'lucide-react'
+import { ChevronLeft, Pencil, Phone, CreditCard, User, Home, FileText, Calendar, LogOut, Plus, Download, ArrowLeftRight } from 'lucide-react'
 import { roomRow } from '@/lib/room-utils'
 import { ContractForm } from '../_components/contract-form'
 import { TerminateContractButton } from '../_components/terminate-contract-button'
@@ -99,6 +99,12 @@ export default async function TenantDetailPage({
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <Link
+              href={`/tenants/${id}/transfer`}
+              className={buttonVariants({ variant: 'outline', size: 'sm' }) + ' rounded-xl border-violet-200 text-violet-700 hover:bg-violet-50 hover:border-violet-300 gap-1.5'}
+            >
+              <ArrowLeftRight className="size-3.5" /> โอนเช่า
+            </Link>
             <Link href={`/tenants/${id}/edit`}
               className={buttonVariants({ variant: 'outline', size: 'sm' }) + ' rounded-xl border-slate-200 text-slate-600 hover:bg-slate-50 gap-1.5'}>
               <Pencil className="size-3.5" /> แก้ไขข้อมูล
