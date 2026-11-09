@@ -18,6 +18,7 @@ export function BankAccountCard({
   amountLabel?: string
 }) {
   const [copied, setCopied] = useState(false)
+  const [copiedAmount, setCopiedAmount] = useState(false)
 
   const { bankName, accountNo, accountName } = bankAccount
   const hasAccount = Boolean(accountNo)
@@ -52,7 +53,26 @@ export function BankAccountCard({
     }
   }
 
+  // ดึงจำนวนเงิน (ตัวเลขที่ควรโอน) ออกจาก amountLabel เช่น "ชำระยอดค้าง ฿1,234.50" -> "1234.50"
+  function extractAmount(label?: string): string | null {
+    const m = label?.match(/฿\s*([\d,]+(?:\.\d+)?)/)
+    return m ? m[1].replace(/,/g, '') : null
+  }
+
+  async function handleCopyAmount() {
+    const amount = extractAmount(amountLabel)
+    if (!amount) return
+    try {
+      await navigator.clipboard.writeText(amount)
+      setCopiedAmount(true)
+      setTimeout(() => setCopiedAmount(false), 2000)
+    } catch {
+      setCopiedAmount(false)
+    }
+  }
+
   if (!hasAccount) return null
+
 
   return (
     <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
@@ -92,7 +112,17 @@ export function BankAccountCard({
       </div>
 
       {amountLabel && (
-        <p className="mt-3 text-center text-xs text-slate-400">{amountLabel}</p>
+        <div className="mt-3 flex items-center justify-between gap-2 rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-2.5">
+          <p className="text-xs text-slate-600">{amountLabel}</p>
+          <button
+            type="button"
+            onClick={handleCopyAmount}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-slate-950 px-2.5 py-1.5 text-xs font-bold text-white transition-colors hover:bg-slate-800 active:scale-[0.98]"
+          >
+            {copiedAmount ? <Check className="size-3.5 text-emerald-400" /> : <Copy className="size-3.5" />}
+            {copiedAmount ? 'คัดลอกแล้ว' : 'คัดลอกยอดเงิน'}
+          </button>
+        </div>
       )}
 
       {/* Fallback: ถ้า Clipboard API ล้มเหลว ผู้ใช้ยังเห็นเลขบัญชีชัดเจน */}
